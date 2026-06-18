@@ -23,7 +23,7 @@
 		},
 		{
 			"Name": "LLMNPCActionLayerEditor",
-			"Type": "Editor",
+			"Type": "UncookedOnly",
 			"LoadingPhase": "Default"
 		}
 	]
