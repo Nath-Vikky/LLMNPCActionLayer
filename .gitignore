@@ -1,0 +1,24 @@
+# Unreal build output
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+
+# IDE and local machine state
+.vs/
+.idea/
+*.sln
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+*.old
+
+# OS files
+Thumbs.db
+.DS_Store

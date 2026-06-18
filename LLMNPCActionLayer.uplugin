@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "LLM NPC Action Layer",
+	"Description": "LLM-directed, UE-executed procedural NPC gesture layer.",
+	"Category": "AI",
+	"CreatedBy": "Vikky",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "LLMNPCActionLayer",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
