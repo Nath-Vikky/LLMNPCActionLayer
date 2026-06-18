@@ -2,7 +2,26 @@
 
 #include "Animation/AnimInstanceProxy.h"
 #include "AnimationRuntime.h"
+#include "BonePose.h"
 #include "TwoBoneIK.h"
+
+namespace
+{
+void AddOrReplaceBoneTransform(TArray<FBoneTransform>& OutBoneTransforms, FCompactPoseBoneIndex BoneIndex, const FTransform& Transform)
+{
+	if (FBoneTransform* Existing = OutBoneTransforms.FindByPredicate(
+		[BoneIndex](const FBoneTransform& BoneTransform)
+		{
+			return BoneTransform.BoneIndex == BoneIndex;
+		}))
+	{
+		Existing->Transform = Transform;
+		return;
+	}
+
+	OutBoneTransforms.Add(FBoneTransform(BoneIndex, Transform));
+}
+}
 
 FAnimNode_LLMProceduralPose::FAnimNode_LLMProceduralPose()
 {
@@ -69,6 +88,8 @@ void FAnimNode_LLMProceduralPose::EvaluateSkeletalControl_AnyThread(
 	{
 		ApplySimpleRightArmIK(Output, OutBoneTransforms);
 	}
+
+	OutBoneTransforms.Sort(FCompareBoneTransformIndex());
 }
 
 void FAnimNode_LLMProceduralPose::ApplyAdditiveRotationCS(
@@ -90,7 +111,7 @@ void FAnimNode_LLMProceduralPose::ApplyAdditiveRotationCS(
 	const FQuat AdditiveQuat = FQuat(Rotation * InAlpha);
 	NewBoneTM.SetRotation(AdditiveQuat * NewBoneTM.GetRotation());
 	NewBoneTM.NormalizeRotation();
-	OutBoneTransforms.Add(FBoneTransform(BoneIndex, NewBoneTM));
+	AddOrReplaceBoneTransform(OutBoneTransforms, BoneIndex, NewBoneTM);
 }
 
 void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
@@ -143,7 +164,7 @@ void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
 	LowerTM.Blend(OriginalLowerTM, LowerTM, IKAlpha);
 	HandTM.Blend(OriginalHandTM, HandTM, IKAlpha);
 
-	OutBoneTransforms.Add(FBoneTransform(UpperIndex, UpperTM));
-	OutBoneTransforms.Add(FBoneTransform(LowerIndex, LowerTM));
-	OutBoneTransforms.Add(FBoneTransform(HandIndex, HandTM));
+	AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, UpperTM);
+	AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, LowerTM);
+	AddOrReplaceBoneTransform(OutBoneTransforms, HandIndex, HandTM);
 }

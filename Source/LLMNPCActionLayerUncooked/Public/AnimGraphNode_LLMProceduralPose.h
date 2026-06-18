@@ -6,7 +6,7 @@
 #include "AnimGraphNode_LLMProceduralPose.generated.h"
 
 UCLASS()
-class LLMNPCACTIONLAYEREDITOR_API UAnimGraphNode_LLMProceduralPose : public UAnimGraphNode_SkeletalControlBase
+class LLMNPCACTIONLAYERUNCOOKED_API UAnimGraphNode_LLMProceduralPose : public UAnimGraphNode_SkeletalControlBase
 {
 	GENERATED_BODY()
 

@@ -1,8 +1,8 @@
 using UnrealBuildTool;
 
-public class LLMNPCActionLayerEditor : ModuleRules
+public class LLMNPCActionLayerUncooked : ModuleRules
 {
-	public LLMNPCActionLayerEditor(ReadOnlyTargetRules Target) : base(Target)
+	public LLMNPCActionLayerUncooked(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
