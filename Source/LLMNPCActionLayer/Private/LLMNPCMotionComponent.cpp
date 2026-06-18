@@ -189,26 +189,71 @@ void ULLMNPCMotionComponent::TestWave(AActor* TargetActor)
 	Plan.Clip.BlendIn = 0.18f;
 	Plan.Clip.BlendOut = 0.25f;
 
+	if (TargetActor)
+	{
+		FLLMMotionTrack GazeTarget;
+		GazeTarget.ControlId = TEXT("gaze.target");
+		GazeTarget.TrackType = ELLMMotionTrackType::LookAt;
+		GazeTarget.ValueType = ELLMMotionValueType::Vector;
+		GazeTarget.TargetRef = TEXT("test_target");
+		GazeTarget.StartTime = 0.0f;
+		GazeTarget.EndTime = 1.7f;
+		GazeTarget.Strength = 0.65f;
+		Plan.Clip.Tracks.Add(GazeTarget);
+
+		FLLMMotionTrack PalmTarget;
+		PalmTarget.ControlId = TEXT("right_hand.palm_target");
+		PalmTarget.TrackType = ELLMMotionTrackType::LookAt;
+		PalmTarget.ValueType = ELLMMotionValueType::Vector;
+		PalmTarget.TargetRef = TEXT("test_target");
+		PalmTarget.StartTime = 0.2f;
+		PalmTarget.EndTime = 1.45f;
+		PalmTarget.Strength = 1.0f;
+		Plan.Clip.Tracks.Add(PalmTarget);
+	}
+
 	FLLMMotionTrack HandAnchor;
 	HandAnchor.ControlId = TEXT("right_hand.ik");
-	HandAnchor.TrackType = ELLMMotionTrackType::Anchor;
 	HandAnchor.ValueType = ELLMMotionValueType::Vector;
-	HandAnchor.Anchor = TEXT("head_right");
 	HandAnchor.StartTime = 0.0f;
 	HandAnchor.EndTime = 1.7f;
-	HandAnchor.Offset = FVector(15.0f, 8.0f, 5.0f);
+	if (TargetActor)
+	{
+		HandAnchor.TrackType = ELLMMotionTrackType::IKReach;
+		HandAnchor.TargetRef = TEXT("test_target");
+		HandAnchor.Reach = 0.72f;
+		HandAnchor.Offset = FVector(0.0f, 10.0f, 18.0f);
+	}
+	else
+	{
+		HandAnchor.TrackType = ELLMMotionTrackType::Anchor;
+		HandAnchor.Anchor = TEXT("head_right");
+		HandAnchor.Offset = FVector(15.0f, 8.0f, 5.0f);
+	}
 	Plan.Clip.Tracks.Add(HandAnchor);
 
 	FLLMMotionTrack WaveOffset;
-	WaveOffset.ControlId = TEXT("right_hand.local_offset.x");
+	WaveOffset.ControlId = TEXT("right_hand.local_offset.y");
 	WaveOffset.TrackType = ELLMMotionTrackType::Oscillator;
 	WaveOffset.ValueType = ELLMMotionValueType::Float;
 	WaveOffset.StartTime = 0.35f;
 	WaveOffset.EndTime = 1.35f;
-	WaveOffset.Amplitude = 18.0f;
+	WaveOffset.Amplitude = 16.0f;
 	WaveOffset.Frequency = 3.0f;
 	WaveOffset.Envelope = ELLMMotionEnvelope::Smooth;
 	Plan.Clip.Tracks.Add(WaveOffset);
+
+	FLLMMotionTrack WaveLift;
+	WaveLift.ControlId = TEXT("right_hand.local_offset.z");
+	WaveLift.TrackType = ELLMMotionTrackType::Oscillator;
+	WaveLift.ValueType = ELLMMotionValueType::Float;
+	WaveLift.StartTime = 0.35f;
+	WaveLift.EndTime = 1.35f;
+	WaveLift.Amplitude = 5.0f;
+	WaveLift.Frequency = 3.0f;
+	WaveLift.Phase = HALF_PI;
+	WaveLift.Envelope = ELLMMotionEnvelope::Smooth;
+	Plan.Clip.Tracks.Add(WaveLift);
 
 	FLLMMotionTrack FingerOpen;
 	FingerOpen.ControlId = TEXT("right_fingers.open");

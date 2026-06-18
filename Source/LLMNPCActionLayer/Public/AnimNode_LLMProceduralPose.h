@@ -17,6 +17,9 @@ struct LLMNPCACTIONLAYER_API FAnimNode_LLMProceduralPose : public FAnimNode_Skel
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(PinShownByDefault))
 	bool bEnableRightArmIK = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FRotator RightHandPalmRotationOffset = FRotator::ZeroRotator;
+
 	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
 	FBoneReference HeadBone;
 
@@ -55,4 +58,6 @@ private:
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms
 	) const;
+
+	void AddGazeToRotations(FComponentSpacePoseContext& Output, FRotator& InOutHeadRotation, FRotator& InOutChestRotation) const;
 };

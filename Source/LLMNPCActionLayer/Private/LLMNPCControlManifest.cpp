@@ -70,6 +70,11 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			Gaze.bRequiresTarget = true;
 			Result.Add(Gaze);
 
+			FLLMControlDefinition RightHandPalmTarget = Gaze;
+			RightHandPalmTarget.ControlId = TEXT("right_hand.palm_target");
+			RightHandPalmTarget.bRequiresTarget = true;
+			Result.Add(RightHandPalmTarget);
+
 			FLLMControlDefinition RightHandOffsetX;
 			RightHandOffsetX.ControlId = TEXT("right_hand.local_offset.x");
 			RightHandOffsetX.SolverType = ELLMControlSolverType::LocalOffset;

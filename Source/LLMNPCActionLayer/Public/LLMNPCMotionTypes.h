@@ -185,6 +185,12 @@ struct FLLMProceduralPoseSnapshot
 	FVector RightHandLocalOffsetCS = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FVector RightHandPalmTargetCS = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	float RightHandPalmAlpha = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	float LeftHandIKAlpha = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")

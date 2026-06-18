@@ -3,6 +3,7 @@
 #include "Animation/AnimInstanceProxy.h"
 #include "AnimationRuntime.h"
 #include "BonePose.h"
+#include "Math/RotationMatrix.h"
 #include "TwoBoneIK.h"
 
 namespace
@@ -74,15 +75,19 @@ void FAnimNode_LLMProceduralPose::EvaluateSkeletalControl_AnyThread(
 {
 	check(OutBoneTransforms.Num() == 0);
 
-	const float PoseAlpha = FMath::Clamp(Snapshot.GlobalAlpha * ActualAlpha, 0.0f, 1.0f);
-	if (PoseAlpha <= KINDA_SMALL_NUMBER)
+	const float NodeAlpha = FMath::Clamp(ActualAlpha, 0.0f, 1.0f);
+	if (NodeAlpha <= KINDA_SMALL_NUMBER || Snapshot.GlobalAlpha <= KINDA_SMALL_NUMBER)
 	{
 		return;
 	}
 
 	// Manny's observed nod axis in the current project maps to component-space Z offset.
-	ApplyAdditiveRotationCS(Output, OutBoneTransforms, HeadBone, FRotator(0.0f, Snapshot.HeadYaw, Snapshot.HeadPitch), PoseAlpha);
-	ApplyAdditiveRotationCS(Output, OutBoneTransforms, ChestBone, FRotator(Snapshot.ChestPitch, Snapshot.ChestYaw, Snapshot.ChestRoll), PoseAlpha);
+	FRotator HeadRotation(0.0f, Snapshot.HeadYaw, Snapshot.HeadPitch);
+	FRotator ChestRotation(Snapshot.ChestPitch, Snapshot.ChestYaw, Snapshot.ChestRoll);
+	AddGazeToRotations(Output, HeadRotation, ChestRotation);
+
+	ApplyAdditiveRotationCS(Output, OutBoneTransforms, HeadBone, HeadRotation, NodeAlpha);
+	ApplyAdditiveRotationCS(Output, OutBoneTransforms, ChestBone, ChestRotation, NodeAlpha);
 
 	if (bEnableRightArmIK && Snapshot.RightHandIKAlpha > KINDA_SMALL_NUMBER)
 	{
@@ -127,7 +132,7 @@ void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
 		return;
 	}
 
-	const float IKAlpha = FMath::Clamp(Snapshot.RightHandIKAlpha * Snapshot.GlobalAlpha * ActualAlpha, 0.0f, 1.0f);
+	const float IKAlpha = FMath::Clamp(Snapshot.RightHandIKAlpha * ActualAlpha, 0.0f, 1.0f);
 	if (IKAlpha <= KINDA_SMALL_NUMBER)
 	{
 		return;
@@ -160,6 +165,19 @@ void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
 		1.2f
 	);
 
+	const float PalmAlpha = FMath::Clamp(Snapshot.RightHandPalmAlpha * ActualAlpha, 0.0f, 1.0f);
+	if (PalmAlpha > KINDA_SMALL_NUMBER && !Snapshot.RightHandPalmTargetCS.IsNearlyZero())
+	{
+		const FVector PalmDirection = (Snapshot.RightHandPalmTargetCS - HandTM.GetLocation()).GetSafeNormal();
+		if (!PalmDirection.IsNearlyZero())
+		{
+			const FQuat PalmTargetRotation =
+				FRotationMatrix::MakeFromXZ(PalmDirection, FVector::UpVector).ToQuat() *
+				RightHandPalmRotationOffset.Quaternion();
+			HandTM.SetRotation(FQuat::Slerp(HandTM.GetRotation(), PalmTargetRotation, PalmAlpha).GetNormalized());
+		}
+	}
+
 	UpperTM.Blend(OriginalUpperTM, UpperTM, IKAlpha);
 	LowerTM.Blend(OriginalLowerTM, LowerTM, IKAlpha);
 	HandTM.Blend(OriginalHandTM, HandTM, IKAlpha);
@@ -167,4 +185,38 @@ void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
 	AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, UpperTM);
 	AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, LowerTM);
 	AddOrReplaceBoneTransform(OutBoneTransforms, HandIndex, HandTM);
+}
+
+void FAnimNode_LLMProceduralPose::AddGazeToRotations(
+	FComponentSpacePoseContext& Output,
+	FRotator& InOutHeadRotation,
+	FRotator& InOutChestRotation
+) const
+{
+	const float GazeAlpha = FMath::Clamp(Snapshot.GazeAlpha * ActualAlpha, 0.0f, 1.0f);
+	if (GazeAlpha <= KINDA_SMALL_NUMBER || Snapshot.GazeTargetCS.IsNearlyZero())
+	{
+		return;
+	}
+
+	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
+	if (!HeadBone.IsValidToEvaluate(BoneContainer))
+	{
+		return;
+	}
+
+	const FCompactPoseBoneIndex HeadIndex = HeadBone.GetCompactPoseIndex(BoneContainer);
+	const FVector HeadLocation = Output.Pose.GetComponentSpaceTransform(HeadIndex).GetLocation();
+	const FVector Direction = (Snapshot.GazeTargetCS - HeadLocation).GetSafeNormal();
+	if (Direction.IsNearlyZero())
+	{
+		return;
+	}
+
+	const float Yaw = FMath::RadiansToDegrees(FMath::Atan2(Direction.Y, Direction.X));
+	const float Pitch = FMath::RadiansToDegrees(FMath::Atan2(Direction.Z, FMath::Max(1.0f, FVector2D(Direction.X, Direction.Y).Size())));
+
+	InOutHeadRotation.Yaw += FMath::Clamp(Yaw, -35.0f, 35.0f) * GazeAlpha * 0.75f;
+	InOutHeadRotation.Roll += FMath::Clamp(Pitch, -20.0f, 20.0f) * GazeAlpha * 0.35f;
+	InOutChestRotation.Yaw += FMath::Clamp(Yaw, -20.0f, 20.0f) * GazeAlpha * 0.25f;
 }

@@ -139,6 +139,19 @@ void FLLMNPCMotionSampler::SampleClip(
 				}
 			}
 		}
+		else if (Control == TEXT("right_hand.palm_target"))
+		{
+			if (const TObjectPtr<AActor>* Target = TargetMap.Find(Track.TargetRef))
+			{
+				if (Mesh && IsValid(Target->Get()))
+				{
+					OutSnapshot.RightHandPalmTargetCS = Mesh->GetComponentTransform().InverseTransformPosition(
+						Target->Get()->GetActorLocation() + FVector(0.0f, 0.0f, 70.0f)
+					);
+					OutSnapshot.RightHandPalmAlpha = FMath::Max(OutSnapshot.RightHandPalmAlpha, TrackAlpha);
+				}
+			}
+		}
 	}
 
 	OutSnapshot.RightHandLocalOffsetCS = PendingRightHandLocalOffsetCS;
