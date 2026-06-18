@@ -1,39 +1,63 @@
 # LLM NPC Action Layer
 
-LLM-directed, Unreal Engine-executed procedural NPC gesture layer.
+Data-driven LLM procedural NPC gesture layer for Unreal Engine 5.3.
 
-The plugin keeps large language models away from low-level skeletal control. The model selects constrained action templates and structured parameters, while Unreal Engine validates, queues, and executes the body expression through animation blueprint, Control Rig, IK, and procedural animation.
+The plugin keeps large language models away from raw skeletal control. The model produces a constrained `MotionPlan` / `MotionClip`, while Unreal Engine validates controls, samples motion tracks, and applies the resulting procedural pose through a post-process animation path.
 
-## MVP Actions
-
-- `gaze.look_at`
-- `gesture.nod`
-- `gesture.wave`
-- `gesture.point`
-
-## Runtime Flow
+## V2 Runtime Flow
 
 ```text
-ActionPlan JSON
-  -> Validator
-  -> LLMNPCActionComponent queue
-  -> RuntimeGestureState
-  -> AnimBP
-  -> Control Rig / IK
+MotionPlan JSON
+  -> ULLMNPCMotionComponent
+  -> ULLMNPCMotionValidator
+  -> FLLMNPCMotionSampler
+  -> FLLMProceduralPoseSnapshot
+  -> ULLMNPCPostProcessAnimInstance
+  -> FAnimNode_LLMProceduralPose
+  -> final skeletal pose
 ```
 
-## Main Blueprint API
+## Core Classes
 
-- `SubmitActionPlanJson`
-- `SubmitActionPlan`
-- `RequestActionPlanFromContext`
-- `RegisterTargetRef`
+- `ULLMNPCMotionComponent`
+- `ULLMNPCControlManifest`
+- `ULLMNPCMotionValidator`
+- `FLLMNPCMotionSampler`
+- `ULLMNPCPostProcessAnimInstance`
+- `FAnimNode_LLMProceduralPose`
+- `UAnimGraphNode_LLMProceduralPose`
+
+## Built-In Controls
+
+```text
+head.pitch
+head.yaw
+head.roll
+chest.pitch
+chest.yaw
+chest.roll
+right_hand.ik
+right_hand.local_offset.x
+right_hand.local_offset.y
+right_hand.local_offset.z
+right_fingers.open
+right_fingers.point
+gaze.target
+```
+
+## Main Blueprint API: Motion
+
+- `SubmitMotionPlanJson`
+- `SubmitMotionPlan`
+- `RequestMotionPlanFromContext`
+- `RegisterTarget`
 - `TestNod`
 - `TestWave`
-- `TestPoint`
 
 ## Default HTTP Endpoint
 
 ```text
-http://localhost:8787/npc/action-plan
+http://localhost:8787/npc/motion-plan
 ```
+
+The earlier `ULLMNPCActionComponent` API is still present as a compatibility/prototyping layer, but the primary path is now MotionClip-driven.

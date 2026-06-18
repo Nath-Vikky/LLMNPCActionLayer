@@ -14,7 +14,9 @@ public class LLMNPCActionLayer : ModuleRules
 				"Core",
 				"CoreUObject",
 				"DeveloperSettings",
-				"Engine"
+				"Engine",
+				"AnimGraphRuntime",
+				"AnimationCore"
 			}
 			);
 			
