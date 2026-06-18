@@ -40,6 +40,7 @@ right_hand.ik
 right_hand.local_offset.x
 right_hand.local_offset.y
 right_hand.local_offset.z
+right_hand.palm_target
 right_fingers.open
 right_fingers.point
 gaze.target
@@ -51,6 +52,9 @@ gaze.target
 - `SubmitMotionPlan`
 - `RequestMotionPlanFromContext`
 - `RegisterTarget`
+- `SubmitSampleMotionPlanJson`
+- `BuildSampleMotionPlanJson`
+- `GetDebugState`
 - `TestNod`
 - `TestWave`
 

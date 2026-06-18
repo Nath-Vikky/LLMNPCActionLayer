@@ -45,8 +45,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Test")
 	void TestWave(AActor* TargetActor);
 
+	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Test")
+	bool SubmitSampleMotionPlanJson(ELLMNPCMotionDebugSample Sample, AActor* TargetActor);
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC Motion|Test")
+	FString BuildSampleMotionPlanJson(ELLMNPCMotionDebugSample Sample, const FString& TargetRef) const;
+
 	UFUNCTION(BlueprintPure, Category="LLM NPC Motion")
 	FLLMProceduralPoseSnapshot GetCurrentSnapshot() const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC Motion|Debug")
+	FLLMNPCMotionDebugState GetDebugState() const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC Motion")
 	int32 GetQueueCount() const { return Queue.Num(); }
@@ -65,6 +74,9 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FString LastValidationError;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString LastRawMotionJson;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FString LastAcceptedMotionJson;
@@ -102,4 +114,9 @@ private:
 	void UpdateActivePlan(float DeltaTime);
 	void InstallPostProcessAnimBP();
 	USkeletalMeshComponent* GetOwnerMesh() const;
+
+	static FLLMMotionPlan BuildNodMotionPlan();
+	static FLLMMotionPlan BuildWaveMotionPlan(const FString& TargetRef);
+	static FLLMMotionPlan BuildInvalidUnknownControlPlan();
+	static FLLMMotionPlan BuildSampleMotionPlan(ELLMNPCMotionDebugSample Sample, const FString& TargetRef);
 };

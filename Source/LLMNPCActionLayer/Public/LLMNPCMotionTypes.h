@@ -44,6 +44,14 @@ enum class ELLMControlSolverType : uint8
 	LocalOffset
 };
 
+UENUM(BlueprintType)
+enum class ELLMNPCMotionDebugSample : uint8
+{
+	Nod,
+	Wave,
+	InvalidUnknownControl
+};
+
 USTRUCT(BlueprintType)
 struct FLLMMotionKeyFloat
 {
@@ -210,4 +218,40 @@ struct FLLMProceduralPoseSnapshot
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	float LeftFingersOpen = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FLLMNPCMotionDebugState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString LastRawMotionJson;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString LastAcceptedMotionJson;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString LastValidationError;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString ActiveClipId;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ActiveTime = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ActiveDuration = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	int32 QueueCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bHasActivePlan = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bMotionRequestInFlight = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FLLMProceduralPoseSnapshot Snapshot;
 };
