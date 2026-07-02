@@ -42,6 +42,15 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			Result.Add(MakeRotationControl(TEXT("chest.pitch"), TEXT("spine_03"), -20.0f, 20.0f));
 			Result.Add(MakeRotationControl(TEXT("chest.yaw"), TEXT("spine_03"), -25.0f, 25.0f));
 			Result.Add(MakeRotationControl(TEXT("chest.roll"), TEXT("spine_03"), -18.0f, 18.0f));
+			Result.Add(MakeRotationControl(TEXT("right_upperarm.pitch"), TEXT("upperarm_r"), -65.0f, 65.0f));
+			Result.Add(MakeRotationControl(TEXT("right_upperarm.yaw"), TEXT("upperarm_r"), -65.0f, 65.0f));
+			Result.Add(MakeRotationControl(TEXT("right_upperarm.roll"), TEXT("upperarm_r"), -65.0f, 65.0f));
+			Result.Add(MakeRotationControl(TEXT("right_lowerarm.pitch"), TEXT("lowerarm_r"), -80.0f, 80.0f));
+			Result.Add(MakeRotationControl(TEXT("right_lowerarm.yaw"), TEXT("lowerarm_r"), -80.0f, 80.0f));
+			Result.Add(MakeRotationControl(TEXT("right_lowerarm.roll"), TEXT("lowerarm_r"), -80.0f, 80.0f));
+			Result.Add(MakeRotationControl(TEXT("right_hand.pitch"), TEXT("hand_r"), -70.0f, 70.0f));
+			Result.Add(MakeRotationControl(TEXT("right_hand.yaw"), TEXT("hand_r"), -70.0f, 70.0f));
+			Result.Add(MakeRotationControl(TEXT("right_hand.roll"), TEXT("hand_r"), -70.0f, 70.0f));
 
 			FLLMControlDefinition RightHandIK;
 			RightHandIK.ControlId = TEXT("right_hand.ik");
@@ -124,6 +133,12 @@ const TArray<FLLMAnchorDefinition>& BuiltInAnchors()
 			HeadRight.BoneName = TEXT("head");
 			HeadRight.OffsetCS = FVector(25.0f, 35.0f, 10.0f);
 			Result.Add(HeadRight);
+
+			FLLMAnchorDefinition RightWave;
+			RightWave.AnchorId = TEXT("right_wave");
+			RightWave.BoneName = TEXT("head");
+			RightWave.OffsetCS = FVector(-32.0f, 32.0f, -10.0f);
+			Result.Add(RightWave);
 
 			FLLMAnchorDefinition ChestFront;
 			ChestFront.AnchorId = TEXT("chest_front");

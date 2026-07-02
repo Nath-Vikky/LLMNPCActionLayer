@@ -59,5 +59,11 @@ private:
 		TArray<FBoneTransform>& OutBoneTransforms
 	) const;
 
+	void ApplyRightArmAdditiveRotationsCS(
+		FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& OutBoneTransforms,
+		float Alpha
+	) const;
+
 	void AddGazeToRotations(FComponentSpacePoseContext& Output, FRotator& InOutHeadRotation, FRotator& InOutChestRotation) const;
 };

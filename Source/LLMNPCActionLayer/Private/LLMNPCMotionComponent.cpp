@@ -330,28 +330,18 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& Target
 		PalmTarget.TargetRef = CleanTargetRef;
 		PalmTarget.StartTime = 0.2f;
 		PalmTarget.EndTime = 1.45f;
-		PalmTarget.Strength = 1.0f;
+		PalmTarget.Strength = 0.45f;
 		Plan.Clip.Tracks.Add(PalmTarget);
 	}
 
 	FLLMMotionTrack HandAnchor;
 	HandAnchor.ControlId = TEXT("right_hand.ik");
 	HandAnchor.ValueType = ELLMMotionValueType::Vector;
+	HandAnchor.TrackType = ELLMMotionTrackType::Anchor;
+	HandAnchor.Anchor = TEXT("right_wave");
 	HandAnchor.StartTime = 0.0f;
 	HandAnchor.EndTime = 1.7f;
-	if (bUseTarget)
-	{
-		HandAnchor.TrackType = ELLMMotionTrackType::IKReach;
-		HandAnchor.TargetRef = CleanTargetRef;
-		HandAnchor.Reach = 0.72f;
-		HandAnchor.Offset = FVector(0.0f, 10.0f, 18.0f);
-	}
-	else
-	{
-		HandAnchor.TrackType = ELLMMotionTrackType::Anchor;
-		HandAnchor.Anchor = TEXT("head_right");
-		HandAnchor.Offset = FVector(15.0f, 8.0f, 5.0f);
-	}
+	HandAnchor.Offset = FVector::ZeroVector;
 	Plan.Clip.Tracks.Add(HandAnchor);
 
 	FLLMMotionTrack WaveOffset;
@@ -360,7 +350,7 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& Target
 	WaveOffset.ValueType = ELLMMotionValueType::Float;
 	WaveOffset.StartTime = 0.35f;
 	WaveOffset.EndTime = 1.35f;
-	WaveOffset.Amplitude = 16.0f;
+	WaveOffset.Amplitude = 5.0f;
 	WaveOffset.Frequency = 3.0f;
 	WaveOffset.Envelope = ELLMMotionEnvelope::Smooth;
 	Plan.Clip.Tracks.Add(WaveOffset);
@@ -371,11 +361,68 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& Target
 	WaveLift.ValueType = ELLMMotionValueType::Float;
 	WaveLift.StartTime = 0.35f;
 	WaveLift.EndTime = 1.35f;
-	WaveLift.Amplitude = 5.0f;
+	WaveLift.Amplitude = 3.0f;
 	WaveLift.Frequency = 3.0f;
 	WaveLift.Phase = HALF_PI;
 	WaveLift.Envelope = ELLMMotionEnvelope::Smooth;
 	Plan.Clip.Tracks.Add(WaveLift);
+
+	FLLMMotionTrack UpperArmSway;
+	UpperArmSway.ControlId = TEXT("right_upperarm.roll");
+	UpperArmSway.TrackType = ELLMMotionTrackType::Oscillator;
+	UpperArmSway.ValueType = ELLMMotionValueType::Float;
+	UpperArmSway.StartTime = 0.35f;
+	UpperArmSway.EndTime = 1.35f;
+	UpperArmSway.Amplitude = 8.0f;
+	UpperArmSway.Frequency = 2.0f;
+	UpperArmSway.Envelope = ELLMMotionEnvelope::Smooth;
+	Plan.Clip.Tracks.Add(UpperArmSway);
+
+	FLLMMotionTrack LowerArmSwing;
+	LowerArmSwing.ControlId = TEXT("right_lowerarm.yaw");
+	LowerArmSwing.TrackType = ELLMMotionTrackType::Oscillator;
+	LowerArmSwing.ValueType = ELLMMotionValueType::Float;
+	LowerArmSwing.StartTime = 0.32f;
+	LowerArmSwing.EndTime = 1.38f;
+	LowerArmSwing.Amplitude = 24.0f;
+	LowerArmSwing.Frequency = 3.0f;
+	LowerArmSwing.Envelope = ELLMMotionEnvelope::Smooth;
+	Plan.Clip.Tracks.Add(LowerArmSwing);
+
+	FLLMMotionTrack LowerArmLift;
+	LowerArmLift.ControlId = TEXT("right_lowerarm.pitch");
+	LowerArmLift.TrackType = ELLMMotionTrackType::Oscillator;
+	LowerArmLift.ValueType = ELLMMotionValueType::Float;
+	LowerArmLift.StartTime = 0.32f;
+	LowerArmLift.EndTime = 1.38f;
+	LowerArmLift.Amplitude = 10.0f;
+	LowerArmLift.Frequency = 3.0f;
+	LowerArmLift.Phase = HALF_PI;
+	LowerArmLift.Envelope = ELLMMotionEnvelope::Smooth;
+	Plan.Clip.Tracks.Add(LowerArmLift);
+
+	FLLMMotionTrack WristWave;
+	WristWave.ControlId = TEXT("right_hand.roll");
+	WristWave.TrackType = ELLMMotionTrackType::Oscillator;
+	WristWave.ValueType = ELLMMotionValueType::Float;
+	WristWave.StartTime = 0.32f;
+	WristWave.EndTime = 1.38f;
+	WristWave.Amplitude = 30.0f;
+	WristWave.Frequency = 3.0f;
+	WristWave.Phase = HALF_PI;
+	WristWave.Envelope = ELLMMotionEnvelope::Smooth;
+	Plan.Clip.Tracks.Add(WristWave);
+
+	FLLMMotionTrack WristYaw;
+	WristYaw.ControlId = TEXT("right_hand.yaw");
+	WristYaw.TrackType = ELLMMotionTrackType::Oscillator;
+	WristYaw.ValueType = ELLMMotionValueType::Float;
+	WristYaw.StartTime = 0.32f;
+	WristYaw.EndTime = 1.38f;
+	WristYaw.Amplitude = 14.0f;
+	WristYaw.Frequency = 3.0f;
+	WristYaw.Envelope = ELLMMotionEnvelope::Smooth;
+	Plan.Clip.Tracks.Add(WristYaw);
 
 	FLLMMotionTrack FingerOpen;
 	FingerOpen.ControlId = TEXT("right_fingers.open");

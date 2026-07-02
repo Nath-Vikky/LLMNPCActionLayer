@@ -106,6 +106,42 @@ void FLLMNPCMotionSampler::SampleClip(
 		{
 			PendingRightHandLocalOffsetCS.Z += FloatValue;
 		}
+		else if (Control == TEXT("right_upperarm.pitch"))
+		{
+			OutSnapshot.RightUpperArmAdditiveRotation.Pitch += FloatValue;
+		}
+		else if (Control == TEXT("right_upperarm.yaw"))
+		{
+			OutSnapshot.RightUpperArmAdditiveRotation.Yaw += FloatValue;
+		}
+		else if (Control == TEXT("right_upperarm.roll"))
+		{
+			OutSnapshot.RightUpperArmAdditiveRotation.Roll += FloatValue;
+		}
+		else if (Control == TEXT("right_lowerarm.pitch"))
+		{
+			OutSnapshot.RightLowerArmAdditiveRotation.Pitch += FloatValue;
+		}
+		else if (Control == TEXT("right_lowerarm.yaw"))
+		{
+			OutSnapshot.RightLowerArmAdditiveRotation.Yaw += FloatValue;
+		}
+		else if (Control == TEXT("right_lowerarm.roll"))
+		{
+			OutSnapshot.RightLowerArmAdditiveRotation.Roll += FloatValue;
+		}
+		else if (Control == TEXT("right_hand.pitch"))
+		{
+			OutSnapshot.RightHandAdditiveRotation.Pitch += FloatValue;
+		}
+		else if (Control == TEXT("right_hand.yaw"))
+		{
+			OutSnapshot.RightHandAdditiveRotation.Yaw += FloatValue;
+		}
+		else if (Control == TEXT("right_hand.roll"))
+		{
+			OutSnapshot.RightHandAdditiveRotation.Roll += FloatValue;
+		}
 		else if (Control == TEXT("right_fingers.open"))
 		{
 			OutSnapshot.RightFingersOpen = FMath::Max(OutSnapshot.RightFingersOpen, FMath::Clamp(FloatValue, 0.0f, 1.0f));

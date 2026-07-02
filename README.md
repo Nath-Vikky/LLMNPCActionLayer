@@ -41,6 +41,15 @@ right_hand.local_offset.x
 right_hand.local_offset.y
 right_hand.local_offset.z
 right_hand.palm_target
+right_upperarm.pitch
+right_upperarm.yaw
+right_upperarm.roll
+right_lowerarm.pitch
+right_lowerarm.yaw
+right_lowerarm.roll
+right_hand.pitch
+right_hand.yaw
+right_hand.roll
 right_fingers.open
 right_fingers.point
 gaze.target

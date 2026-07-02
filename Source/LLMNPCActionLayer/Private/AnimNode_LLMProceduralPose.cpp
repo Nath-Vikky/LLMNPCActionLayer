@@ -22,6 +22,55 @@ void AddOrReplaceBoneTransform(TArray<FBoneTransform>& OutBoneTransforms, FCompa
 
 	OutBoneTransforms.Add(FBoneTransform(BoneIndex, Transform));
 }
+
+FTransform GetCurrentBoneTransformCS(
+	FComponentSpacePoseContext& Output,
+	const TArray<FBoneTransform>& OutBoneTransforms,
+	FCompactPoseBoneIndex BoneIndex
+)
+{
+	if (const FBoneTransform* Existing = OutBoneTransforms.FindByPredicate(
+		[BoneIndex](const FBoneTransform& BoneTransform)
+		{
+			return BoneTransform.BoneIndex == BoneIndex;
+		}))
+	{
+		return Existing->Transform;
+	}
+
+	return Output.Pose.GetComponentSpaceTransform(BoneIndex);
+}
+
+void RotateTransformAroundPivotCS(FTransform& Transform, const FVector& Pivot, const FQuat& DeltaQuat)
+{
+	Transform.SetLocation(Pivot + DeltaQuat.RotateVector(Transform.GetLocation() - Pivot));
+	Transform.SetRotation(DeltaQuat * Transform.GetRotation());
+	Transform.NormalizeRotation();
+}
+
+void RotateBoneAndChildrenCS(
+	FTransform& BoneTM,
+	TArray<FTransform*> ChildTransforms,
+	const FQuat& DeltaQuat
+)
+{
+	if (DeltaQuat.IsIdentity())
+	{
+		return;
+	}
+
+	const FVector Pivot = BoneTM.GetLocation();
+	BoneTM.SetRotation(DeltaQuat * BoneTM.GetRotation());
+	BoneTM.NormalizeRotation();
+
+	for (FTransform* ChildTM : ChildTransforms)
+	{
+		if (ChildTM)
+		{
+			RotateTransformAroundPivotCS(*ChildTM, Pivot, DeltaQuat);
+		}
+	}
+}
 }
 
 FAnimNode_LLMProceduralPose::FAnimNode_LLMProceduralPose()
@@ -93,6 +142,8 @@ void FAnimNode_LLMProceduralPose::EvaluateSkeletalControl_AnyThread(
 	{
 		ApplySimpleRightArmIK(Output, OutBoneTransforms);
 	}
+
+	ApplyRightArmAdditiveRotationsCS(Output, OutBoneTransforms, NodeAlpha);
 
 	OutBoneTransforms.Sort(FCompareBoneTransformIndex());
 }
@@ -181,6 +232,62 @@ void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
 	UpperTM.Blend(OriginalUpperTM, UpperTM, IKAlpha);
 	LowerTM.Blend(OriginalLowerTM, LowerTM, IKAlpha);
 	HandTM.Blend(OriginalHandTM, HandTM, IKAlpha);
+
+	AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, UpperTM);
+	AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, LowerTM);
+	AddOrReplaceBoneTransform(OutBoneTransforms, HandIndex, HandTM);
+}
+
+void FAnimNode_LLMProceduralPose::ApplyRightArmAdditiveRotationsCS(
+	FComponentSpacePoseContext& Output,
+	TArray<FBoneTransform>& OutBoneTransforms,
+	float InAlpha
+) const
+{
+	if (InAlpha <= KINDA_SMALL_NUMBER ||
+		(
+			Snapshot.RightUpperArmAdditiveRotation.IsNearlyZero() &&
+			Snapshot.RightLowerArmAdditiveRotation.IsNearlyZero() &&
+			Snapshot.RightHandAdditiveRotation.IsNearlyZero()
+		))
+	{
+		return;
+	}
+
+	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
+	if (!RightUpperArmBone.IsValidToEvaluate(BoneContainer) ||
+		!RightLowerArmBone.IsValidToEvaluate(BoneContainer) ||
+		!RightHandBone.IsValidToEvaluate(BoneContainer))
+	{
+		return;
+	}
+
+	const FCompactPoseBoneIndex UpperIndex = RightUpperArmBone.GetCompactPoseIndex(BoneContainer);
+	const FCompactPoseBoneIndex LowerIndex = RightLowerArmBone.GetCompactPoseIndex(BoneContainer);
+	const FCompactPoseBoneIndex HandIndex = RightHandBone.GetCompactPoseIndex(BoneContainer);
+
+	FTransform UpperTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperIndex);
+	FTransform LowerTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, LowerIndex);
+	FTransform HandTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, HandIndex);
+
+	if (!Snapshot.RightUpperArmAdditiveRotation.IsNearlyZero())
+	{
+		const FQuat DeltaQuat = FQuat(Snapshot.RightUpperArmAdditiveRotation * InAlpha);
+		RotateBoneAndChildrenCS(UpperTM, { &LowerTM, &HandTM }, DeltaQuat);
+	}
+
+	if (!Snapshot.RightLowerArmAdditiveRotation.IsNearlyZero())
+	{
+		const FQuat DeltaQuat = FQuat(Snapshot.RightLowerArmAdditiveRotation * InAlpha);
+		RotateBoneAndChildrenCS(LowerTM, { &HandTM }, DeltaQuat);
+	}
+
+	if (!Snapshot.RightHandAdditiveRotation.IsNearlyZero())
+	{
+		const FQuat DeltaQuat = FQuat(Snapshot.RightHandAdditiveRotation * InAlpha);
+		HandTM.SetRotation(DeltaQuat * HandTM.GetRotation());
+		HandTM.NormalizeRotation();
+	}
 
 	AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, UpperTM);
 	AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, LowerTM);
