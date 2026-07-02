@@ -88,8 +88,8 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			RightHandOffsetX.ControlId = TEXT("right_hand.local_offset.x");
 			RightHandOffsetX.SolverType = ELLMControlSolverType::LocalOffset;
 			RightHandOffsetX.AllowedTrackTypes = FloatTracks();
-			RightHandOffsetX.MinValue = -50.0f;
-			RightHandOffsetX.MaxValue = 50.0f;
+			RightHandOffsetX.MinValue = -80.0f;
+			RightHandOffsetX.MaxValue = 80.0f;
 			Result.Add(RightHandOffsetX);
 
 			FLLMControlDefinition RightHandOffsetY = RightHandOffsetX;
@@ -137,7 +137,7 @@ const TArray<FLLMAnchorDefinition>& BuiltInAnchors()
 			FLLMAnchorDefinition RightWave;
 			RightWave.AnchorId = TEXT("right_wave");
 			RightWave.BoneName = TEXT("head");
-			RightWave.OffsetCS = FVector(-32.0f, 32.0f, -10.0f);
+			RightWave.OffsetCS = FVector(-22.0f, 27.0f, -10.0f);
 			Result.Add(RightWave);
 
 			FLLMAnchorDefinition ChestFront;

@@ -31,10 +31,10 @@ public:
 	float MaxClipDuration = 3.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(ClampMin="1", ClampMax="32"))
-	int32 MaxTracks = 12;
+	int32 MaxTracks = 24;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(ClampMin="1", ClampMax="16"))
-	int32 MaxFloatKeysPerTrack = 8;
+	int32 MaxFloatKeysPerTrack = 12;
 
 	FLLMMotionValidationResult ValidateAndClamp(FLLMMotionPlan& InOutPlan) const;
 

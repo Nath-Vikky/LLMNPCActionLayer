@@ -307,9 +307,9 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& Target
 	FLLMMotionPlan Plan;
 	Plan.Intent = TEXT("test_wave");
 	Plan.Clip.ClipId = TEXT("test_wave_clip");
-	Plan.Clip.Duration = 1.7f;
-	Plan.Clip.BlendIn = 0.18f;
-	Plan.Clip.BlendOut = 0.25f;
+	Plan.Clip.Duration = 2.2f;
+	Plan.Clip.BlendIn = 0.12f;
+	Plan.Clip.BlendOut = 0.28f;
 
 	if (bUseTarget)
 	{
@@ -319,8 +319,8 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& Target
 		GazeTarget.ValueType = ELLMMotionValueType::Vector;
 		GazeTarget.TargetRef = CleanTargetRef;
 		GazeTarget.StartTime = 0.0f;
-		GazeTarget.EndTime = 1.7f;
-		GazeTarget.Strength = 0.65f;
+		GazeTarget.EndTime = 2.2f;
+		GazeTarget.Strength = 0.55f;
 		Plan.Clip.Tracks.Add(GazeTarget);
 
 		FLLMMotionTrack PalmTarget;
@@ -328,9 +328,9 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& Target
 		PalmTarget.TrackType = ELLMMotionTrackType::LookAt;
 		PalmTarget.ValueType = ELLMMotionValueType::Vector;
 		PalmTarget.TargetRef = CleanTargetRef;
-		PalmTarget.StartTime = 0.2f;
-		PalmTarget.EndTime = 1.45f;
-		PalmTarget.Strength = 0.45f;
+		PalmTarget.StartTime = 0.35f;
+		PalmTarget.EndTime = 1.55f;
+		PalmTarget.Strength = 0.25f;
 		Plan.Clip.Tracks.Add(PalmTarget);
 	}
 
@@ -340,101 +340,228 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& Target
 	HandAnchor.TrackType = ELLMMotionTrackType::Anchor;
 	HandAnchor.Anchor = TEXT("right_wave");
 	HandAnchor.StartTime = 0.0f;
-	HandAnchor.EndTime = 1.7f;
+	HandAnchor.EndTime = 2.2f;
+	HandAnchor.Envelope = ELLMMotionEnvelope::None;
 	HandAnchor.Offset = FVector::ZeroVector;
 	Plan.Clip.Tracks.Add(HandAnchor);
 
-	FLLMMotionTrack WaveOffset;
-	WaveOffset.ControlId = TEXT("right_hand.local_offset.y");
-	WaveOffset.TrackType = ELLMMotionTrackType::Oscillator;
-	WaveOffset.ValueType = ELLMMotionValueType::Float;
-	WaveOffset.StartTime = 0.35f;
-	WaveOffset.EndTime = 1.35f;
-	WaveOffset.Amplitude = 5.0f;
-	WaveOffset.Frequency = 3.0f;
-	WaveOffset.Envelope = ELLMMotionEnvelope::Smooth;
-	Plan.Clip.Tracks.Add(WaveOffset);
+	FLLMMotionTrack HandOffsetX;
+	HandOffsetX.ControlId = TEXT("right_hand.local_offset.x");
+	HandOffsetX.TrackType = ELLMMotionTrackType::Keyframes;
+	HandOffsetX.ValueType = ELLMMotionValueType::Float;
+	HandOffsetX.StartTime = 0.0f;
+	HandOffsetX.EndTime = 2.2f;
+	HandOffsetX.Envelope = ELLMMotionEnvelope::None;
+	HandOffsetX.FloatKeys = {
+		{0.0f, 0.0f},
+		{0.28f, -10.0f},
+		{0.42f, -1.0f},
+		{0.68f, -14.0f},
+		{0.82f, 21.0f},
+		{0.96f, -15.0f},
+		{1.10f, -10.0f},
+		{1.24f, 16.0f},
+		{1.52f, -4.0f},
+		{2.2f, 0.0f}
+	};
+	Plan.Clip.Tracks.Add(HandOffsetX);
 
-	FLLMMotionTrack WaveLift;
-	WaveLift.ControlId = TEXT("right_hand.local_offset.z");
-	WaveLift.TrackType = ELLMMotionTrackType::Oscillator;
-	WaveLift.ValueType = ELLMMotionValueType::Float;
-	WaveLift.StartTime = 0.35f;
-	WaveLift.EndTime = 1.35f;
-	WaveLift.Amplitude = 3.0f;
-	WaveLift.Frequency = 3.0f;
-	WaveLift.Phase = HALF_PI;
-	WaveLift.Envelope = ELLMMotionEnvelope::Smooth;
-	Plan.Clip.Tracks.Add(WaveLift);
+	FLLMMotionTrack HandOffsetY;
+	HandOffsetY.ControlId = TEXT("right_hand.local_offset.y");
+	HandOffsetY.TrackType = ELLMMotionTrackType::Keyframes;
+	HandOffsetY.ValueType = ELLMMotionValueType::Float;
+	HandOffsetY.StartTime = 0.0f;
+	HandOffsetY.EndTime = 2.2f;
+	HandOffsetY.Envelope = ELLMMotionEnvelope::None;
+	HandOffsetY.FloatKeys = {
+		{0.0f, -26.0f},
+		{0.28f, -10.0f},
+		{0.42f, -2.0f},
+		{0.68f, 6.0f},
+		{0.82f, -7.0f},
+		{0.96f, 1.0f},
+		{1.10f, 5.0f},
+		{1.38f, -12.0f},
+		{1.52f, -26.0f},
+		{2.2f, -26.0f}
+	};
+	Plan.Clip.Tracks.Add(HandOffsetY);
 
-	FLLMMotionTrack UpperArmSway;
-	UpperArmSway.ControlId = TEXT("right_upperarm.roll");
-	UpperArmSway.TrackType = ELLMMotionTrackType::Oscillator;
-	UpperArmSway.ValueType = ELLMMotionValueType::Float;
-	UpperArmSway.StartTime = 0.35f;
-	UpperArmSway.EndTime = 1.35f;
-	UpperArmSway.Amplitude = 8.0f;
-	UpperArmSway.Frequency = 2.0f;
-	UpperArmSway.Envelope = ELLMMotionEnvelope::Smooth;
-	Plan.Clip.Tracks.Add(UpperArmSway);
+	FLLMMotionTrack HandOffsetZ;
+	HandOffsetZ.ControlId = TEXT("right_hand.local_offset.z");
+	HandOffsetZ.TrackType = ELLMMotionTrackType::Keyframes;
+	HandOffsetZ.ValueType = ELLMMotionValueType::Float;
+	HandOffsetZ.StartTime = 0.0f;
+	HandOffsetZ.EndTime = 2.2f;
+	HandOffsetZ.Envelope = ELLMMotionEnvelope::None;
+	HandOffsetZ.FloatKeys = {
+		{0.0f, -60.0f},
+		{0.28f, -50.0f},
+		{0.42f, 3.0f},
+		{0.56f, 4.0f},
+		{0.82f, -3.0f},
+		{0.96f, 6.0f},
+		{1.24f, -13.0f},
+		{1.38f, -44.0f},
+		{1.52f, -59.0f},
+		{2.2f, -60.0f}
+	};
+	Plan.Clip.Tracks.Add(HandOffsetZ);
 
-	FLLMMotionTrack LowerArmSwing;
-	LowerArmSwing.ControlId = TEXT("right_lowerarm.yaw");
-	LowerArmSwing.TrackType = ELLMMotionTrackType::Oscillator;
-	LowerArmSwing.ValueType = ELLMMotionValueType::Float;
-	LowerArmSwing.StartTime = 0.32f;
-	LowerArmSwing.EndTime = 1.38f;
-	LowerArmSwing.Amplitude = 24.0f;
-	LowerArmSwing.Frequency = 3.0f;
-	LowerArmSwing.Envelope = ELLMMotionEnvelope::Smooth;
-	Plan.Clip.Tracks.Add(LowerArmSwing);
+	FLLMMotionTrack UpperArmPitch;
+	UpperArmPitch.ControlId = TEXT("right_upperarm.pitch");
+	UpperArmPitch.TrackType = ELLMMotionTrackType::Keyframes;
+	UpperArmPitch.ValueType = ELLMMotionValueType::Float;
+	UpperArmPitch.StartTime = 0.0f;
+	UpperArmPitch.EndTime = 2.2f;
+	UpperArmPitch.Envelope = ELLMMotionEnvelope::None;
+	UpperArmPitch.FloatKeys = {
+		{0.0f, 0.0f},
+		{0.28f, 7.0f},
+		{0.42f, 28.0f},
+		{0.56f, 32.0f},
+		{0.68f, 29.0f},
+		{0.82f, 35.0f},
+		{1.10f, 27.0f},
+		{1.52f, 3.0f},
+		{2.2f, 0.0f}
+	};
+	Plan.Clip.Tracks.Add(UpperArmPitch);
 
-	FLLMMotionTrack LowerArmLift;
-	LowerArmLift.ControlId = TEXT("right_lowerarm.pitch");
-	LowerArmLift.TrackType = ELLMMotionTrackType::Oscillator;
-	LowerArmLift.ValueType = ELLMMotionValueType::Float;
-	LowerArmLift.StartTime = 0.32f;
-	LowerArmLift.EndTime = 1.38f;
-	LowerArmLift.Amplitude = 10.0f;
-	LowerArmLift.Frequency = 3.0f;
-	LowerArmLift.Phase = HALF_PI;
-	LowerArmLift.Envelope = ELLMMotionEnvelope::Smooth;
-	Plan.Clip.Tracks.Add(LowerArmLift);
+	FLLMMotionTrack UpperArmYaw;
+	UpperArmYaw.ControlId = TEXT("right_upperarm.yaw");
+	UpperArmYaw.TrackType = ELLMMotionTrackType::Keyframes;
+	UpperArmYaw.ValueType = ELLMMotionValueType::Float;
+	UpperArmYaw.StartTime = 0.0f;
+	UpperArmYaw.EndTime = 2.2f;
+	UpperArmYaw.Envelope = ELLMMotionEnvelope::None;
+	UpperArmYaw.FloatKeys = {
+		{0.0f, 0.0f},
+		{0.28f, 5.0f},
+		{0.42f, 22.0f},
+		{0.68f, 26.0f},
+		{0.82f, 31.0f},
+		{0.96f, 21.0f},
+		{1.24f, 24.0f},
+		{1.52f, 0.0f},
+		{2.2f, 0.0f}
+	};
+	Plan.Clip.Tracks.Add(UpperArmYaw);
 
-	FLLMMotionTrack WristWave;
-	WristWave.ControlId = TEXT("right_hand.roll");
-	WristWave.TrackType = ELLMMotionTrackType::Oscillator;
-	WristWave.ValueType = ELLMMotionValueType::Float;
-	WristWave.StartTime = 0.32f;
-	WristWave.EndTime = 1.38f;
-	WristWave.Amplitude = 30.0f;
-	WristWave.Frequency = 3.0f;
-	WristWave.Phase = HALF_PI;
-	WristWave.Envelope = ELLMMotionEnvelope::Smooth;
-	Plan.Clip.Tracks.Add(WristWave);
+	FLLMMotionTrack UpperArmRoll;
+	UpperArmRoll.ControlId = TEXT("right_upperarm.roll");
+	UpperArmRoll.TrackType = ELLMMotionTrackType::Keyframes;
+	UpperArmRoll.ValueType = ELLMMotionValueType::Float;
+	UpperArmRoll.StartTime = 0.0f;
+	UpperArmRoll.EndTime = 2.2f;
+	UpperArmRoll.Envelope = ELLMMotionEnvelope::None;
+	UpperArmRoll.FloatKeys = {
+		{0.0f, 0.0f},
+		{0.28f, -24.0f},
+		{0.42f, -51.0f},
+		{0.56f, -47.0f},
+		{0.68f, -55.0f},
+		{0.82f, -30.0f},
+		{1.10f, -55.0f},
+		{1.24f, -30.0f},
+		{1.52f, 0.0f},
+		{2.2f, 0.0f}
+	};
+	Plan.Clip.Tracks.Add(UpperArmRoll);
+
+	FLLMMotionTrack LowerArmYaw;
+	LowerArmYaw.ControlId = TEXT("right_lowerarm.yaw");
+	LowerArmYaw.TrackType = ELLMMotionTrackType::Keyframes;
+	LowerArmYaw.ValueType = ELLMMotionValueType::Float;
+	LowerArmYaw.StartTime = 0.0f;
+	LowerArmYaw.EndTime = 2.2f;
+	LowerArmYaw.Envelope = ELLMMotionEnvelope::None;
+	LowerArmYaw.FloatKeys = {
+		{0.0f, 0.0f},
+		{0.28f, 15.0f},
+		{0.42f, 55.0f},
+		{0.56f, 60.0f},
+		{0.68f, 35.0f},
+		{0.82f, 65.0f},
+		{0.96f, 40.0f},
+		{1.24f, 62.0f},
+		{1.52f, 0.0f},
+		{2.2f, 0.0f}
+	};
+	Plan.Clip.Tracks.Add(LowerArmYaw);
+
+	FLLMMotionTrack WristPitch;
+	WristPitch.ControlId = TEXT("right_hand.pitch");
+	WristPitch.TrackType = ELLMMotionTrackType::Keyframes;
+	WristPitch.ValueType = ELLMMotionValueType::Float;
+	WristPitch.StartTime = 0.0f;
+	WristPitch.EndTime = 2.2f;
+	WristPitch.Envelope = ELLMMotionEnvelope::None;
+	WristPitch.FloatKeys = {
+		{0.0f, 0.0f},
+		{0.28f, 10.0f},
+		{0.56f, -7.0f},
+		{0.68f, 28.0f},
+		{0.82f, -10.0f},
+		{1.10f, 30.0f},
+		{1.38f, -18.0f},
+		{1.52f, -6.0f},
+		{2.2f, 0.0f}
+	};
+	Plan.Clip.Tracks.Add(WristPitch);
 
 	FLLMMotionTrack WristYaw;
 	WristYaw.ControlId = TEXT("right_hand.yaw");
-	WristYaw.TrackType = ELLMMotionTrackType::Oscillator;
+	WristYaw.TrackType = ELLMMotionTrackType::Keyframes;
 	WristYaw.ValueType = ELLMMotionValueType::Float;
-	WristYaw.StartTime = 0.32f;
-	WristYaw.EndTime = 1.38f;
-	WristYaw.Amplitude = 14.0f;
-	WristYaw.Frequency = 3.0f;
-	WristYaw.Envelope = ELLMMotionEnvelope::Smooth;
+	WristYaw.StartTime = 0.0f;
+	WristYaw.EndTime = 2.2f;
+	WristYaw.Envelope = ELLMMotionEnvelope::None;
+	WristYaw.FloatKeys = {
+		{0.0f, 0.0f},
+		{0.42f, 23.0f},
+		{0.68f, 22.0f},
+		{0.96f, 27.0f},
+		{1.24f, 21.0f},
+		{1.52f, 8.0f},
+		{2.2f, 0.0f}
+	};
 	Plan.Clip.Tracks.Add(WristYaw);
+
+	FLLMMotionTrack WristRoll;
+	WristRoll.ControlId = TEXT("right_hand.roll");
+	WristRoll.TrackType = ELLMMotionTrackType::Keyframes;
+	WristRoll.ValueType = ELLMMotionValueType::Float;
+	WristRoll.StartTime = 0.0f;
+	WristRoll.EndTime = 2.2f;
+	WristRoll.Envelope = ELLMMotionEnvelope::None;
+	WristRoll.FloatKeys = {
+		{0.0f, 0.0f},
+		{0.28f, -5.0f},
+		{0.42f, 30.0f},
+		{0.56f, 42.0f},
+		{0.68f, 25.0f},
+		{0.82f, 42.0f},
+		{1.10f, 20.0f},
+		{1.24f, 35.0f},
+		{1.52f, 16.0f},
+		{2.2f, 0.0f}
+	};
+	Plan.Clip.Tracks.Add(WristRoll);
 
 	FLLMMotionTrack FingerOpen;
 	FingerOpen.ControlId = TEXT("right_fingers.open");
 	FingerOpen.TrackType = ELLMMotionTrackType::Keyframes;
 	FingerOpen.ValueType = ELLMMotionValueType::Float;
 	FingerOpen.StartTime = 0.0f;
-	FingerOpen.EndTime = 1.7f;
+	FingerOpen.EndTime = 2.2f;
+	FingerOpen.Envelope = ELLMMotionEnvelope::None;
 	FingerOpen.FloatKeys = {
 		{0.0f, 0.0f},
-		{0.25f, 1.0f},
-		{1.45f, 1.0f},
-		{1.7f, 0.0f}
+		{0.28f, 1.0f},
+		{1.38f, 1.0f},
+		{1.52f, 0.35f},
+		{2.2f, 0.0f}
 	};
 	Plan.Clip.Tracks.Add(FingerOpen);
 
