@@ -208,12 +208,14 @@ void ULLMNPCActionComponent::StopActiveAction()
 
 void ULLMNPCActionComponent::TestWave(AActor* TargetActor)
 {
+	static_cast<void>(TargetActor);
+
 	FLLMNPCActionPlan Plan;
 	Plan.Intent = TEXT("test_wave");
 
 	FLLMNPCActionRequest Action;
 	Action.ActionId = TEXT("gesture.wave");
-	Action.TargetRef = TargetActor ? TEXT("test_target") : TEXT("player");
+	Action.TargetRef.Reset();
 	Action.Hand = ELLMNPCHand::Right;
 	Action.Emotion = ELLMNPCEmotion::Friendly;
 	Action.Amplitude = 0.7f;
@@ -221,11 +223,6 @@ void ULLMNPCActionComponent::TestWave(AActor* TargetActor)
 	Action.Duration = 1.8f;
 	Action.Height = 0.8f;
 	Action.Beats = 3;
-
-	if (TargetActor)
-	{
-		RegisterTargetRef(Action.TargetRef, TargetActor);
-	}
 
 	Plan.Actions.Add(Action);
 	SubmitActionPlan(Plan);
@@ -300,7 +297,7 @@ bool ULLMNPCActionComponent::StartNextAction()
 	RuntimeState.ActiveTargetRef = FName(*ActiveAction.TargetRef);
 
 	AActor* ResolvedTarget = nullptr;
-	if (ResolveTarget(ActiveAction.TargetRef, ResolvedTarget))
+	if (ActiveAction.ActionId != TEXT("gesture.wave") && ResolveTarget(ActiveAction.TargetRef, ResolvedTarget))
 	{
 		CurrentTargetActor = ResolvedTarget;
 	}
@@ -415,7 +412,6 @@ void ULLMNPCActionComponent::UpdateActiveAction(float DeltaTime)
 	}
 	else if (ActiveAction.ActionId == TEXT("gesture.wave"))
 	{
-		UpdateGaze(T);
 		UpdateWave(T);
 	}
 	else if (ActiveAction.ActionId == TEXT("gesture.point"))

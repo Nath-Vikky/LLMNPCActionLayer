@@ -161,13 +161,8 @@ void ULLMNPCMotionComponent::TestNod()
 
 void ULLMNPCMotionComponent::TestWave(AActor* TargetActor)
 {
-	const FString TargetRef = TargetActor ? TEXT("test_target") : FString();
-	if (TargetActor)
-	{
-		RegisterTarget(TargetRef, TargetActor);
-	}
-
-	SubmitMotionPlan(BuildWaveMotionPlan(TargetRef));
+	static_cast<void>(TargetActor);
+	SubmitMotionPlan(BuildWaveMotionPlan(FString()));
 }
 
 bool ULLMNPCMotionComponent::SubmitSampleMotionPlanJson(ELLMNPCMotionDebugSample Sample, AActor* TargetActor)
@@ -301,8 +296,7 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildNodMotionPlan()
 
 FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& TargetRef)
 {
-	const FString CleanTargetRef = TargetRef.TrimStartAndEnd();
-	const bool bUseTarget = !CleanTargetRef.IsEmpty();
+	static_cast<void>(TargetRef);
 
 	FLLMMotionPlan Plan;
 	Plan.Intent = TEXT("test_wave");
@@ -310,29 +304,6 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& Target
 	Plan.Clip.Duration = 2.2f;
 	Plan.Clip.BlendIn = 0.12f;
 	Plan.Clip.BlendOut = 0.28f;
-
-	if (bUseTarget)
-	{
-		FLLMMotionTrack GazeTarget;
-		GazeTarget.ControlId = TEXT("gaze.target");
-		GazeTarget.TrackType = ELLMMotionTrackType::LookAt;
-		GazeTarget.ValueType = ELLMMotionValueType::Vector;
-		GazeTarget.TargetRef = CleanTargetRef;
-		GazeTarget.StartTime = 0.0f;
-		GazeTarget.EndTime = 2.2f;
-		GazeTarget.Strength = 0.55f;
-		Plan.Clip.Tracks.Add(GazeTarget);
-
-		FLLMMotionTrack PalmTarget;
-		PalmTarget.ControlId = TEXT("right_hand.palm_target");
-		PalmTarget.TrackType = ELLMMotionTrackType::LookAt;
-		PalmTarget.ValueType = ELLMMotionValueType::Vector;
-		PalmTarget.TargetRef = CleanTargetRef;
-		PalmTarget.StartTime = 0.35f;
-		PalmTarget.EndTime = 1.55f;
-		PalmTarget.Strength = 0.25f;
-		Plan.Clip.Tracks.Add(PalmTarget);
-	}
 
 	FLLMMotionTrack HandAnchor;
 	HandAnchor.ControlId = TEXT("right_hand.ik");
