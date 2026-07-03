@@ -52,7 +52,10 @@ FTransform ApplyLocalRotationDelta(
 	}
 
 	FTransform NewLocalTM = LocalTM;
-	const FQuat DeltaQuat = FQuat(DeltaRotation * Alpha);
+	const FQuat FullDeltaQuat = FQuat(DeltaRotation);
+	const FQuat DeltaQuat = Alpha >= 1.0f - KINDA_SMALL_NUMBER
+		? FullDeltaQuat
+		: FQuat::Slerp(FQuat::Identity, FullDeltaQuat, FMath::Clamp(Alpha, 0.0f, 1.0f)).GetNormalized();
 	NewLocalTM.SetRotation(DeltaQuat * NewLocalTM.GetRotation());
 	NewLocalTM.NormalizeRotation();
 	return NewLocalTM;
