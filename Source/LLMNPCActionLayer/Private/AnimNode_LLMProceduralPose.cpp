@@ -41,25 +41,21 @@ FTransform GetCurrentBoneTransformCS(
 	return Output.Pose.GetComponentSpaceTransform(BoneIndex);
 }
 FTransform ApplyLocalRotationDelta(
-	const FTransform& BoneCS,
-	const FTransform& ParentCS,
+	const FTransform& LocalTM,
 	const FRotator& DeltaRotation,
 	float Alpha
 )
 {
 	if (DeltaRotation.IsNearlyZero())
 	{
-		return BoneCS;
+		return LocalTM;
 	}
 
-	FTransform LocalTM = BoneCS.GetRelativeTransform(ParentCS);
+	FTransform NewLocalTM = LocalTM;
 	const FQuat DeltaQuat = FQuat(DeltaRotation * Alpha);
-	LocalTM.SetRotation(DeltaQuat * LocalTM.GetRotation());
-	LocalTM.NormalizeRotation();
-
-	FTransform NewBoneCS = LocalTM * ParentCS;
-	NewBoneCS.NormalizeRotation();
-	return NewBoneCS;
+	NewLocalTM.SetRotation(DeltaQuat * NewLocalTM.GetRotation());
+	NewLocalTM.NormalizeRotation();
+	return NewLocalTM;
 }
 }
 
@@ -258,13 +254,26 @@ void FAnimNode_LLMProceduralPose::ApplyRightArmAdditiveRotationsLocal(
 	const FCompactPoseBoneIndex UpperParentIndex = BoneContainer.GetParentBoneIndex(UpperIndex);
 
 	const FTransform UpperParentTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperParentIndex);
-	FTransform UpperTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperIndex);
-	FTransform LowerTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, LowerIndex);
-	FTransform HandTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, HandIndex);
+	const FTransform OriginalUpperTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperIndex);
+	const FTransform OriginalLowerTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, LowerIndex);
+	const FTransform OriginalHandTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, HandIndex);
 
-	UpperTM = ApplyLocalRotationDelta(UpperTM, UpperParentTM, Snapshot.RightUpperArmAdditiveRotation, InAlpha);
-	LowerTM = ApplyLocalRotationDelta(LowerTM, UpperTM, Snapshot.RightLowerArmAdditiveRotation, InAlpha);
-	HandTM = ApplyLocalRotationDelta(HandTM, LowerTM, Snapshot.RightHandAdditiveRotation, InAlpha);
+	FTransform UpperLocalTM = OriginalUpperTM.GetRelativeTransform(UpperParentTM);
+	FTransform LowerLocalTM = OriginalLowerTM.GetRelativeTransform(OriginalUpperTM);
+	FTransform HandLocalTM = OriginalHandTM.GetRelativeTransform(OriginalLowerTM);
+
+	UpperLocalTM = ApplyLocalRotationDelta(UpperLocalTM, Snapshot.RightUpperArmAdditiveRotation, InAlpha);
+	LowerLocalTM = ApplyLocalRotationDelta(LowerLocalTM, Snapshot.RightLowerArmAdditiveRotation, InAlpha);
+	HandLocalTM = ApplyLocalRotationDelta(HandLocalTM, Snapshot.RightHandAdditiveRotation, InAlpha);
+
+	FTransform UpperTM = UpperLocalTM * UpperParentTM;
+	UpperTM.NormalizeRotation();
+
+	FTransform LowerTM = LowerLocalTM * UpperTM;
+	LowerTM.NormalizeRotation();
+
+	FTransform HandTM = HandLocalTM * LowerTM;
+	HandTM.NormalizeRotation();
 
 	AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, UpperTM);
 	AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, LowerTM);
