@@ -60,6 +60,37 @@ FTransform ApplyLocalRotationDelta(
 	NewLocalTM.NormalizeRotation();
 	return NewLocalTM;
 }
+
+FCompactPoseBoneIndex ResolveBoneIndex(
+	const FBoneContainer& BoneContainer,
+	const FBoneReference& Bone,
+	FName FallbackBoneName
+)
+{
+	if (Bone.IsValidToEvaluate(BoneContainer))
+	{
+		return Bone.GetCompactPoseIndex(BoneContainer);
+	}
+
+	const FName BoneName = Bone.BoneName.IsNone() ? FallbackBoneName : Bone.BoneName;
+	if (BoneName.IsNone())
+	{
+		return FCompactPoseBoneIndex(INDEX_NONE);
+	}
+
+	const int32 MeshPoseIndex = BoneContainer.GetPoseBoneIndexForBoneName(BoneName);
+	if (MeshPoseIndex == INDEX_NONE)
+	{
+		return FCompactPoseBoneIndex(INDEX_NONE);
+	}
+
+	return BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshPoseIndex));
+}
+
+bool IsValidCompactPoseBoneIndex(const FCompactPoseBoneIndex BoneIndex)
+{
+	return BoneIndex.GetInt() != INDEX_NONE;
+}
 }
 
 FAnimNode_LLMProceduralPose::FAnimNode_LLMProceduralPose()
@@ -317,27 +348,33 @@ void FAnimNode_LLMProceduralPose::ApplyRightArmAdditiveRotationsLocal(
 
 bool FAnimNode_LLMProceduralPose::HasAnyRightFingerBone(const FBoneContainer& RequiredBones) const
 {
-	const FBoneReference* FingerBones[] = {
-		&RightThumb01Bone,
-		&RightThumb02Bone,
-		&RightThumb03Bone,
-		&RightIndex01Bone,
-		&RightIndex02Bone,
-		&RightIndex03Bone,
-		&RightMiddle01Bone,
-		&RightMiddle02Bone,
-		&RightMiddle03Bone,
-		&RightRing01Bone,
-		&RightRing02Bone,
-		&RightRing03Bone,
-		&RightPinky01Bone,
-		&RightPinky02Bone,
-		&RightPinky03Bone
+	struct FFingerBoneBinding
+	{
+		const FBoneReference& Bone;
+		FName FallbackBoneName;
 	};
 
-	for (const FBoneReference* FingerBone : FingerBones)
+	const FFingerBoneBinding FingerBones[] = {
+		{RightThumb01Bone, TEXT("thumb_01_r")},
+		{RightThumb02Bone, TEXT("thumb_02_r")},
+		{RightThumb03Bone, TEXT("thumb_03_r")},
+		{RightIndex01Bone, TEXT("index_01_r")},
+		{RightIndex02Bone, TEXT("index_02_r")},
+		{RightIndex03Bone, TEXT("index_03_r")},
+		{RightMiddle01Bone, TEXT("middle_01_r")},
+		{RightMiddle02Bone, TEXT("middle_02_r")},
+		{RightMiddle03Bone, TEXT("middle_03_r")},
+		{RightRing01Bone, TEXT("ring_01_r")},
+		{RightRing02Bone, TEXT("ring_02_r")},
+		{RightRing03Bone, TEXT("ring_03_r")},
+		{RightPinky01Bone, TEXT("pinky_01_r")},
+		{RightPinky02Bone, TEXT("pinky_02_r")},
+		{RightPinky03Bone, TEXT("pinky_03_r")}
+	};
+
+	for (const FFingerBoneBinding& FingerBone : FingerBones)
 	{
-		if (FingerBone && FingerBone->IsValidToEvaluate(RequiredBones))
+		if (IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, FingerBone.Bone, FingerBone.FallbackBoneName)))
 		{
 			return true;
 		}
@@ -350,6 +387,7 @@ void FAnimNode_LLMProceduralPose::ApplyFingerRotationLocal(
 	FComponentSpacePoseContext& Output,
 	TArray<FBoneTransform>& OutBoneTransforms,
 	const FBoneReference& Bone,
+	FName FallbackBoneName,
 	const FRotator& Rotation,
 	float InAlpha
 ) const
@@ -360,13 +398,17 @@ void FAnimNode_LLMProceduralPose::ApplyFingerRotationLocal(
 	}
 
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	if (!Bone.IsValidToEvaluate(BoneContainer))
+	const FCompactPoseBoneIndex BoneIndex = ResolveBoneIndex(BoneContainer, Bone, FallbackBoneName);
+	if (!IsValidCompactPoseBoneIndex(BoneIndex))
 	{
 		return;
 	}
 
-	const FCompactPoseBoneIndex BoneIndex = Bone.GetCompactPoseIndex(BoneContainer);
 	const FCompactPoseBoneIndex ParentIndex = BoneContainer.GetParentBoneIndex(BoneIndex);
+	if (!IsValidCompactPoseBoneIndex(ParentIndex))
+	{
+		return;
+	}
 
 	const FTransform ParentTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, ParentIndex);
 	const FTransform BoneTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, BoneIndex);
@@ -394,48 +436,48 @@ void FAnimNode_LLMProceduralPose::ApplyRightFingerPoseLocal(
 
 	if (OpenAlpha > KINDA_SMALL_NUMBER)
 	{
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb01Bone, FRotator(3.0f, -3.0f, -2.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb02Bone, FRotator(1.5f, -3.0f, -1.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb03Bone, FRotator(0.0f, -1.5f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb01Bone, TEXT("thumb_01_r"), FRotator(8.0f, -14.0f, -7.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb02Bone, TEXT("thumb_02_r"), FRotator(4.0f, -10.0f, -3.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb03Bone, TEXT("thumb_03_r"), FRotator(1.0f, -5.0f, 0.0f), OpenAlpha);
 
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex01Bone, FRotator(0.0f, -6.0f, -1.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex02Bone, FRotator(0.0f, -6.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex03Bone, FRotator(0.0f, -3.0f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex01Bone, TEXT("index_01_r"), FRotator(-2.0f, -18.0f, -4.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex02Bone, TEXT("index_02_r"), FRotator(-1.0f, -16.0f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex03Bone, TEXT("index_03_r"), FRotator(0.0f, -8.0f, 0.0f), OpenAlpha);
 
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle01Bone, FRotator(0.0f, -6.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle02Bone, FRotator(0.0f, -6.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle03Bone, FRotator(0.0f, -3.0f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle01Bone, TEXT("middle_01_r"), FRotator(0.0f, -16.0f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle02Bone, TEXT("middle_02_r"), FRotator(0.0f, -16.0f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle03Bone, TEXT("middle_03_r"), FRotator(0.0f, -8.0f, 0.0f), OpenAlpha);
 
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing01Bone, FRotator(0.0f, -6.0f, 1.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing02Bone, FRotator(0.0f, -6.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing03Bone, FRotator(0.0f, -3.0f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing01Bone, TEXT("ring_01_r"), FRotator(1.0f, -17.0f, 4.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing02Bone, TEXT("ring_02_r"), FRotator(0.0f, -16.0f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing03Bone, TEXT("ring_03_r"), FRotator(0.0f, -8.0f, 0.0f), OpenAlpha);
 
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky01Bone, FRotator(1.0f, -6.0f, 2.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky02Bone, FRotator(1.0f, -6.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky03Bone, FRotator(0.0f, -3.0f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky01Bone, TEXT("pinky_01_r"), FRotator(3.0f, -18.0f, 8.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky02Bone, TEXT("pinky_02_r"), FRotator(2.0f, -16.0f, 0.0f), OpenAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky03Bone, TEXT("pinky_03_r"), FRotator(0.0f, -8.0f, 0.0f), OpenAlpha);
 	}
 
 	if (PointAlpha > KINDA_SMALL_NUMBER)
 	{
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb01Bone, FRotator(12.0f, -18.0f, -8.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb02Bone, FRotator(8.0f, -16.0f, -4.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb03Bone, FRotator(2.0f, -8.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb01Bone, TEXT("thumb_01_r"), FRotator(12.0f, -18.0f, -8.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb02Bone, TEXT("thumb_02_r"), FRotator(8.0f, -16.0f, -4.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb03Bone, TEXT("thumb_03_r"), FRotator(2.0f, -8.0f, 0.0f), PointAlpha);
 
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex01Bone, FRotator(0.0f, -3.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex02Bone, FRotator(0.0f, -2.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex03Bone, FRotator(0.0f, -1.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex01Bone, TEXT("index_01_r"), FRotator(0.0f, -3.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex02Bone, TEXT("index_02_r"), FRotator(0.0f, -2.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex03Bone, TEXT("index_03_r"), FRotator(0.0f, -1.0f, 0.0f), PointAlpha);
 
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle01Bone, FRotator(0.0f, -44.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle02Bone, FRotator(0.0f, -54.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle03Bone, FRotator(0.0f, -28.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle01Bone, TEXT("middle_01_r"), FRotator(0.0f, -44.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle02Bone, TEXT("middle_02_r"), FRotator(0.0f, -54.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle03Bone, TEXT("middle_03_r"), FRotator(0.0f, -28.0f, 0.0f), PointAlpha);
 
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing01Bone, FRotator(0.0f, -46.0f, 2.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing02Bone, FRotator(0.0f, -56.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing03Bone, FRotator(0.0f, -30.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing01Bone, TEXT("ring_01_r"), FRotator(0.0f, -46.0f, 2.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing02Bone, TEXT("ring_02_r"), FRotator(0.0f, -56.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing03Bone, TEXT("ring_03_r"), FRotator(0.0f, -30.0f, 0.0f), PointAlpha);
 
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky01Bone, FRotator(2.0f, -48.0f, 4.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky02Bone, FRotator(2.0f, -58.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky03Bone, FRotator(0.0f, -32.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky01Bone, TEXT("pinky_01_r"), FRotator(2.0f, -48.0f, 4.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky02Bone, TEXT("pinky_02_r"), FRotator(2.0f, -58.0f, 0.0f), PointAlpha);
+		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky03Bone, TEXT("pinky_03_r"), FRotator(0.0f, -32.0f, 0.0f), PointAlpha);
 	}
 }
 

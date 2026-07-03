@@ -116,6 +116,7 @@ private:
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms,
 		const FBoneReference& Bone,
+		FName FallbackBoneName,
 		const FRotator& Rotation,
 		float InAlpha
 	) const;
