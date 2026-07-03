@@ -59,7 +59,7 @@ private:
 		TArray<FBoneTransform>& OutBoneTransforms
 	) const;
 
-	void ApplyRightArmAdditiveRotationsCS(
+	void ApplyRightArmAdditiveRotationsLocal(
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms,
 		float Alpha

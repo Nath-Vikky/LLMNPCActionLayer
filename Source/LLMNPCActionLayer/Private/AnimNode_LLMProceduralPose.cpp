@@ -40,36 +40,26 @@ FTransform GetCurrentBoneTransformCS(
 
 	return Output.Pose.GetComponentSpaceTransform(BoneIndex);
 }
-
-void RotateTransformAroundPivotCS(FTransform& Transform, const FVector& Pivot, const FQuat& DeltaQuat)
-{
-	Transform.SetLocation(Pivot + DeltaQuat.RotateVector(Transform.GetLocation() - Pivot));
-	Transform.SetRotation(DeltaQuat * Transform.GetRotation());
-	Transform.NormalizeRotation();
-}
-
-void RotateBoneAndChildrenCS(
-	FTransform& BoneTM,
-	TArray<FTransform*> ChildTransforms,
-	const FQuat& DeltaQuat
+FTransform ApplyLocalRotationDelta(
+	const FTransform& BoneCS,
+	const FTransform& ParentCS,
+	const FRotator& DeltaRotation,
+	float Alpha
 )
 {
-	if (DeltaQuat.IsIdentity())
+	if (DeltaRotation.IsNearlyZero())
 	{
-		return;
+		return BoneCS;
 	}
 
-	const FVector Pivot = BoneTM.GetLocation();
-	BoneTM.SetRotation(DeltaQuat * BoneTM.GetRotation());
-	BoneTM.NormalizeRotation();
+	FTransform LocalTM = BoneCS.GetRelativeTransform(ParentCS);
+	const FQuat DeltaQuat = FQuat(DeltaRotation * Alpha);
+	LocalTM.SetRotation(DeltaQuat * LocalTM.GetRotation());
+	LocalTM.NormalizeRotation();
 
-	for (FTransform* ChildTM : ChildTransforms)
-	{
-		if (ChildTM)
-		{
-			RotateTransformAroundPivotCS(*ChildTM, Pivot, DeltaQuat);
-		}
-	}
+	FTransform NewBoneCS = LocalTM * ParentCS;
+	NewBoneCS.NormalizeRotation();
+	return NewBoneCS;
 }
 }
 
@@ -143,7 +133,7 @@ void FAnimNode_LLMProceduralPose::EvaluateSkeletalControl_AnyThread(
 		ApplySimpleRightArmIK(Output, OutBoneTransforms);
 	}
 
-	ApplyRightArmAdditiveRotationsCS(Output, OutBoneTransforms, NodeAlpha);
+	ApplyRightArmAdditiveRotationsLocal(Output, OutBoneTransforms, NodeAlpha);
 
 	OutBoneTransforms.Sort(FCompareBoneTransformIndex());
 }
@@ -238,7 +228,7 @@ void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
 	AddOrReplaceBoneTransform(OutBoneTransforms, HandIndex, HandTM);
 }
 
-void FAnimNode_LLMProceduralPose::ApplyRightArmAdditiveRotationsCS(
+void FAnimNode_LLMProceduralPose::ApplyRightArmAdditiveRotationsLocal(
 	FComponentSpacePoseContext& Output,
 	TArray<FBoneTransform>& OutBoneTransforms,
 	float InAlpha
@@ -265,29 +255,16 @@ void FAnimNode_LLMProceduralPose::ApplyRightArmAdditiveRotationsCS(
 	const FCompactPoseBoneIndex UpperIndex = RightUpperArmBone.GetCompactPoseIndex(BoneContainer);
 	const FCompactPoseBoneIndex LowerIndex = RightLowerArmBone.GetCompactPoseIndex(BoneContainer);
 	const FCompactPoseBoneIndex HandIndex = RightHandBone.GetCompactPoseIndex(BoneContainer);
+	const FCompactPoseBoneIndex UpperParentIndex = BoneContainer.GetParentBoneIndex(UpperIndex);
 
+	const FTransform UpperParentTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperParentIndex);
 	FTransform UpperTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperIndex);
 	FTransform LowerTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, LowerIndex);
 	FTransform HandTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, HandIndex);
 
-	if (!Snapshot.RightUpperArmAdditiveRotation.IsNearlyZero())
-	{
-		const FQuat DeltaQuat = FQuat(Snapshot.RightUpperArmAdditiveRotation * InAlpha);
-		RotateBoneAndChildrenCS(UpperTM, { &LowerTM, &HandTM }, DeltaQuat);
-	}
-
-	if (!Snapshot.RightLowerArmAdditiveRotation.IsNearlyZero())
-	{
-		const FQuat DeltaQuat = FQuat(Snapshot.RightLowerArmAdditiveRotation * InAlpha);
-		RotateBoneAndChildrenCS(LowerTM, { &HandTM }, DeltaQuat);
-	}
-
-	if (!Snapshot.RightHandAdditiveRotation.IsNearlyZero())
-	{
-		const FQuat DeltaQuat = FQuat(Snapshot.RightHandAdditiveRotation * InAlpha);
-		HandTM.SetRotation(DeltaQuat * HandTM.GetRotation());
-		HandTM.NormalizeRotation();
-	}
+	UpperTM = ApplyLocalRotationDelta(UpperTM, UpperParentTM, Snapshot.RightUpperArmAdditiveRotation, InAlpha);
+	LowerTM = ApplyLocalRotationDelta(LowerTM, UpperTM, Snapshot.RightLowerArmAdditiveRotation, InAlpha);
+	HandTM = ApplyLocalRotationDelta(HandTM, LowerTM, Snapshot.RightHandAdditiveRotation, InAlpha);
 
 	AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, UpperTM);
 	AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, LowerTM);
