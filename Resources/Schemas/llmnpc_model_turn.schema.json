@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "llmnpc.model_turn.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "assistant_text", "action", "locomotion"],
+  "properties": {
+    "schema_version": { "const": "llmnpc.model_turn.v1" },
+    "assistant_text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "template_id", "target_ref", "amplitude", "speed_scale", "duration_scale", "style", "reason_tag"],
+      "properties": {
+        "decision": { "enum": ["none", "execute_template"] },
+        "template_id": { "type": "string", "maxLength": 128 },
+        "target_ref": { "type": "string", "maxLength": 128 },
+        "amplitude": { "type": "number" },
+        "speed_scale": { "type": "number" },
+        "duration_scale": { "type": "number" },
+        "style": { "type": "string", "maxLength": 64 },
+        "reason_tag": { "type": "string", "maxLength": 64 }
+      }
+    },
+    "locomotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "target_ref", "acceptance_radius_cm"],
+      "properties": {
+        "decision": { "enum": ["none", "move_to"] },
+        "target_ref": { "type": "string", "maxLength": 128 },
+        "acceptance_radius_cm": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

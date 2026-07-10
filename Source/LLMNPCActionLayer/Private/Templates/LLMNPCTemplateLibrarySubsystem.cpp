@@ -194,3 +194,64 @@ const ULLMNPCSkeletonProfile* ULLMNPCTemplateLibrarySubsystem::FindSkeletonProfi
 	const TObjectPtr<ULLMNPCSkeletonProfile>* Found = SkeletonProfileIndex.Find(ProfileId);
 	return Found ? Found->Get() : nullptr;
 }
+
+const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolveRuntimeModelTemplate(
+	FName SelectionId,
+	FName SkeletonProfileId
+) const
+{
+	if (SelectionId.IsNone() || SkeletonProfileId.IsNone())
+	{
+		return nullptr;
+	}
+
+	if (const ULLMNPCMotionTemplate* ExactTemplate = FindPublishedTemplate(SelectionId))
+	{
+		if (
+			ExactTemplate->Metadata.bAllowRuntimeModelSelection &&
+			ExactTemplate->Metadata.SkeletonProfileId == SkeletonProfileId
+		)
+		{
+			return ExactTemplate;
+		}
+	}
+
+	return FindPublishedVariant(SelectionId, SkeletonProfileId);
+}
+
+void ULLMNPCTemplateLibrarySubsystem::QueryRuntimeCandidates(
+	FName SkeletonProfileId,
+	TArray<FLLMNPCTemplateCandidate>& OutCandidates
+) const
+{
+	OutCandidates.Reset();
+	for (const TPair<FName, TArray<FName>>& Pair : PublicActionIndex)
+	{
+		const ULLMNPCMotionTemplate* MotionTemplate = FindPublishedVariant(
+			Pair.Key,
+			SkeletonProfileId
+		);
+		if (!MotionTemplate)
+		{
+			continue;
+		}
+
+		FLLMNPCTemplateCandidate& Candidate = OutCandidates.AddDefaulted_GetRef();
+		Candidate.SelectionId = MotionTemplate->Metadata.PublicActionId;
+		Candidate.Description = MotionTemplate->Metadata.Description;
+		Candidate.IntentTags = MotionTemplate->Metadata.IntentTags;
+		Candidate.EmotionTags = MotionTemplate->Metadata.EmotionTags;
+		Candidate.bRequiresTarget = MotionTemplate->Metadata.bRequiresTarget;
+		Candidate.AmplitudeRange = MotionTemplate->ModifierPolicy.AmplitudeRange;
+		Candidate.SpeedRange = MotionTemplate->ModifierPolicy.SpeedRange;
+		Candidate.DurationRange = MotionTemplate->ModifierPolicy.DurationRange;
+		Candidate.AllowedStyles = MotionTemplate->ModifierPolicy.AllowedStyleTags;
+	}
+
+	OutCandidates.Sort(
+		[](const FLLMNPCTemplateCandidate& A, const FLLMNPCTemplateCandidate& B)
+		{
+			return A.SelectionId.LexicalLess(B.SelectionId);
+		}
+	);
+}

@@ -104,12 +104,13 @@ bool FLLMNPCMockProviderSmokeTest::RunTest(const FString& Parameters)
 		{
 			bCallbackReceived = true;
 			TestEqual(TEXT("The result keeps the request ID"), Result.RequestId, Request.RequestId);
-			TestFalse(TEXT("The empty Phase 0 provider does not report success"), Result.bSuccess);
+			TestTrue(TEXT("The Phase 2 mock provider completes successfully"), Result.bSuccess);
 			TestEqual(
-				TEXT("The empty provider returns a stable error code"),
-				Result.ErrorCode,
-				FName(TEXT("LLMNPC_MOCK_NOT_CONFIGURED"))
+				TEXT("The mock provider reports its stable provider ID"),
+				Result.ProviderId,
+				FName(TEXT("mock"))
 			);
+			TestTrue(TEXT("The mock returns a structured response"), Result.ResponseJson.Contains(TEXT("llmnpc.model_turn.v1")));
 		}
 	);
 

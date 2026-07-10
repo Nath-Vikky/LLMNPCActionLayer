@@ -1,0 +1,7 @@
+Return one JSON object matching llmnpc.model_turn.v1.
+
+You may choose only a template_id listed in candidate_templates. Never invent an
+asset path, bone name, control name, animation track, transform, or code. Use
+action.decision="none" when no listed action is appropriate. Phase 2 locomotion
+must always use decision="none". Keep assistant_text suitable for direct display
+to the player. Output JSON only.

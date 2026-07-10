@@ -16,7 +16,8 @@ public class LLMNPCActionLayer : ModuleRules
 				"DeveloperSettings",
 				"Engine",
 				"AnimGraphRuntime",
-				"AnimationCore"
+				"AnimationCore",
+				"UMG"
 			}
 			);
 			
@@ -26,7 +27,9 @@ public class LLMNPCActionLayer : ModuleRules
 				"HTTP",
 				"Json",
 				"JsonUtilities",
-				"Projects"
+				"Projects",
+				"Slate",
+				"SlateCore"
 			}
 			);
 	}

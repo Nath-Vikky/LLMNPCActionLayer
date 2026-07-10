@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Templates/LLMNPCTemplateCandidate.h"
 #include "LLMNPCTemplateLibrarySubsystem.generated.h"
 
 class ULLMNPCMotionTemplate;
@@ -30,6 +31,18 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
 	const ULLMNPCSkeletonProfile* FindSkeletonProfile(FName ProfileId) const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
+	const ULLMNPCMotionTemplate* ResolveRuntimeModelTemplate(
+		FName SelectionId,
+		FName SkeletonProfileId
+	) const;
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Template Library")
+	void QueryRuntimeCandidates(
+		FName SkeletonProfileId,
+		TArray<FLLMNPCTemplateCandidate>& OutCandidates
+	) const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
 	int32 GetPublishedTemplateCount() const { return TemplateIndex.Num(); }

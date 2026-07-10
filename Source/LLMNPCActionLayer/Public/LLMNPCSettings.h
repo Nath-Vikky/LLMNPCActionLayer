@@ -1,10 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Dialogue/LLMNPCDialogueTypes.h"
 #include "Engine/DeveloperSettings.h"
 #include "LLMNPCSettings.generated.h"
 
 class UAnimInstance;
+class UUserWidget;
 
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="LLM NPC Motion Layer"))
 class LLMNPCACTIONLAYER_API ULLMNPCSettings : public UDeveloperSettings
@@ -17,14 +19,41 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category="LLM API")
 	FString ProviderEndpoint = TEXT("http://localhost:8787/npc/motion-plan");
 
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider")
+	ELLMNPCModelProviderKind DefaultModelProvider = ELLMNPCModelProviderKind::Mock;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider")
+	FString BackendProxyEndpoint = TEXT("http://localhost:8787/v1/npc/turn");
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider")
+	FString DeepSeekBaseUrl = TEXT("https://api.deepseek.com");
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider")
+	FString DeepSeekModel = TEXT("deepseek-v4-flash");
+
 	UPROPERTY(Config, EditAnywhere, Category="LLM API")
-	FString ApiKeyEnvironmentVariable = TEXT("OPENAI_API_KEY");
+	FString ApiKeyEnvironmentVariable = TEXT("DEEPSEEK_API_KEY");
 
 	UPROPERTY(Config, EditAnywhere, Category="LLM API")
 	bool bAllowDirectProviderCallInEditorOnly = false;
 
 	UPROPERTY(Config, EditAnywhere, Category="Runtime", meta=(ClampMin="1.0", ClampMax="60.0"))
 	float RequestTimeoutSeconds = 8.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider", meta=(ClampMin="0", ClampMax="5"))
+	int32 MaxProviderRetries = 2;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider", meta=(ClampMin="0.05", ClampMax="5.0"))
+	float ProviderRetryBaseDelaySeconds = 0.35f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|DeepSeek", meta=(ClampMin="0.0", ClampMax="2.0"))
+	float DeepSeekTemperature = 0.2f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|DeepSeek", meta=(ClampMin="128", ClampMax="8192"))
+	int32 DeepSeekMaxTokens = 1200;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|DeepSeek", meta=(MultiLine="true"))
+	FString DeepSeekSystemPrompt;
 
 	UPROPERTY(Config, EditAnywhere, Category="Runtime|Post Process")
 	TSoftClassPtr<UAnimInstance> DefaultPostProcessAnimClass;
@@ -34,4 +63,7 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category="Runtime|Templates")
 	TArray<FString> SkeletonProfileScanPaths;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|UI")
+	TSoftClassPtr<UUserWidget> DefaultChatWidgetClass;
 };

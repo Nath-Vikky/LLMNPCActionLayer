@@ -12,7 +12,19 @@ struct FLLMNPCModelTurnRequest
 	FGuid RequestId;
 
 	UPROPERTY(BlueprintReadWrite, Category="LLM NPC|Model")
+	FGuid SessionId;
+
+	UPROPERTY(BlueprintReadWrite, Category="LLM NPC|Model")
+	FName NPCId = NAME_None;
+
+	UPROPERTY(BlueprintReadWrite, Category="LLM NPC|Model")
+	FString UserMessage;
+
+	UPROPERTY(BlueprintReadWrite, Category="LLM NPC|Model")
 	FString ContextJson;
+
+	UPROPERTY(BlueprintReadWrite, Category="LLM NPC|Model")
+	bool bFallbackRequest = false;
 };
 
 USTRUCT(BlueprintType)
@@ -31,6 +43,18 @@ struct FLLMNPCModelTurnResult
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
 	FName ErrorCode = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
+	FString ErrorMessage;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
+	FName ProviderId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
+	int32 HttpStatus = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
+	int32 AttemptCount = 0;
 };
 
 using FLLMNPCModelTurnCallback = TFunction<void(const FLLMNPCModelTurnResult&)>;
@@ -46,4 +70,6 @@ public:
 	) = 0;
 
 	virtual void CancelRequest(const FGuid& RequestId) = 0;
+
+	virtual FName GetProviderId() const = 0;
 };
