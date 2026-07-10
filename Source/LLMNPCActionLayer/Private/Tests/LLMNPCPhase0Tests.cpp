@@ -77,7 +77,7 @@ bool FLLMNPCMotionValidatorSmokeTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("An unknown control is rejected"), InvalidResult.bValid);
 	TestTrue(
 		TEXT("The rejection identifies the unknown control"),
-		InvalidResult.ErrorMessage.Contains(TEXT("Unknown ControlId"))
+		InvalidResult.ErrorMessage.Contains(TEXT("LLMNPC_MOTION_CONTROL_UNKNOWN"))
 	);
 	return true;
 }

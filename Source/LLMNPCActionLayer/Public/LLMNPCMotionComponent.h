@@ -4,11 +4,40 @@
 #include "Components/ActorComponent.h"
 #include "LLMNPCControlManifest.h"
 #include "LLMNPCMotionTypes.h"
+#include "Templates/LLMNPCTemplateCompiler.h"
 #include "LLMNPCMotionComponent.generated.h"
 
 class UAnimInstance;
 class ULLMNPCAPIClient;
 class ULLMNPCMotionValidator;
+class ULLMNPCSkeletonProfile;
+class ULLMNPCMotionTemplate;
+class USkeletalMesh;
+class USkeletalMeshComponent;
+enum class ELLMNPCMotionValidationSource : uint8;
+
+UENUM(BlueprintType)
+enum class ELLMNPCPostProcessInstallMode : uint8
+{
+	Disabled,
+	ComponentOverride,
+	UseMeshAssetSetting
+};
+
+struct FLLMNPCQueuedMotionPlan
+{
+	FLLMMotionPlan Plan;
+	TArray<FName> Channels;
+	FName SourceTemplateId = NAME_None;
+	float CooldownSeconds = 0.0f;
+	double QueuedAtSeconds = 0.0;
+};
+
+struct FLLMNPCActiveMotionPlan
+{
+	FLLMNPCQueuedMotionPlan Request;
+	float Time = 0.0f;
+};
 
 UCLASS(ClassGroup=(AI), meta=(BlueprintSpawnableComponent))
 class LLMNPCACTIONLAYER_API ULLMNPCMotionComponent : public UActorComponent
@@ -19,6 +48,7 @@ public:
 	ULLMNPCMotionComponent();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion")
@@ -26,6 +56,11 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion")
 	bool SubmitMotionPlan(FLLMMotionPlan Plan);
+
+	bool SubmitCompiledTemplatePlan(FLLMMotionPlan Plan);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Templates")
+	bool SubmitPublishedTemplate(FName TemplateOrPublicActionId, FLLMNPCTemplateModifiers Modifiers);
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion")
 	void RequestMotionPlanFromContext(const FString& ContextJson);
@@ -63,14 +98,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
 	TObjectPtr<ULLMNPCControlManifest> ControlManifest;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Templates")
+	TSoftObjectPtr<ULLMNPCSkeletonProfile> SkeletonProfile;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
 	TSubclassOf<UAnimInstance> PostProcessAnimClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Post Process")
+	ELLMNPCPostProcessInstallMode PostProcessInstallMode = ELLMNPCPostProcessInstallMode::ComponentOverride;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Legacy")
 	bool bAutoInstallPostProcessAnimBP = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(ClampMin="1", ClampMax="8"))
 	int32 MaxQueueSize = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(ClampMin="0.1", ClampMax="30.0"))
+	float MaxQueueWaitSeconds = 4.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FString LastValidationError;
@@ -91,6 +135,12 @@ public:
 	float ActiveTime = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bPostProcessInstalled = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString LastPostProcessError;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FLLMProceduralPoseSnapshot CurrentSnapshot;
 
 private:
@@ -100,23 +150,48 @@ private:
 	UPROPERTY()
 	TObjectPtr<ULLMNPCAPIClient> APIClient;
 
-	UPROPERTY()
-	TArray<FLLMMotionPlan> Queue;
+	TArray<FLLMNPCQueuedMotionPlan> Queue;
+	TArray<FLLMNPCActiveMotionPlan> ActiveMotions;
+	TMap<FName, double> LastTemplateStartTimes;
 
 	UPROPERTY()
 	TMap<FString, TObjectPtr<AActor>> TargetMap;
 
-	FLLMMotionPlan ActivePlan;
+	UPROPERTY(Transient)
+	TObjectPtr<USkeletalMeshComponent> InstalledPostProcessMesh;
+
+	UPROPERTY(Transient)
+	TObjectPtr<USkeletalMesh> OriginalSkeletalMesh;
+
+	UPROPERTY(Transient)
+	TObjectPtr<USkeletalMesh> TransientSkeletalMeshOverride;
+
 	bool bHasActivePlan = false;
+	bool bOriginalPostProcessDisabled = false;
 
 private:
-	bool StartNextPlan();
-	void UpdateActivePlan(float DeltaTime);
-	void InstallPostProcessAnimBP();
+#if WITH_DEV_AUTOMATION_TESTS
+	friend class FLLMNPCMotionSchedulerTest;
+#endif
+
+	void StartEligiblePlans();
+	bool SubmitMotionPlanWithSource(
+		FLLMMotionPlan Plan,
+		ELLMNPCMotionValidationSource Source,
+		const ULLMNPCMotionTemplate* SourceTemplate = nullptr
+	);
+	bool ValidateTargetRefs(const FLLMMotionPlan& Plan, FString& OutError) const;
+	void UpdateActivePlans(float DeltaTime);
+	static TArray<FName> DeriveMotionChannels(const FLLMMotionPlan& Plan);
+	static bool ChannelsConflict(const TArray<FName>& A, const TArray<FName>& B);
+	static void MergeSnapshot(
+		FLLMProceduralPoseSnapshot& InOutSnapshot,
+		const FLLMProceduralPoseSnapshot& Snapshot
+	);
+	bool InstallPostProcessAnimBP();
+	void RestorePostProcessAnimBP();
+	UClass* ResolvePostProcessAnimClass() const;
 	USkeletalMeshComponent* GetOwnerMesh() const;
 
-	static FLLMMotionPlan BuildNodMotionPlan();
-	static FLLMMotionPlan BuildWaveMotionPlan(const FString& TargetRef);
 	static FLLMMotionPlan BuildInvalidUnknownControlPlan();
-	static FLLMMotionPlan BuildSampleMotionPlan(ELLMNPCMotionDebugSample Sample, const FString& TargetRef);
 };

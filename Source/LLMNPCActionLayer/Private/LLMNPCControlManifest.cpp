@@ -12,7 +12,13 @@ TArray<ELLMMotionTrackType> FloatTracks()
 	};
 }
 
-FLLMControlDefinition MakeRotationControl(FName ControlId, FName BoneName, float MinValue, float MaxValue)
+FLLMControlDefinition MakeRotationControl(
+	FName ControlId,
+	FName BoneName,
+	float MinValue,
+	float MaxValue,
+	bool bAllowRuntimeModel = true
+)
 {
 	FLLMControlDefinition Def;
 	Def.ControlId = ControlId;
@@ -20,6 +26,8 @@ FLLMControlDefinition MakeRotationControl(FName ControlId, FName BoneName, float
 	Def.AllowedTrackTypes = FloatTracks();
 	Def.MinValue = MinValue;
 	Def.MaxValue = MaxValue;
+	Def.bAllowRuntimeModel = bAllowRuntimeModel;
+	Def.bAllowLLM = bAllowRuntimeModel;
 
 	FLLMWeightedBone WeightedBone;
 	WeightedBone.BoneName = BoneName;
@@ -42,15 +50,15 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			Result.Add(MakeRotationControl(TEXT("chest.pitch"), TEXT("spine_03"), -20.0f, 20.0f));
 			Result.Add(MakeRotationControl(TEXT("chest.yaw"), TEXT("spine_03"), -25.0f, 25.0f));
 			Result.Add(MakeRotationControl(TEXT("chest.roll"), TEXT("spine_03"), -18.0f, 18.0f));
-			Result.Add(MakeRotationControl(TEXT("right_upperarm.pitch"), TEXT("upperarm_r"), -125.0f, 125.0f));
-			Result.Add(MakeRotationControl(TEXT("right_upperarm.yaw"), TEXT("upperarm_r"), -125.0f, 125.0f));
-			Result.Add(MakeRotationControl(TEXT("right_upperarm.roll"), TEXT("upperarm_r"), -125.0f, 125.0f));
-			Result.Add(MakeRotationControl(TEXT("right_lowerarm.pitch"), TEXT("lowerarm_r"), -125.0f, 125.0f));
-			Result.Add(MakeRotationControl(TEXT("right_lowerarm.yaw"), TEXT("lowerarm_r"), -125.0f, 125.0f));
-			Result.Add(MakeRotationControl(TEXT("right_lowerarm.roll"), TEXT("lowerarm_r"), -125.0f, 125.0f));
-			Result.Add(MakeRotationControl(TEXT("right_hand.pitch"), TEXT("hand_r"), -95.0f, 95.0f));
-			Result.Add(MakeRotationControl(TEXT("right_hand.yaw"), TEXT("hand_r"), -95.0f, 95.0f));
-			Result.Add(MakeRotationControl(TEXT("right_hand.roll"), TEXT("hand_r"), -95.0f, 95.0f));
+			Result.Add(MakeRotationControl(TEXT("right_upperarm.pitch"), TEXT("upperarm_r"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_upperarm.yaw"), TEXT("upperarm_r"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_upperarm.roll"), TEXT("upperarm_r"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_lowerarm.pitch"), TEXT("lowerarm_r"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_lowerarm.yaw"), TEXT("lowerarm_r"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_lowerarm.roll"), TEXT("lowerarm_r"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_hand.pitch"), TEXT("hand_r"), -95.0f, 95.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_hand.yaw"), TEXT("hand_r"), -95.0f, 95.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_hand.roll"), TEXT("hand_r"), -95.0f, 95.0f, false));
 
 			FLLMControlDefinition RightHandIK;
 			RightHandIK.ControlId = TEXT("right_hand.ik");

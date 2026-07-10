@@ -1,0 +1,64 @@
+{
+  "schema_version": "llmnpc.motion_template.v1",
+  "asset_name": "MT_Nod_Manny_v1",
+  "template_id": "gesture.nod.manny.v1",
+  "public_action_id": "gesture.nod",
+  "semantic_version": "1.0.0",
+  "kind": "procedural_motion",
+  "review_state": "published",
+  "display_name": "Manny Neutral Nod",
+  "description": "A short neutral nod for agreement or acknowledgement.",
+  "skeleton_profile_id": "ue5_manny.v1",
+  "metadata": {
+    "intent_tags": ["confirm", "agree", "acknowledge"],
+    "emotion_tags": ["neutral", "friendly"],
+    "personality_tags": [],
+    "required_channels": ["head"],
+    "blocked_states": ["dead", "ragdoll", "stunned"],
+    "requires_target": false,
+    "can_run_while_moving": true,
+    "allow_runtime_model_selection": true,
+    "cooldown_seconds": 0.35
+  },
+  "modifier_policy": {
+    "amplitude": [0.8, 1.2],
+    "speed": [0.85, 1.15],
+    "duration": [1.0, 1.0],
+    "allow_mirror": false,
+    "allowed_styles": ["neutral", "friendly", "subtle"]
+  },
+  "clip": {
+    "clip_id": "gesture.nod.manny.v1.clip",
+    "duration": 0.9,
+    "blend_in": 0.12,
+    "blend_out": 0.18,
+    "priority": 0.4,
+    "interruptible": true,
+    "tracks": [
+      {
+        "control_id": "head.pitch",
+        "track_type": "oscillator",
+        "value_type": "float",
+        "start_time": 0.05,
+        "end_time": 0.82,
+        "amplitude": 10.0,
+        "frequency": 2.0,
+        "phase": 0.0,
+        "envelope": "smooth",
+        "strength": 1.0
+      }
+    ]
+  },
+  "provenance": {
+    "source_type": "hand_authored_existing_test",
+    "source_repository": "LLMNPCActionLayer",
+    "source_revision": "v0.2.0-baseline",
+    "source_license": "project_owned",
+    "redistribution_allowed": true
+  },
+  "validation_report": {
+    "schema_version": "llmnpc.template_validation.v1",
+    "status": "pass",
+    "manual_review": "accepted_in_llmnpcdemo"
+  }
+}

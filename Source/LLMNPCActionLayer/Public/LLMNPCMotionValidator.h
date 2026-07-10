@@ -18,6 +18,14 @@ struct FLLMMotionValidationResult
 	FString ErrorMessage;
 };
 
+UENUM(BlueprintType)
+enum class ELLMNPCMotionValidationSource : uint8
+{
+	RuntimeModel,
+	PublishedTemplate,
+	InternalDebug
+};
+
 UCLASS(BlueprintType)
 class LLMNPCACTIONLAYER_API ULLMNPCMotionValidator : public UObject
 {
@@ -36,9 +44,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(ClampMin="1", ClampMax="16"))
 	int32 MaxFloatKeysPerTrack = 12;
 
-	FLLMMotionValidationResult ValidateAndClamp(FLLMMotionPlan& InOutPlan) const;
+	FLLMMotionValidationResult ValidateAndClamp(
+		FLLMMotionPlan& InOutPlan,
+		ELLMNPCMotionValidationSource Source = ELLMNPCMotionValidationSource::RuntimeModel
+	) const;
 
 private:
-	bool ValidateTrack(FLLMMotionTrack& InOutTrack, FString& OutError) const;
+	bool ValidateTrack(
+		FLLMMotionTrack& InOutTrack,
+		float ClipDuration,
+		ELLMNPCMotionValidationSource Source,
+		FString& OutError
+	) const;
 	const FLLMControlDefinition* FindControl(FName ControlId) const;
 };

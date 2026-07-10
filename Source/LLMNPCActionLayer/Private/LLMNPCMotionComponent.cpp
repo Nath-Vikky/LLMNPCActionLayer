@@ -4,15 +4,24 @@
 #include "LLMNPCActionLayer.h"
 #include "LLMNPCMotionSampler.h"
 #include "LLMNPCMotionValidator.h"
+#include "LLMNPCPostProcessAnimInstance.h"
+#include "LLMNPCSettings.h"
+#include "Skeleton/LLMNPCSkeletonProfile.h"
+#include "Templates/LLMNPCMotionTemplate.h"
+#include "Templates/LLMNPCTemplateLibrarySubsystem.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Character.h"
+#include "HAL/PlatformTime.h"
 #include "JsonObjectConverter.h"
 
 ULLMNPCMotionComponent::ULLMNPCMotionComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	SkeletonProfile = TSoftObjectPtr<ULLMNPCSkeletonProfile>(FSoftObjectPath(
+		TEXT("/LLMNPCActionLayer/LLMNPC/SkeletonProfiles/SP_UE5_Manny_v1.SP_UE5_Manny_v1")
+	));
 }
 
 void ULLMNPCMotionComponent::BeginPlay()
@@ -23,29 +32,24 @@ void ULLMNPCMotionComponent::BeginPlay()
 	Validator->Manifest = ControlManifest;
 	APIClient = NewObject<ULLMNPCAPIClient>(this);
 
-	if (bAutoInstallPostProcessAnimBP)
+	if (bAutoInstallPostProcessAnimBP && PostProcessInstallMode != ELLMNPCPostProcessInstallMode::Disabled)
 	{
 		InstallPostProcessAnimBP();
 	}
+}
+
+void ULLMNPCMotionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	RestorePostProcessAnimBP();
+	Super::EndPlay(EndPlayReason);
 }
 
 void ULLMNPCMotionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (!bHasActivePlan)
-	{
-		StartNextPlan();
-	}
-
-	if (bHasActivePlan)
-	{
-		UpdateActivePlan(DeltaTime);
-	}
-	else
-	{
-		CurrentSnapshot = FLLMProceduralPoseSnapshot();
-	}
+	StartEligiblePlans();
+	UpdateActivePlans(DeltaTime);
 }
 
 bool ULLMNPCMotionComponent::SubmitMotionPlanJson(const FString& JsonString)
@@ -65,6 +69,97 @@ bool ULLMNPCMotionComponent::SubmitMotionPlanJson(const FString& JsonString)
 
 bool ULLMNPCMotionComponent::SubmitMotionPlan(FLLMMotionPlan Plan)
 {
+	return SubmitMotionPlanWithSource(
+		MoveTemp(Plan),
+		ELLMNPCMotionValidationSource::RuntimeModel
+	);
+}
+
+bool ULLMNPCMotionComponent::SubmitCompiledTemplatePlan(FLLMMotionPlan Plan)
+{
+	return SubmitMotionPlanWithSource(
+		MoveTemp(Plan),
+		ELLMNPCMotionValidationSource::PublishedTemplate
+	);
+}
+
+bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
+	FName TemplateOrPublicActionId,
+	FLLMNPCTemplateModifiers Modifiers
+)
+{
+	ULLMNPCSkeletonProfile* ResolvedProfile = SkeletonProfile.LoadSynchronous();
+	if (!ResolvedProfile)
+	{
+		LastValidationError = TEXT("LLMNPC_SKELETON_PROFILE_NOT_FOUND");
+		return false;
+	}
+
+	USkeletalMeshComponent* Mesh = GetOwnerMesh();
+	USkeletalMesh* MeshAsset = Mesh ? Mesh->GetSkeletalMeshAsset() : nullptr;
+	if (
+		!MeshAsset ||
+		!ResolvedProfile->IsCompatibleSkeleton(MeshAsset->GetSkeleton())
+	)
+	{
+		LastValidationError = TEXT("LLMNPC_SKELETON_PROFILE_INCOMPATIBLE");
+		return false;
+	}
+
+	UGameInstance* GameInstance = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	ULLMNPCTemplateLibrarySubsystem* Library = GameInstance
+		? GameInstance->GetSubsystem<ULLMNPCTemplateLibrarySubsystem>()
+		: nullptr;
+	if (!Library)
+	{
+		LastValidationError = TEXT("LLMNPC_TEMPLATE_LIBRARY_NOT_AVAILABLE");
+		return false;
+	}
+
+	const ULLMNPCMotionTemplate* MotionTemplate = Library->FindPublishedTemplate(
+		TemplateOrPublicActionId
+	);
+	if (!MotionTemplate)
+	{
+		MotionTemplate = Library->FindPublishedVariant(
+			TemplateOrPublicActionId,
+			ResolvedProfile->ProfileId
+		);
+	}
+
+	if (!MotionTemplate)
+	{
+		LastValidationError = TEXT("LLMNPC_TEMPLATE_NOT_FOUND_OR_NOT_PUBLISHED");
+		return false;
+	}
+
+	FLLMMotionPlan CompiledPlan;
+	FString CompileError;
+	if (!FLLMNPCTemplateCompiler::Compile(
+		*MotionTemplate,
+		Modifiers,
+		*ResolvedProfile,
+		CompiledPlan,
+		CompileError
+	))
+	{
+		LastValidationError = CompileError;
+		return false;
+	}
+
+	return SubmitMotionPlanWithSource(
+		MoveTemp(CompiledPlan),
+		ELLMNPCMotionValidationSource::PublishedTemplate,
+		MotionTemplate
+	);
+}
+
+bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
+	FLLMMotionPlan Plan,
+	ELLMNPCMotionValidationSource Source,
+	const ULLMNPCMotionTemplate* SourceTemplate
+)
+{
 	if (!Validator)
 	{
 		Validator = NewObject<ULLMNPCMotionValidator>(this);
@@ -72,10 +167,18 @@ bool ULLMNPCMotionComponent::SubmitMotionPlan(FLLMMotionPlan Plan)
 
 	Validator->Manifest = ControlManifest;
 
-	FLLMMotionValidationResult Result = Validator->ValidateAndClamp(Plan);
+	FLLMMotionValidationResult Result = Validator->ValidateAndClamp(Plan, Source);
 	if (!Result.bValid)
 	{
 		LastValidationError = Result.ErrorMessage;
+		UE_LOG(LogLLMNPCActionLayer, Warning, TEXT("LLMNPCMotion: Plan rejected: %s"), *LastValidationError);
+		return false;
+	}
+
+	FString TargetError;
+	if (!ValidateTargetRefs(Plan, TargetError))
+	{
+		LastValidationError = TargetError;
 		UE_LOG(LogLLMNPCActionLayer, Warning, TEXT("LLMNPCMotion: Plan rejected: %s"), *LastValidationError);
 		return false;
 	}
@@ -86,8 +189,31 @@ bool ULLMNPCMotionComponent::SubmitMotionPlan(FLLMMotionPlan Plan)
 		return false;
 	}
 
-	Queue.Add(Plan);
-	FJsonObjectConverter::UStructToJsonObjectString(Plan, LastAcceptedMotionJson);
+	FLLMNPCQueuedMotionPlan Request;
+	Request.Plan = MoveTemp(Plan);
+	Request.Channels = DeriveMotionChannels(Request.Plan);
+	Request.QueuedAtSeconds = FPlatformTime::Seconds();
+	if (SourceTemplate)
+	{
+		Request.SourceTemplateId = SourceTemplate->Metadata.TemplateId;
+		Request.CooldownSeconds = SourceTemplate->Metadata.CooldownSeconds;
+		for (const FName Channel : SourceTemplate->Metadata.RequiredChannels)
+		{
+			Request.Channels.AddUnique(Channel);
+		}
+
+		if (const double* LastStart = LastTemplateStartTimes.Find(Request.SourceTemplateId))
+		{
+			if (Request.QueuedAtSeconds - *LastStart < Request.CooldownSeconds)
+			{
+				LastValidationError = TEXT("LLMNPC_TEMPLATE_COOLDOWN_ACTIVE");
+				return false;
+			}
+		}
+	}
+
+	FJsonObjectConverter::UStructToJsonObjectString(Request.Plan, LastAcceptedMotionJson);
+	Queue.Add(MoveTemp(Request));
 	LastValidationError.Reset();
 	return true;
 }
@@ -156,29 +282,85 @@ void ULLMNPCMotionComponent::ClearQueue()
 
 void ULLMNPCMotionComponent::TestNod()
 {
-	SubmitMotionPlan(BuildNodMotionPlan());
+	SubmitPublishedTemplate(TEXT("gesture.nod"), FLLMNPCTemplateModifiers());
 }
 
 void ULLMNPCMotionComponent::TestWave(AActor* TargetActor)
 {
 	static_cast<void>(TargetActor);
-	SubmitMotionPlan(BuildWaveMotionPlan(FString()));
+	SubmitPublishedTemplate(
+		TEXT("gesture.wave.right.manny.fk.v1"),
+		FLLMNPCTemplateModifiers()
+	);
 }
 
 bool ULLMNPCMotionComponent::SubmitSampleMotionPlanJson(ELLMNPCMotionDebugSample Sample, AActor* TargetActor)
 {
-	const FString TargetRef = TargetActor ? TEXT("test_target") : FString();
-	if (TargetActor)
+	static_cast<void>(TargetActor);
+	switch (Sample)
 	{
-		RegisterTarget(TargetRef, TargetActor);
+	case ELLMNPCMotionDebugSample::Wave:
+		return SubmitPublishedTemplate(
+			TEXT("gesture.wave.right.manny.fk.v1"),
+			FLLMNPCTemplateModifiers()
+		);
+	case ELLMNPCMotionDebugSample::InvalidUnknownControl:
+		{
+			FLLMMotionPlan Plan = BuildInvalidUnknownControlPlan();
+			FJsonObjectConverter::UStructToJsonObjectString(Plan, LastRawMotionJson);
+			return SubmitMotionPlanWithSource(
+				MoveTemp(Plan),
+				ELLMNPCMotionValidationSource::InternalDebug
+			);
+		}
+	case ELLMNPCMotionDebugSample::Nod:
+	default:
+		return SubmitPublishedTemplate(
+			TEXT("gesture.nod"),
+			FLLMNPCTemplateModifiers()
+		);
 	}
-
-	return SubmitMotionPlanJson(BuildSampleMotionPlanJson(Sample, TargetRef));
 }
 
 FString ULLMNPCMotionComponent::BuildSampleMotionPlanJson(ELLMNPCMotionDebugSample Sample, const FString& TargetRef) const
 {
-	const FLLMMotionPlan Plan = BuildSampleMotionPlan(Sample, TargetRef.TrimStartAndEnd());
+	static_cast<void>(TargetRef);
+	if (Sample == ELLMNPCMotionDebugSample::InvalidUnknownControl)
+	{
+		FString JsonString;
+		FJsonObjectConverter::UStructToJsonObjectString(
+			BuildInvalidUnknownControlPlan(),
+			JsonString
+		);
+		return JsonString;
+	}
+
+	const TCHAR* TemplatePath = Sample == ELLMNPCMotionDebugSample::Wave
+		? TEXT("/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Wave_Right_Manny_FK_v1.MT_Wave_Right_Manny_FK_v1")
+		: TEXT("/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Nod_Manny_v1.MT_Nod_Manny_v1");
+	const ULLMNPCMotionTemplate* MotionTemplate = LoadObject<ULLMNPCMotionTemplate>(
+		nullptr,
+		TemplatePath
+	);
+	const ULLMNPCSkeletonProfile* Profile = SkeletonProfile.LoadSynchronous();
+	if (!MotionTemplate || !Profile)
+	{
+		return FString();
+	}
+
+	FLLMMotionPlan Plan;
+	FString CompileError;
+	if (!FLLMNPCTemplateCompiler::Compile(
+		*MotionTemplate,
+		FLLMNPCTemplateModifiers(),
+		*Profile,
+		Plan,
+		CompileError
+	))
+	{
+		return FString();
+	}
+
 	FString JsonString;
 	FJsonObjectConverter::UStructToJsonObjectString(Plan, JsonString);
 	return JsonString;
@@ -197,68 +379,423 @@ FLLMNPCMotionDebugState ULLMNPCMotionComponent::GetDebugState() const
 	State.LastValidationError = LastValidationError;
 	State.ActiveClipId = ActiveClipId;
 	State.ActiveTime = ActiveTime;
-	State.ActiveDuration = bHasActivePlan ? ActivePlan.Clip.Duration : 0.0f;
+	State.ActiveDuration = ActiveMotions.IsEmpty()
+		? 0.0f
+		: ActiveMotions[0].Request.Plan.Clip.Duration;
 	State.QueueCount = Queue.Num();
 	State.bHasActivePlan = bHasActivePlan;
+	State.ActivePlanCount = ActiveMotions.Num();
 	State.bMotionRequestInFlight = bMotionRequestInFlight;
+	State.bPostProcessInstalled = bPostProcessInstalled;
+	State.LastPostProcessError = LastPostProcessError;
 	State.Snapshot = CurrentSnapshot;
 	return State;
 }
 
-bool ULLMNPCMotionComponent::StartNextPlan()
+void ULLMNPCMotionComponent::StartEligiblePlans()
 {
-	if (Queue.Num() <= 0)
+	const double NowSeconds = FPlatformTime::Seconds();
+	for (int32 QueueIndex = Queue.Num() - 1; QueueIndex >= 0; --QueueIndex)
 	{
-		return false;
+		if (NowSeconds - Queue[QueueIndex].QueuedAtSeconds > MaxQueueWaitSeconds)
+		{
+			UE_LOG(
+				LogLLMNPCActionLayer,
+				Warning,
+				TEXT("LLMNPCMotion: Dropped queued clip %s after waiting %.2f seconds."),
+				*Queue[QueueIndex].Plan.Clip.ClipId,
+				NowSeconds - Queue[QueueIndex].QueuedAtSeconds
+			);
+			Queue.RemoveAt(QueueIndex);
+		}
 	}
 
-	ActivePlan = Queue[0];
-	Queue.RemoveAt(0);
-	ActiveTime = 0.0f;
-	ActiveClipId = ActivePlan.Clip.ClipId;
-	bHasActivePlan = true;
+	for (int32 QueueIndex = 0; QueueIndex < Queue.Num();)
+	{
+		const FLLMNPCQueuedMotionPlan& Candidate = Queue[QueueIndex];
+		if (!Candidate.SourceTemplateId.IsNone() && Candidate.CooldownSeconds > 0.0f)
+		{
+			if (const double* LastStart = LastTemplateStartTimes.Find(Candidate.SourceTemplateId))
+			{
+				if (NowSeconds - *LastStart < Candidate.CooldownSeconds)
+				{
+					++QueueIndex;
+					continue;
+				}
+			}
+		}
+
+		TArray<int32> ConflictingActiveIndices;
+		bool bCanInterruptAll = true;
+
+		for (int32 ActiveIndex = 0; ActiveIndex < ActiveMotions.Num(); ++ActiveIndex)
+		{
+			const FLLMNPCActiveMotionPlan& Active = ActiveMotions[ActiveIndex];
+			if (!ChannelsConflict(Candidate.Channels, Active.Request.Channels))
+			{
+				continue;
+			}
+
+			ConflictingActiveIndices.Add(ActiveIndex);
+			const FLLMMotionClip& ActiveClip = Active.Request.Plan.Clip;
+			if (
+				!ActiveClip.bInterruptible ||
+				Candidate.Plan.Clip.Priority <= ActiveClip.Priority
+			)
+			{
+				bCanInterruptAll = false;
+			}
+		}
+
+		if (!ConflictingActiveIndices.IsEmpty() && !bCanInterruptAll)
+		{
+			++QueueIndex;
+			continue;
+		}
+
+		for (int32 ConflictIndex = ConflictingActiveIndices.Num() - 1; ConflictIndex >= 0; --ConflictIndex)
+		{
+			ActiveMotions.RemoveAt(ConflictingActiveIndices[ConflictIndex]);
+		}
+
+		FLLMNPCActiveMotionPlan NewActive;
+		NewActive.Request = MoveTemp(Queue[QueueIndex]);
+		NewActive.Time = 0.0f;
+		if (!NewActive.Request.SourceTemplateId.IsNone())
+		{
+			LastTemplateStartTimes.Add(NewActive.Request.SourceTemplateId, NowSeconds);
+		}
+
+		ActiveMotions.Add(MoveTemp(NewActive));
+		Queue.RemoveAt(QueueIndex);
+	}
+
+	bHasActivePlan = !ActiveMotions.IsEmpty();
+}
+
+bool ULLMNPCMotionComponent::ValidateTargetRefs(const FLLMMotionPlan& Plan, FString& OutError) const
+{
+	OutError.Reset();
+	for (const FLLMMotionTrack& Track : Plan.Clip.Tracks)
+	{
+		const FLLMControlDefinition* Definition = ControlManifest
+			? ControlManifest->FindControl(Track.ControlId)
+			: ULLMNPCControlManifest::FindBuiltInControl(Track.ControlId);
+		const bool bRequiresTarget =
+			(Definition && Definition->bRequiresTarget) ||
+			Track.TrackType == ELLMMotionTrackType::IKReach ||
+			Track.TrackType == ELLMMotionTrackType::LookAt;
+
+		if (!bRequiresTarget && Track.TargetRef.IsEmpty())
+		{
+			continue;
+		}
+
+		const TObjectPtr<AActor>* Target = TargetMap.Find(Track.TargetRef);
+		if (!Target)
+		{
+			OutError = FString::Printf(
+				TEXT("LLMNPC_TARGET_NOT_REGISTERED:%s"),
+				*Track.TargetRef
+			);
+			return false;
+		}
+
+		if (!IsValid(Target->Get()))
+		{
+			OutError = FString::Printf(
+				TEXT("LLMNPC_TARGET_INVALID:%s"),
+				*Track.TargetRef
+			);
+			return false;
+		}
+	}
+
 	return true;
 }
 
-void ULLMNPCMotionComponent::UpdateActivePlan(float DeltaTime)
+void ULLMNPCMotionComponent::UpdateActivePlans(float DeltaTime)
 {
-	ActiveTime += DeltaTime;
+	CurrentSnapshot = FLLMProceduralPoseSnapshot();
+	USkeletalMeshComponent* Mesh = GetOwnerMesh();
 
-	FLLMNPCMotionSampler::SampleClip(
-		ActivePlan.Clip,
-		ControlManifest,
-		GetOwnerMesh(),
-		TargetMap,
-		ActiveTime,
-		CurrentSnapshot
-	);
-
-	if (ActiveTime >= ActivePlan.Clip.Duration)
+	for (int32 ActiveIndex = ActiveMotions.Num() - 1; ActiveIndex >= 0; --ActiveIndex)
 	{
-		bHasActivePlan = false;
+		FLLMNPCActiveMotionPlan& Active = ActiveMotions[ActiveIndex];
+		Active.Time += DeltaTime;
+		if (Active.Time >= Active.Request.Plan.Clip.Duration)
+		{
+			ActiveMotions.RemoveAt(ActiveIndex);
+			continue;
+		}
+
+		FLLMProceduralPoseSnapshot SampledSnapshot;
+		FLLMNPCMotionSampler::SampleClip(
+			Active.Request.Plan.Clip,
+			ControlManifest,
+			Mesh,
+			TargetMap,
+			Active.Time,
+			SampledSnapshot
+		);
+		MergeSnapshot(CurrentSnapshot, SampledSnapshot);
+	}
+
+	bHasActivePlan = !ActiveMotions.IsEmpty();
+	if (bHasActivePlan)
+	{
+		ActiveClipId = ActiveMotions[0].Request.Plan.Clip.ClipId;
+		ActiveTime = ActiveMotions[0].Time;
+	}
+	else
+	{
 		ActiveTime = 0.0f;
 		ActiveClipId.Reset();
-		CurrentSnapshot = FLLMProceduralPoseSnapshot();
 	}
 }
 
-void ULLMNPCMotionComponent::InstallPostProcessAnimBP()
+TArray<FName> ULLMNPCMotionComponent::DeriveMotionChannels(const FLLMMotionPlan& Plan)
 {
+	TArray<FName> Channels;
+	for (const FLLMMotionTrack& Track : Plan.Clip.Tracks)
+	{
+		const FString Control = Track.ControlId.ToString();
+		FName Channel = NAME_None;
+		if (Control.StartsWith(TEXT("head.")))
+		{
+			Channel = TEXT("head");
+		}
+		else if (Control == TEXT("gaze.target"))
+		{
+			Channel = TEXT("gaze");
+		}
+		else if (Control.StartsWith(TEXT("chest.")))
+		{
+			Channel = TEXT("chest");
+		}
+		else if (
+			Control == TEXT("right_hand.ik") ||
+			Control.StartsWith(TEXT("right_hand.local_offset."))
+		)
+		{
+			Channel = TEXT("right_arm_ik");
+		}
+		else if (
+			Control.StartsWith(TEXT("right_upperarm.")) ||
+			Control.StartsWith(TEXT("right_lowerarm.")) ||
+			Control == TEXT("right_hand.pitch") ||
+			Control == TEXT("right_hand.yaw") ||
+			Control == TEXT("right_hand.roll")
+		)
+		{
+			Channel = TEXT("right_arm_fk");
+		}
+		else if (
+			Control.StartsWith(TEXT("right_fingers.")) ||
+			Control == TEXT("right_hand.palm_target")
+		)
+		{
+			Channel = TEXT("right_hand_pose");
+		}
+
+		if (!Channel.IsNone())
+		{
+			Channels.AddUnique(Channel);
+		}
+	}
+
+	return Channels;
+}
+
+bool ULLMNPCMotionComponent::ChannelsConflict(const TArray<FName>& A, const TArray<FName>& B)
+{
+	static const FName FullBodyChannel(TEXT("full_body"));
+	static const FName RightArmIKChannel(TEXT("right_arm_ik"));
+	static const FName RightArmFKChannel(TEXT("right_arm_fk"));
+
+	if (A.Contains(FullBodyChannel) || B.Contains(FullBodyChannel))
+	{
+		return !A.IsEmpty() && !B.IsEmpty();
+	}
+
+	for (const FName Channel : A)
+	{
+		if (B.Contains(Channel))
+		{
+			return true;
+		}
+	}
+
+	return
+		(A.Contains(RightArmIKChannel) && B.Contains(RightArmFKChannel)) ||
+		(A.Contains(RightArmFKChannel) && B.Contains(RightArmIKChannel));
+}
+
+void ULLMNPCMotionComponent::MergeSnapshot(
+	FLLMProceduralPoseSnapshot& InOutSnapshot,
+	const FLLMProceduralPoseSnapshot& Snapshot
+)
+{
+	InOutSnapshot.GlobalAlpha = FMath::Max(InOutSnapshot.GlobalAlpha, Snapshot.GlobalAlpha);
+	InOutSnapshot.HeadPitch += Snapshot.HeadPitch;
+	InOutSnapshot.HeadYaw += Snapshot.HeadYaw;
+	InOutSnapshot.HeadRoll += Snapshot.HeadRoll;
+	InOutSnapshot.ChestPitch += Snapshot.ChestPitch;
+	InOutSnapshot.ChestYaw += Snapshot.ChestYaw;
+	InOutSnapshot.ChestRoll += Snapshot.ChestRoll;
+	InOutSnapshot.RightHandLocalOffsetCS += Snapshot.RightHandLocalOffsetCS;
+	InOutSnapshot.RightUpperArmAdditiveRotation += Snapshot.RightUpperArmAdditiveRotation;
+	InOutSnapshot.RightLowerArmAdditiveRotation += Snapshot.RightLowerArmAdditiveRotation;
+	InOutSnapshot.RightHandAdditiveRotation += Snapshot.RightHandAdditiveRotation;
+
+	if (Snapshot.RightHandIKAlpha > InOutSnapshot.RightHandIKAlpha)
+	{
+		InOutSnapshot.RightHandIKAlpha = Snapshot.RightHandIKAlpha;
+		InOutSnapshot.RightHandIKTargetCS = Snapshot.RightHandIKTargetCS;
+	}
+	if (Snapshot.RightHandPalmAlpha > InOutSnapshot.RightHandPalmAlpha)
+	{
+		InOutSnapshot.RightHandPalmAlpha = Snapshot.RightHandPalmAlpha;
+		InOutSnapshot.RightHandPalmTargetCS = Snapshot.RightHandPalmTargetCS;
+	}
+	if (Snapshot.LeftHandIKAlpha > InOutSnapshot.LeftHandIKAlpha)
+	{
+		InOutSnapshot.LeftHandIKAlpha = Snapshot.LeftHandIKAlpha;
+		InOutSnapshot.LeftHandIKTargetCS = Snapshot.LeftHandIKTargetCS;
+	}
+	if (Snapshot.GazeAlpha > InOutSnapshot.GazeAlpha)
+	{
+		InOutSnapshot.GazeAlpha = Snapshot.GazeAlpha;
+		InOutSnapshot.GazeTargetCS = Snapshot.GazeTargetCS;
+	}
+
+	InOutSnapshot.RightFingersOpen = FMath::Max(InOutSnapshot.RightFingersOpen, Snapshot.RightFingersOpen);
+	InOutSnapshot.RightFingersPoint = FMath::Max(InOutSnapshot.RightFingersPoint, Snapshot.RightFingersPoint);
+	InOutSnapshot.LeftFingersOpen = FMath::Max(InOutSnapshot.LeftFingersOpen, Snapshot.LeftFingersOpen);
+}
+
+bool ULLMNPCMotionComponent::InstallPostProcessAnimBP()
+{
+	RestorePostProcessAnimBP();
+	LastPostProcessError.Reset();
+
 	USkeletalMeshComponent* Mesh = GetOwnerMesh();
-	if (!Mesh || !PostProcessAnimClass)
+	if (!Mesh)
 	{
-		return;
+		LastPostProcessError = TEXT("LLMNPC_POST_PROCESS_MESH_NOT_FOUND");
+		return false;
 	}
 
-	USkeletalMesh* SkeletalMesh = Mesh->GetSkeletalMeshAsset();
-	if (!SkeletalMesh)
+	USkeletalMesh* SourceMesh = Mesh->GetSkeletalMeshAsset();
+	if (!SourceMesh)
 	{
-		return;
+		LastPostProcessError = TEXT("LLMNPC_POST_PROCESS_SKELETAL_MESH_NOT_FOUND");
+		return false;
 	}
 
-	SkeletalMesh->SetPostProcessAnimBlueprint(PostProcessAnimClass);
+	UClass* DesiredClass = ResolvePostProcessAnimClass();
+	if (!DesiredClass)
+	{
+		LastPostProcessError = TEXT("LLMNPC_POST_PROCESS_CLASS_NOT_FOUND");
+		return false;
+	}
+
+	if (!DesiredClass->IsChildOf(ULLMNPCPostProcessAnimInstance::StaticClass()))
+	{
+		LastPostProcessError = TEXT("LLMNPC_POST_PROCESS_CLASS_INCOMPATIBLE");
+		return false;
+	}
+
+	InstalledPostProcessMesh = Mesh;
+	bOriginalPostProcessDisabled = Mesh->GetDisablePostProcessBlueprint();
+
+	UClass* MeshPostProcessClass = *SourceMesh->GetPostProcessAnimBlueprint();
+	if (PostProcessInstallMode == ELLMNPCPostProcessInstallMode::UseMeshAssetSetting)
+	{
+		if (MeshPostProcessClass != DesiredClass)
+		{
+			LastPostProcessError = TEXT("LLMNPC_POST_PROCESS_MESH_ASSET_CLASS_MISMATCH");
+			InstalledPostProcessMesh = nullptr;
+			return false;
+		}
+	}
+	else if (MeshPostProcessClass != DesiredClass)
+	{
+		OriginalSkeletalMesh = SourceMesh;
+		const FName OverrideName = MakeUniqueObjectName(
+			Mesh,
+			USkeletalMesh::StaticClass(),
+			FName(*FString::Printf(TEXT("%s_LLMNPCPostProcess"), *SourceMesh->GetName()))
+		);
+		TransientSkeletalMeshOverride = DuplicateObject<USkeletalMesh>(SourceMesh, Mesh, OverrideName);
+		if (!TransientSkeletalMeshOverride)
+		{
+			LastPostProcessError = TEXT("LLMNPC_POST_PROCESS_TRANSIENT_MESH_FAILED");
+			InstalledPostProcessMesh = nullptr;
+			OriginalSkeletalMesh = nullptr;
+			return false;
+		}
+
+		TransientSkeletalMeshOverride->ClearFlags(RF_Public | RF_Standalone);
+		TransientSkeletalMeshOverride->SetFlags(RF_Transient | RF_DuplicateTransient);
+		TransientSkeletalMeshOverride->SetPostProcessAnimBlueprint(DesiredClass);
+		Mesh->SetSkeletalMesh(TransientSkeletalMeshOverride, true);
+	}
+
+	Mesh->SetDisablePostProcessBlueprint(false);
 	Mesh->InitAnim(true);
-	UE_LOG(LogLLMNPCActionLayer, Log, TEXT("LLMNPCMotion: Installed post-process AnimBP %s on %s."), *PostProcessAnimClass->GetName(), *SkeletalMesh->GetName());
+
+	UAnimInstance* InstalledInstance = Mesh->GetPostProcessInstance();
+	if (!InstalledInstance || InstalledInstance->GetClass() != DesiredClass)
+	{
+		LastPostProcessError = TEXT("LLMNPC_POST_PROCESS_INSTANCE_NOT_CREATED");
+		RestorePostProcessAnimBP();
+		return false;
+	}
+
+	bPostProcessInstalled = true;
+	UE_LOG(
+		LogLLMNPCActionLayer,
+		Log,
+		TEXT("LLMNPCMotion: Installed post-process AnimBP %s on component %s using mode %s."),
+		*DesiredClass->GetName(),
+		*Mesh->GetName(),
+		*UEnum::GetValueAsString(PostProcessInstallMode)
+	);
+	return true;
+}
+
+void ULLMNPCMotionComponent::RestorePostProcessAnimBP()
+{
+	if (InstalledPostProcessMesh)
+	{
+		if (
+			TransientSkeletalMeshOverride &&
+			OriginalSkeletalMesh &&
+			InstalledPostProcessMesh->GetSkeletalMeshAsset() == TransientSkeletalMeshOverride
+		)
+		{
+			InstalledPostProcessMesh->SetSkeletalMesh(OriginalSkeletalMesh, true);
+		}
+
+		InstalledPostProcessMesh->SetDisablePostProcessBlueprint(bOriginalPostProcessDisabled);
+	}
+
+	bPostProcessInstalled = false;
+	InstalledPostProcessMesh = nullptr;
+	OriginalSkeletalMesh = nullptr;
+	TransientSkeletalMeshOverride = nullptr;
+}
+
+UClass* ULLMNPCMotionComponent::ResolvePostProcessAnimClass() const
+{
+	if (PostProcessAnimClass)
+	{
+		return PostProcessAnimClass.Get();
+	}
+
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	return Settings ? Settings->DefaultPostProcessAnimClass.LoadSynchronous() : nullptr;
 }
 
 USkeletalMeshComponent* ULLMNPCMotionComponent::GetOwnerMesh() const
@@ -271,182 +808,6 @@ USkeletalMeshComponent* ULLMNPCMotionComponent::GetOwnerMesh() const
 	return GetOwner() ? GetOwner()->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
 }
 
-FLLMMotionPlan ULLMNPCMotionComponent::BuildNodMotionPlan()
-{
-	FLLMMotionPlan Plan;
-	Plan.Intent = TEXT("test_nod");
-	Plan.Clip.ClipId = TEXT("test_nod_clip");
-	Plan.Clip.Duration = 0.9f;
-	Plan.Clip.BlendIn = 0.12f;
-	Plan.Clip.BlendOut = 0.18f;
-
-	FLLMMotionTrack HeadPitch;
-	HeadPitch.ControlId = TEXT("head.pitch");
-	HeadPitch.TrackType = ELLMMotionTrackType::Oscillator;
-	HeadPitch.ValueType = ELLMMotionValueType::Float;
-	HeadPitch.StartTime = 0.05f;
-	HeadPitch.EndTime = 0.82f;
-	HeadPitch.Amplitude = 10.0f;
-	HeadPitch.Frequency = 2.0f;
-	HeadPitch.Envelope = ELLMMotionEnvelope::Smooth;
-	Plan.Clip.Tracks.Add(HeadPitch);
-
-	return Plan;
-}
-
-FLLMMotionPlan ULLMNPCMotionComponent::BuildWaveMotionPlan(const FString& TargetRef)
-{
-	static_cast<void>(TargetRef);
-
-	FLLMMotionPlan Plan;
-	Plan.Intent = TEXT("test_wave");
-	Plan.Clip.ClipId = TEXT("test_wave_clip");
-	Plan.Clip.Duration = 2.2f;
-	Plan.Clip.BlendIn = 0.12f;
-	Plan.Clip.BlendOut = 0.28f;
-
-	const auto AddKeyTrack = [&Plan](FName ControlId, const TArray<FLLMMotionKeyFloat>& Keys)
-	{
-		FLLMMotionTrack Track;
-		Track.ControlId = ControlId;
-		Track.TrackType = ELLMMotionTrackType::Keyframes;
-		Track.ValueType = ELLMMotionValueType::Float;
-		Track.StartTime = 0.0f;
-		Track.EndTime = 2.2f;
-		Track.Envelope = ELLMMotionEnvelope::None;
-		Track.FloatKeys = Keys;
-		Plan.Clip.Tracks.Add(Track);
-	};
-
-	// These tracks are UE FQuat delta rotators from the Waving full-pose sample:
-	// Delta * first-frame-local-rotation = source-frame-local-rotation.
-	AddKeyTrack(TEXT("right_upperarm.pitch"), {
-		{0.0f, 0.0f},
-		{0.22f, 0.4f},
-		{0.43f, -17.5f},
-		{0.67f, -49.9f},
-		{0.88f, -5.5f},
-		{1.10f, -45.6f},
-		{1.32f, 14.0f},
-		{1.53f, 3.2f},
-		{1.77f, 0.9f},
-		{2.2f, 0.0f}
-	});
-
-	AddKeyTrack(TEXT("right_upperarm.yaw"), {
-		{0.0f, 0.0f},
-		{0.22f, -13.6f},
-		{0.43f, -11.1f},
-		{0.67f, -11.5f},
-		{0.88f, -3.1f},
-		{1.10f, -13.2f},
-		{1.32f, -2.3f},
-		{1.53f, -5.0f},
-		{1.77f, -2.7f},
-		{2.2f, 0.0f}
-	});
-
-	AddKeyTrack(TEXT("right_upperarm.roll"), {
-		{0.0f, 0.0f},
-		{0.22f, -6.2f},
-		{0.43f, -75.2f},
-		{0.67f, -83.7f},
-		{0.88f, -80.0f},
-		{1.10f, -77.7f},
-		{1.32f, -25.8f},
-		{1.53f, -3.9f},
-		{1.77f, -0.3f},
-		{2.2f, 0.0f}
-	});
-
-	AddKeyTrack(TEXT("right_lowerarm.pitch"), {
-		{0.0f, 0.0f},
-		{0.22f, -0.1f},
-		{0.43f, -3.3f},
-		{0.67f, -2.2f},
-		{0.88f, -3.3f},
-		{1.10f, -2.6f},
-		{1.32f, -3.3f},
-		{1.53f, -0.1f},
-		{1.77f, 0.1f},
-		{2.2f, 0.0f}
-	});
-
-	AddKeyTrack(TEXT("right_lowerarm.yaw"), {
-		{0.0f, 0.0f},
-		{0.22f, 2.1f},
-		{0.43f, 85.2f},
-		{0.67f, 40.6f},
-		{0.88f, 91.4f},
-		{1.10f, 52.6f},
-		{1.32f, 82.4f},
-		{1.53f, 0.8f},
-		{1.77f, -1.2f},
-		{2.2f, 0.0f}
-	});
-
-	AddKeyTrack(TEXT("right_lowerarm.roll"), {
-		{0.0f, 0.0f},
-		{0.22f, 0.0f},
-		{0.43f, -3.0f},
-		{0.67f, -0.8f},
-		{0.88f, -3.4f},
-		{1.10f, -1.3f},
-		{1.32f, -2.9f},
-		{1.53f, 0.0f},
-		{1.77f, 0.0f},
-		{2.2f, 0.0f}
-	});
-
-	AddKeyTrack(TEXT("right_hand.pitch"), {
-		{0.0f, 0.0f},
-		{0.22f, -5.6f},
-		{0.43f, -0.2f},
-		{0.67f, 43.1f},
-		{0.88f, -10.0f},
-		{1.10f, 28.9f},
-		{1.32f, -9.9f},
-		{1.53f, -6.3f},
-		{1.77f, -1.9f},
-		{2.2f, 0.0f}
-	});
-
-	AddKeyTrack(TEXT("right_hand.yaw"), {
-		{0.0f, 0.0f},
-		{0.22f, 4.0f},
-		{0.43f, 20.0f},
-		{0.67f, 16.9f},
-		{0.88f, 16.4f},
-		{1.10f, 15.0f},
-		{1.32f, 7.4f},
-		{1.53f, 6.7f},
-		{1.77f, 0.0f},
-		{2.2f, 0.0f}
-	});
-
-	AddKeyTrack(TEXT("right_hand.roll"), {
-		{0.0f, 0.0f},
-		{0.22f, -9.2f},
-		{0.43f, 56.3f},
-		{0.67f, 42.3f},
-		{0.88f, 57.5f},
-		{1.10f, 30.9f},
-		{1.32f, 32.1f},
-		{1.53f, 6.5f},
-		{1.77f, 1.6f},
-		{2.2f, 0.0f}
-	});
-
-	AddKeyTrack(TEXT("right_fingers.open"), {
-		{0.0f, 0.0f},
-		{0.35f, 1.0f},
-		{1.45f, 1.0f},
-		{1.65f, 0.35f},
-		{2.2f, 0.0f}
-	});
-
-	return Plan;
-}
 
 FLLMMotionPlan ULLMNPCMotionComponent::BuildInvalidUnknownControlPlan()
 {
@@ -467,18 +828,4 @@ FLLMMotionPlan ULLMNPCMotionComponent::BuildInvalidUnknownControlPlan()
 	Plan.Clip.Tracks.Add(BadTrack);
 
 	return Plan;
-}
-
-FLLMMotionPlan ULLMNPCMotionComponent::BuildSampleMotionPlan(ELLMNPCMotionDebugSample Sample, const FString& TargetRef)
-{
-	switch (Sample)
-	{
-	case ELLMNPCMotionDebugSample::Wave:
-		return BuildWaveMotionPlan(TargetRef);
-	case ELLMNPCMotionDebugSample::InvalidUnknownControl:
-		return BuildInvalidUnknownControlPlan();
-	case ELLMNPCMotionDebugSample::Nod:
-	default:
-		return BuildNodMotionPlan();
-	}
 }

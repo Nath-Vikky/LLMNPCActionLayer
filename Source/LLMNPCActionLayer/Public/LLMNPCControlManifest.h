@@ -71,6 +71,12 @@ struct FLLMControlDefinition
 	bool bRequiresTarget = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
+	bool bAllowRuntimeModel = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
+	bool bAllowTemplateAuthoring = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion", meta=(DeprecatedProperty, DeprecationMessage="Use bAllowRuntimeModel."))
 	bool bAllowLLM = true;
 };
 

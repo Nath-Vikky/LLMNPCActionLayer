@@ -2,14 +2,17 @@
 
 Data-driven LLM procedural NPC gesture layer for Unreal Engine 5.3.
 
-The plugin keeps large language models away from raw skeletal control. The model produces a constrained `MotionPlan` / `MotionClip`, while Unreal Engine validates controls, samples motion tracks, and applies the resulting procedural pose through a post-process animation path.
+The plugin keeps large language models away from raw skeletal control. Runtime models select a published action and constrained modifiers. Unreal Engine resolves the skeleton-specific template, validates it, schedules its channels, samples motion tracks, and applies the procedural pose through a post-process animation path.
 
-## V2 Runtime Flow
+## Runtime Flow
 
 ```text
-MotionPlan JSON
-  -> ULLMNPCMotionComponent
-  -> ULLMNPCMotionValidator
+public_action_id + constrained modifiers
+  -> ULLMNPCTemplateLibrarySubsystem
+  -> published ULLMNPCMotionTemplate
+  -> FLLMNPCTemplateCompiler
+  -> ULLMNPCMotionValidator trust boundary
+  -> channel / priority / interruption scheduler
   -> FLLMNPCMotionSampler
   -> FLLMProceduralPoseSnapshot
   -> ULLMNPCPostProcessAnimInstance
@@ -22,6 +25,9 @@ MotionPlan JSON
 - `ULLMNPCMotionComponent`
 - `ULLMNPCControlManifest`
 - `ULLMNPCMotionValidator`
+- `ULLMNPCTemplateLibrarySubsystem`
+- `ULLMNPCMotionTemplate`
+- `ULLMNPCSkeletonProfile`
 - `FLLMNPCMotionSampler`
 - `ULLMNPCPostProcessAnimInstance`
 - `FAnimNode_LLMProceduralPose`
@@ -55,10 +61,23 @@ right_fingers.point
 gaze.target
 ```
 
+The direct right-arm FK controls are internal-only. Published, reviewed templates may use them; runtime model plans may not.
+
+## Published Templates
+
+```text
+gesture.nod.manny.v1
+gesture.wave.right.manny.fk.v1
+gesture.wave.right.manny.procedural.v1
+```
+
+Runtime model selection exposes the skeleton-independent public IDs `gesture.nod` and `gesture.wave.right`. The faithful FK wave remains available by exact ID for trusted debug and review workflows, but is hidden from model candidate selection.
+
 ## Main Blueprint API: Motion
 
 - `SubmitMotionPlanJson`
 - `SubmitMotionPlan`
+- `SubmitPublishedTemplate`
 - `RequestMotionPlanFromContext`
 - `RegisterTarget`
 - `SubmitSampleMotionPlanJson`
@@ -73,4 +92,6 @@ gaze.target
 http://localhost:8787/npc/motion-plan
 ```
 
-The earlier `ULLMNPCActionComponent` API is still present as a compatibility/prototyping layer, but the primary path is now MotionClip-driven.
+The earlier `ULLMNPCActionComponent` API is still present as a compatibility/prototyping layer, but the primary path is now Published Template-driven.
+
+The plugin ships its default post-process AnimBP, Manny skeleton profile, and published templates as cooked plugin content. Motion templates are also retained as JSON authoring sources under `Resources/Templates`.

@@ -94,7 +94,7 @@ struct FLLMMotionTrack
 	float Phase = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
-	ELLMMotionEnvelope Envelope = ELLMMotionEnvelope::Smooth;
+	ELLMMotionEnvelope Envelope = ELLMMotionEnvelope::None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float Strength = 1.0f;
@@ -259,7 +259,16 @@ struct FLLMNPCMotionDebugState
 	bool bHasActivePlan = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	int32 ActivePlanCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	bool bMotionRequestInFlight = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bPostProcessInstalled = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString LastPostProcessError;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FLLMProceduralPoseSnapshot Snapshot;

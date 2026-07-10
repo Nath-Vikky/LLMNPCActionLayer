@@ -1,0 +1,114 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/DataAsset.h"
+#include "LLMNPCSkeletonProfile.generated.h"
+
+class USkeleton;
+
+USTRUCT(BlueprintType)
+struct FLLMNPCBoneAxisBasis
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FVector PitchAxis = FVector::RightVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FVector YawAxis = FVector::UpVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FVector RollAxis = FVector::ForwardVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FRotator MinAdditiveRotation = FRotator(-45.0f, -60.0f, -45.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FRotator MaxAdditiveRotation = FRotator(45.0f, 60.0f, 45.0f);
+};
+
+USTRUCT(BlueprintType)
+struct FLLMNPCIKChainProfile
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FName ChainId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FName RootBoneSemantic = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FName MidBoneSemantic = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FName EndBoneSemantic = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FVector PoleDirectionCS = FVector::BackwardVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float MaxReachScale = 0.98f;
+};
+
+USTRUCT(BlueprintType)
+struct FLLMNPCFingerPoseProfile
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FName PoseId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	TMap<FName, FRotator> SemanticBoneRotations;
+};
+
+UCLASS(BlueprintType)
+class LLMNPCACTIONLAYER_API ULLMNPCSkeletonProfile : public UPrimaryDataAsset
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FName ProfileId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FString SemanticVersion = TEXT("1.0.0");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	TSoftObjectPtr<USkeleton> Skeleton;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	TMap<FName, FName> SemanticBoneMap;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	TMap<FName, FLLMNPCBoneAxisBasis> AxisBases;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	TArray<FLLMNPCIKChainProfile> IKChains;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	TArray<FLLMNPCFingerPoseProfile> FingerPoses;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FString SkeletonSignature;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Skeleton")
+	FName FindBoneName(FName SemanticBone) const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Skeleton")
+	bool IsCompatibleSkeleton(const USkeleton* CandidateSkeleton) const;
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Skeleton")
+	bool ValidateProfile(FString& OutError) const;
+
+	UFUNCTION(BlueprintCallable, CallInEditor, Category="LLM NPC|Skeleton")
+	void RefreshSkeletonSignature();
+
+	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
+
+	static FString BuildSkeletonSignature(
+		const USkeleton* InSkeleton,
+		const FString& ProfileVersion
+	);
+};
