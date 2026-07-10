@@ -1,0 +1,34 @@
+{
+  "schema_version": "uepi.animation_full_pose_samples.v1",
+  "artifact_id": "phase3-full-pose-excerpt",
+  "artifact_uri": "uepi://animation-full-pose-samples/phase3-full-pose-excerpt",
+  "sequence_path": "/Game/LLMNPC/Animation/Waving.Waving",
+  "sequence_name": "Waving",
+  "skeleton_path": "/Game/Characters/Mannequins/Meshes/SK_Mannequin.SK_Mannequin",
+  "analysis_state": "ready",
+  "sample_policy": "excerpt_for_automation",
+  "sample_count": 2,
+  "bone_count": 2,
+  "samples": [
+    {
+      "frame_number": 0,
+      "time_seconds": 0.0,
+      "normalized_time": 0.0,
+      "bone_count": 2,
+      "bones": [
+        {"index": 57, "bone_name": "upperarm_r", "local_transform": {}, "component_transform": {}},
+        {"index": 59, "bone_name": "hand_r", "local_transform": {}, "component_transform": {}}
+      ]
+    },
+    {
+      "frame_number": 142,
+      "time_seconds": 4.7333333,
+      "normalized_time": 1.0,
+      "bone_count": 2,
+      "bones": [
+        {"index": 57, "bone_name": "upperarm_r", "local_transform": {}, "component_transform": {}},
+        {"index": 59, "bone_name": "hand_r", "local_transform": {}, "component_transform": {}}
+      ]
+    }
+  ]
+}

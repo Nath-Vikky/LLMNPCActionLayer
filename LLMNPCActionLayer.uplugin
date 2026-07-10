@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 3,
-	"VersionName": "0.4.0",
+	"Version": 4,
+	"VersionName": "0.5.0",
 	"FriendlyName": "LLM NPC Action Layer",
 	"Description": "Data-driven LLM procedural NPC gesture layer for Unreal Engine.",
 	"Category": "AI",
@@ -24,6 +24,11 @@
 		{
 			"Name": "LLMNPCActionLayerUncooked",
 			"Type": "UncookedOnly",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "LLMNPCActionLayerEditor",
+			"Type": "Editor",
 			"LoadingPhase": "Default"
 		}
 	]

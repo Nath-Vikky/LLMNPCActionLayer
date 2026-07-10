@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "llmnpc.authoring_context.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source",
+    "reconstruction_policy",
+    "recommended_driver_bones",
+    "phase_estimates",
+    "driver_track_curves"
+  ],
+  "properties": {
+    "schema_version": { "const": "llmnpc.authoring_context.v1" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_schema_version",
+        "profile_content_hash",
+        "sequence_path",
+        "skeleton_path",
+        "play_length_seconds",
+        "driver_curve_count",
+        "driver_key_count"
+      ],
+      "properties": {
+        "profile_schema_version": { "const": "uepi.animation_reconstruction_profile.v1" },
+        "profile_content_hash": { "type": "string", "minLength": 8 },
+        "artifact_id": { "type": "string" },
+        "artifact_uri": { "type": "string" },
+        "sequence_path": { "type": "string", "minLength": 1 },
+        "skeleton_path": { "type": "string", "minLength": 1 },
+        "play_length_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "driver_curve_count": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "driver_key_count": { "type": "integer", "minimum": 1 },
+        "full_pose_artifact_uri": { "type": "string" },
+        "full_pose_artifact_path": { "type": "string" },
+        "full_pose_sample_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "reconstruction_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime_bone_output_forbidden", "published_controls_only", "full_pose_usage"],
+      "properties": {
+        "runtime_bone_output_forbidden": { "const": true },
+        "published_controls_only": { "const": true },
+        "full_pose_usage": { "const": "validation_only" }
+      }
+    },
+    "recommended_driver_bones": { "type": "array", "items": { "type": "string" }, "maxItems": 64 },
+    "phase_estimates": { "type": "array", "items": { "type": "object" }, "maxItems": 16 },
+    "driver_track_curves": { "type": "array", "items": { "type": "object" }, "minItems": 1, "maxItems": 64 }
+  }
+}

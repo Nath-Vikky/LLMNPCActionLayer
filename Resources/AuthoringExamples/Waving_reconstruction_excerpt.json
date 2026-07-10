@@ -1,0 +1,84 @@
+{
+  "schema_version": "uepi.animation_reconstruction_profile.v1",
+  "artifact_id": "phase3-waving-excerpt",
+  "artifact_uri": "uepi://animation-reconstruction-profile/phase3-waving-excerpt",
+  "sequence_path": "/Game/LLMNPC/Animation/Waving.Waving",
+  "sequence_name": "Waving",
+  "skeleton_path": "/Game/Characters/Mannequins/Meshes/SK_Mannequin.SK_Mannequin",
+  "analysis_state": "ready",
+  "play_length_seconds": 4.7333331108,
+  "sampling_frame_rate": "30/1",
+  "source_key_count": 143,
+  "source_frame_count": 142,
+  "driver_curve_count": 1,
+  "driver_key_count": 3,
+  "driver_key_sample_policy": "excerpt_for_automation",
+  "candidate_driver_bone_count": 1,
+  "recommended_driver_bones": ["upperarm_r"],
+  "phase_estimates": [
+    {"name": "establish_start_pose", "normalized_start": 0.0, "normalized_end": 0.2},
+    {"name": "main_motion", "normalized_start": 0.2, "normalized_end": 0.8},
+    {"name": "return_or_settle", "normalized_start": 0.8, "normalized_end": 1.0}
+  ],
+  "driver_track_curves": [
+    {
+      "rank": 0,
+      "bone_name": "upperarm_r",
+      "bone_index": 57,
+      "parent_index": 56,
+      "intent_group": "right_arm_hand",
+      "driver_score": 102.267,
+      "local_translation_range": 0.0,
+      "local_rotation_range_degrees": 102.267,
+      "local_scale_range": 0.0,
+      "rotation_extrema_count": 7,
+      "curve_semantics": "oscillating_rotation",
+      "programmatic_recipe_hint": "Fit approved semantic arm controls to this local FK evidence.",
+      "keyframes": [
+        {
+          "frame_number": 0,
+          "time_seconds": 0.0,
+          "normalized_time": 0.0,
+          "local_transform": {
+            "translation": {"x": -15.286, "y": 0.0, "z": -0.0004},
+            "rotation": {"x": -0.3571, "y": 0.4729, "z": 0.3078, "w": 0.7443},
+            "scale3d": {"x": 1.0, "y": 1.0, "z": 1.0},
+            "rotation_euler_degrees": {"pitch": -67.5057, "yaw": 18.3515, "roll": 38.9433}
+          }
+        },
+        {
+          "frame_number": 71,
+          "time_seconds": 2.3666666,
+          "normalized_time": 0.5,
+          "local_transform": {
+            "translation": {"x": -15.286, "y": 0.0, "z": -0.0004},
+            "rotation": {"x": -0.22, "y": 0.31, "z": 0.51, "w": 0.77},
+            "scale3d": {"x": 1.0, "y": 1.0, "z": 1.0},
+            "rotation_euler_degrees": {"pitch": -42.0, "yaw": 31.0, "roll": 72.0}
+          }
+        },
+        {
+          "frame_number": 142,
+          "time_seconds": 4.7333333,
+          "normalized_time": 1.0,
+          "local_transform": {
+            "translation": {"x": -15.286, "y": 0.0, "z": -0.0004},
+            "rotation": {"x": -0.3571, "y": 0.4729, "z": 0.3078, "w": 0.7443},
+            "scale3d": {"x": 1.0, "y": 1.0, "z": 1.0},
+            "rotation_euler_degrees": {"pitch": -67.5057, "yaw": 18.3515, "roll": 38.9433}
+          }
+        }
+      ]
+    }
+  ],
+  "full_pose_sample_artifact": {
+    "schema_version": "uepi.animation_full_pose_samples_manifest.v1",
+    "profile_schema_version": "uepi.animation_full_pose_samples.v1",
+    "artifact_id": "phase3-full-pose-excerpt",
+    "artifact_uri": "uepi://animation-full-pose-samples/phase3-full-pose-excerpt",
+    "path": "Resources/AuthoringExamples/Waving_full_pose_excerpt.json",
+    "sample_count": 2,
+    "bone_count": 2,
+    "encoding": "json"
+  }
+}

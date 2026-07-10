@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "llmnpc.template_quality_report.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "template_id",
+    "template_content_hash",
+    "generated_at_utc",
+    "checks",
+    "warnings",
+    "manual_review_required"
+  ],
+  "properties": {
+    "schema_version": { "const": "llmnpc.template_quality_report.v1" },
+    "status": { "enum": ["pass", "fail"] },
+    "template_id": { "type": "string", "minLength": 1 },
+    "template_content_hash": { "type": "string", "minLength": 8 },
+    "generated_at_utc": { "type": "string", "minLength": 1 },
+    "source_reconstruction_hash": { "type": "string" },
+    "full_pose_validation": { "enum": ["not_requested", "manifest_only", "artifact_checked"] },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "passed", "message"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "passed": { "type": "boolean" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "manual_review_required": { "const": true }
+  }
+}

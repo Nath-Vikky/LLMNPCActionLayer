@@ -1,0 +1,110 @@
+{
+  "schema_version": "llmnpc.motion_template_draft.v1",
+  "asset_name": "DT_Wave_Right_Manny_UEPI_v2",
+  "template_id": "gesture.wave.right.manny.uepi.v2",
+  "public_action_id": "gesture.wave.right",
+  "semantic_version": "2.0.0",
+  "kind": "procedural_motion",
+  "review_state": "generated",
+  "display_name": "Manny UEPI Right Wave Draft",
+  "description": "A development-only wave Draft fitted from the Waving Reconstruction Profile for Phase 3 pipeline verification.",
+  "skeleton_profile_id": "ue5_manny.v1",
+  "metadata": {
+    "intent_tags": ["greet", "farewell"],
+    "emotion_tags": ["neutral", "friendly"],
+    "personality_tags": [],
+    "required_channels": ["right_arm_fk", "right_hand_pose"],
+    "blocked_states": ["dead", "ragdoll", "right_hand_busy"],
+    "requires_target": false,
+    "can_run_while_moving": true,
+    "allow_runtime_model_selection": false,
+    "cooldown_seconds": 1.0
+  },
+  "modifier_policy": {
+    "amplitude": [0.95, 1.05],
+    "speed": [0.9, 1.1],
+    "duration": [1.0, 1.0],
+    "allow_mirror": false,
+    "allowed_styles": ["neutral", "faithful"]
+  },
+  "clip": {
+    "clip_id": "gesture.wave.right.manny.uepi.v2.clip",
+    "duration": 2.2,
+    "blend_in": 0.12,
+    "blend_out": 0.28,
+    "priority": 0.5,
+    "interruptible": true,
+    "tracks": [
+      {
+        "control_id": "right_upperarm.pitch",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "strength": 1.0,
+        "keys": [[0.0, 0.0], [0.43, -17.5], [0.67, -49.9], [0.88, -5.5], [1.1, -45.6], [1.32, 14.0], [1.77, 0.9], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_upperarm.roll",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "strength": 1.0,
+        "keys": [[0.0, 0.0], [0.43, -75.2], [0.67, -83.7], [0.88, -80.0], [1.1, -77.7], [1.32, -25.8], [1.77, -0.3], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_lowerarm.yaw",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "strength": 1.0,
+        "keys": [[0.0, 0.0], [0.43, 85.2], [0.67, 40.6], [0.88, 91.4], [1.1, 52.6], [1.32, 82.4], [1.77, -1.2], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_hand.roll",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "strength": 1.0,
+        "keys": [[0.0, 0.0], [0.43, 56.3], [0.67, 42.3], [0.88, 57.5], [1.1, 30.9], [1.32, 32.1], [1.77, 1.6], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_fingers.open",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "strength": 1.0,
+        "keys": [[0.0, 0.0], [0.35, 1.0], [1.45, 1.0], [1.65, 0.35], [2.2, 0.0]]
+      }
+    ]
+  },
+  "provenance": {
+    "source_type": "uepi_reconstruction_profile",
+    "source_sequence_path": "/Game/LLMNPC/Animation/Waving.Waving",
+    "reconstruction_profile_uri": "uepi://animation-reconstruction-profile/42f33c9299d629556389b16e5c1e24d8e58aaa3363575ea498b156a5d094ac49",
+    "reconstruction_profile_path": "Saved/UEProjectIntelligence/store/artifacts/animation_reconstruction/42f33c9299d629556389b16e5c1e24d8e58aaa3363575ea498b156a5d094ac49.json",
+    "reconstruction_profile_hash": "sha1:dd58d7d67de5761e19098d6b32ac624f1f998055",
+    "full_pose_artifact_uri": "uepi://animation-full-pose-samples/8c2eba019dbf26de5ee27bf61baedc933d809c48cf5ff9be1cdbe8f3bbbf1577",
+    "full_pose_artifact_hash": "sha1:7aec2ea8cfc356c97b9f6e60316c6ecd09a8097f",
+    "source_license": {
+      "identifier": "project-owned",
+      "holder": "LLMNPCDemo project",
+      "redistribution_allowed": false,
+      "notes": "Pipeline verification reference; confirm final distribution rights before release."
+    },
+    "authoring_agent": {
+      "tool": "Codex",
+      "version": "phase3",
+      "prompt_version": "llmnpc.codex_authoring.v1"
+    }
+  }
+}

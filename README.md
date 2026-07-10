@@ -136,3 +136,42 @@ The earlier `ULLMNPCActionComponent` and raw motion-plan endpoint are still pres
 The plugin ships its default post-process AnimBP, Manny skeleton profile, and published templates as cooked plugin content. Motion templates are also retained as JSON authoring sources under `Resources/Templates`.
 
 The Phase 2 structured response schema and DeepSeek command prompt live under `Resources/Schemas` and `Resources/PromptTemplates`.
+
+## Authoring Pipeline
+
+Phase 3 adds a development-only `LLMNPCActionLayerEditor` module. It converts a
+UEProjectIntelligence Reconstruction Profile into a bounded authoring context,
+imports a strict template Draft, generates a quality report, previews the Draft
+in PIE, records human review, and only then permits an explicit Publish copy.
+
+```text
+Animation Sequence
+  -> UEPI Reconstruction Profile
+  -> llmnpc.authoring_context.v1
+  -> Codex / authoring agent
+  -> llmnpc.motion_template_draft.v1
+  -> Generated DataAsset
+  -> quality report
+  -> PIE preview
+  -> HumanApproved
+  -> explicit Publish
+  -> /Game/LLMNPCActionLayer/MotionTemplates
+```
+
+Imported JSON can only declare `draft` or `generated`; the importer always
+forces `Generated`. A passing report is bound to motion data, provenance,
+license, Reconstruction Profile hash, and optional Full Pose hash. Any later
+change invalidates the report. Review records do not invalidate otherwise
+unchanged content. Runtime template discovery still indexes only assets whose
+local state is `Published`.
+
+Authoring files are stored under:
+
+```text
+Saved/LLMNPCActionLayer/Authoring/Contexts
+Saved/LLMNPCActionLayer/Authoring/Drafts
+Saved/LLMNPCActionLayer/Authoring/Reports
+Saved/LLMNPCActionLayer/Authoring/Rejected
+```
+
+See `Docs/authoring-workflow.md` for the repeatable editor and Python workflow.

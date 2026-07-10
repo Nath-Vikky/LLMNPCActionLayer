@@ -15,5 +15,6 @@ ULLMNPCSettings::ULLMNPCSettings()
 		TEXT("Use action decision none when no candidate is appropriate. ")
 		TEXT("Use locomotion decision none. Output JSON only.");
 	MotionTemplateScanPaths.Add(TEXT("/LLMNPCActionLayer/LLMNPC/MotionTemplates"));
+	MotionTemplateScanPaths.Add(TEXT("/Game/LLMNPCActionLayer/MotionTemplates"));
 	SkeletonProfileScanPaths.Add(TEXT("/LLMNPCActionLayer/LLMNPC/SkeletonProfiles"));
 }
