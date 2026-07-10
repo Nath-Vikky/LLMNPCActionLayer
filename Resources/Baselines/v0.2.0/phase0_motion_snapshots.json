@@ -1,0 +1,38 @@
+{
+  "schema_version": "llmnpc.motion_snapshot_baseline.v1",
+  "baseline_tag": "v0.2.0-baseline",
+  "engine_version": "5.3.2",
+  "samples": [
+    {
+      "sample": "nod",
+      "time_seconds": 0.14625,
+      "snapshot": {
+        "global_alpha": 1.0,
+        "head_pitch": 3.826834
+      }
+    },
+    {
+      "sample": "wave",
+      "time_seconds": 0.88,
+      "snapshot": {
+        "global_alpha": 1.0,
+        "right_upper_arm_rotation": {
+          "pitch": -5.5,
+          "yaw": -3.1,
+          "roll": -80.0
+        },
+        "right_lower_arm_rotation": {
+          "pitch": -3.3,
+          "yaw": 91.4,
+          "roll": -3.4
+        },
+        "right_hand_rotation": {
+          "pitch": -10.0,
+          "yaw": 16.4,
+          "roll": 57.5
+        },
+        "right_fingers_open": 1.0
+      }
+    }
+  ]
+}
