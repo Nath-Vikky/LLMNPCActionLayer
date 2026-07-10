@@ -110,6 +110,11 @@ private:
 		float Alpha
 	) const;
 
+	void PropagateRightHandChildrenCS(
+		FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& OutBoneTransforms
+	) const;
+
 	bool HasAnyRightFingerBone(const FBoneContainer& RequiredBones) const;
 
 	void ApplyFingerRotationLocal(
