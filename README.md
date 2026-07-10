@@ -9,8 +9,12 @@ The plugin keeps large language models away from raw skeletal control. Runtime m
 ```text
 player text / story command
   -> ULLMNPCDialogueComponent
+  -> emotion / personality / relationship / scene context snapshot
+  -> ULLMNPCCandidateRetriever
+  -> target / occupied-state / cooldown / repetition filtering
   -> Mock, Backend Proxy, or editor-only DeepSeek provider
   -> strict llmnpc.model_turn.v1 parser
+  -> offered-candidate and contextual modifier policy
   -> public_action_id + constrained modifiers
   -> ULLMNPCBehaviorCoordinator
   -> ULLMNPCTemplateLibrarySubsystem
@@ -31,6 +35,12 @@ player text / story command
 - `ULLMNPCDialogueComponent`
 - `ULLMNPCConversationSession`
 - `ULLMNPCBehaviorCoordinator`
+- `ULLMNPCEmotionComponent`
+- `ULLMNPCPersonalityProfile`
+- `ULLMNPCRelationshipComponent`
+- `ULLMNPCSceneContextComponent`
+- `ULLMNPCCandidateRetriever`
+- `ULLMNPCSelectionAnalyticsSubsystem`
 - `ULLMNPCChatWidget`
 - `ILLMNPCModelProvider`
 - `ULLMNPCControlManifest`
@@ -79,9 +89,10 @@ The direct right-arm FK controls are internal-only. Published, reviewed template
 gesture.nod.manny.v1
 gesture.wave.right.manny.fk.v1
 gesture.wave.right.manny.procedural.v1
+gesture.point.target.manny.v1
 ```
 
-Runtime model selection exposes the skeleton-independent public IDs `gesture.nod` and `gesture.wave.right`. The faithful FK wave remains available by exact ID for trusted debug and review workflows, but is hidden from model candidate selection.
+Runtime model selection exposes the skeleton-independent public IDs `gesture.nod`, `gesture.wave.right`, and `gesture.point.target`. The faithful FK wave remains available by exact ID for trusted debug and review workflows, but is hidden from model candidate selection. Target Point is offered only while at least one legal scene target exists.
 
 ## Main Blueprint API: Motion
 
@@ -104,12 +115,24 @@ Runtime model selection exposes the skeleton-independent public IDs `gesture.nod
 - `SetProviderKind`
 - `SetMotionComponent`
 - `RegisterTarget`
+- `RegisterSceneTarget`
+- `SetSceneStateActive`
 - `CreateChatWidget`
 - `GetDebugState`
+- `GetSelectionContextSnapshot`
+- `GetLastOfferedCandidates`
 
 Add `LLM NPC Motion Component` and `LLM NPC Dialogue Component` to the NPC actor. Set the Dialogue provider to `Mock` for a fully local first test. Enable `Auto Create Chat Widget`, or call `CreateChatWidget` from the player-facing gameplay layer. The shipped `WBP_LLMNPCChat` derives from the native widget and needs no Blueprint graph.
 
-The Phase 2 Mock recognizes explicit English and Chinese Nod/Wave commands. It also maps greetings to the optional Wave behavior. Multi-turn history is bounded and only public Published candidates are sent to a remote provider.
+The local Mock recognizes English and Chinese greeting, agreement, and direction intents. It reads the same filtered candidate list as a remote model: a friendly greeting selects Wave, an agreement question selects Nod, and a direction question selects Gaze + Point only when a legal Target is available. A busy right hand removes right-arm actions and falls back to Nod. Multi-turn history is bounded and only public Published candidates are sent to a provider.
+
+## Contextual Selection
+
+Add optional `LLM NPC Emotion`, `LLM NPC Relationship`, and `LLM NPC Scene Context` components beside the Dialogue component. Assign an `LLMNPCPersonalityProfile` to the Dialogue component. Without them, neutral defaults are used.
+
+`RegisterSceneTarget` registers the same opaque Target Ref with both the motion executor and scene-selection context. `SetSceneStateActive("right_hand_busy", true)` removes templates blocked by that state before the request reaches the model. Template cooldown and short-term repeat suppression also operate before selection; the motion scheduler remains the final execution-time guard.
+
+The request contract is `llmnpc.turn_request.v2`, with prompt version `llmnpc.selection_prompt.v1`. Context-constrained amplitude, speed, duration, style, and Target refs are enforced again after parsing. Selection events are retained in a bounded `ULLMNPCSelectionAnalyticsSubsystem` ring buffer and do not leave the process automatically.
 
 ## Model Providers
 
@@ -135,7 +158,7 @@ The earlier `ULLMNPCActionComponent` and raw motion-plan endpoint are still pres
 
 The plugin ships its default post-process AnimBP, Manny skeleton profile, and published templates as cooked plugin content. Motion templates are also retained as JSON authoring sources under `Resources/Templates`.
 
-The Phase 2 structured response schema and DeepSeek command prompt live under `Resources/Schemas` and `Resources/PromptTemplates`.
+Structured response/request schemas and versioned prompts live under `Resources/Schemas` and `Resources/PromptTemplates`.
 
 ## Authoring Pipeline
 

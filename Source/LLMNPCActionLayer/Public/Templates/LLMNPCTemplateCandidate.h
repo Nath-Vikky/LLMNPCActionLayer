@@ -21,6 +21,15 @@ struct FLLMNPCTemplateCandidate
 	TArray<FName> EmotionTags;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FName> PersonalityTags;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FName> RequiredChannels;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FName> BlockedStates;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	bool bRequiresTarget = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
@@ -34,4 +43,19 @@ struct FLLMNPCTemplateCandidate
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	TArray<FName> AllowedStyles;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	float CooldownSeconds = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FString> AllowedTargetRefs;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	FString DefaultTargetRef;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	float RecommendedAmplitude = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	float RelevanceScore = 0.0f;
 };

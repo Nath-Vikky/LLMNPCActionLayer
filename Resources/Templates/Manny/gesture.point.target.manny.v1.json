@@ -1,0 +1,94 @@
+{
+  "schema_version": "llmnpc.motion_template.v1",
+  "asset_name": "MT_Point_Target_Manny_v1",
+  "template_id": "gesture.point.target.manny.v1",
+  "public_action_id": "gesture.point.target",
+  "semantic_version": "1.0.0",
+  "kind": "procedural_motion",
+  "review_state": "published",
+  "display_name": "Manny Gaze And Point",
+  "description": "Looks toward a legal scene target and points at it with the right hand.",
+  "skeleton_profile_id": "ue5_manny.v1",
+  "metadata": {
+    "intent_tags": ["indicate", "direct_attention", "answer_where"],
+    "emotion_tags": ["neutral", "friendly", "helpful"],
+    "personality_tags": [],
+    "required_channels": ["gaze", "right_arm_ik", "right_hand_pose"],
+    "blocked_states": ["dead", "ragdoll", "stunned", "right_hand_busy"],
+    "requires_target": true,
+    "can_run_while_moving": false,
+    "allow_runtime_model_selection": true,
+    "cooldown_seconds": 0.8
+  },
+  "modifier_policy": {
+    "amplitude": [0.7, 1.15],
+    "speed": [0.85, 1.2],
+    "duration": [1.0, 1.0],
+    "allow_mirror": false,
+    "allowed_styles": ["neutral", "friendly", "subtle"]
+  },
+  "clip": {
+    "clip_id": "gesture.point.target.manny.v1.clip",
+    "duration": 1.45,
+    "blend_in": 0.18,
+    "blend_out": 0.25,
+    "priority": 0.55,
+    "interruptible": true,
+    "tracks": [
+      {
+        "control_id": "gaze.target",
+        "track_type": "look_at",
+        "value_type": "vector",
+        "start_time": 0.05,
+        "end_time": 1.4,
+        "target_ref": "",
+        "envelope": "ease_in_out",
+        "strength": 0.9
+      },
+      {
+        "control_id": "right_hand.ik",
+        "track_type": "ik_reach",
+        "value_type": "vector",
+        "start_time": 0.12,
+        "end_time": 1.32,
+        "target_ref": "",
+        "offset": [0.0, 0.0, 4.0],
+        "reach": 0.78,
+        "envelope": "ease_in_out",
+        "strength": 1.0
+      },
+      {
+        "control_id": "right_hand.palm_target",
+        "track_type": "look_at",
+        "value_type": "vector",
+        "start_time": 0.16,
+        "end_time": 1.28,
+        "target_ref": "",
+        "envelope": "ease_in_out",
+        "strength": 0.85
+      },
+      {
+        "control_id": "right_fingers.point",
+        "track_type": "hold",
+        "value_type": "float",
+        "start_time": 0.2,
+        "end_time": 1.24,
+        "amplitude": 1.0,
+        "envelope": "ease_in_out",
+        "strength": 1.0
+      }
+    ]
+  },
+  "provenance": {
+    "source_type": "semantic_procedural_authoring",
+    "source_repository": "LLMNPCActionLayer",
+    "source_revision": "phase4",
+    "source_license": "project_owned",
+    "redistribution_allowed": true
+  },
+  "validation_report": {
+    "schema_version": "llmnpc.template_validation.v1",
+    "status": "pass",
+    "manual_review": "phase4_target_context_acceptance"
+  }
+}

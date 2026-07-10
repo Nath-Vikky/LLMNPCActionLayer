@@ -201,7 +201,7 @@ bool FLLMNPCCandidateBoundaryTest::RunTest(const FString& Parameters)
 
 	TArray<FLLMNPCTemplateCandidate> Candidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), Candidates);
-	TestEqual(TEXT("Manny exposes two public actions"), Candidates.Num(), 2);
+	TestEqual(TEXT("Manny exposes three public actions"), Candidates.Num(), 3);
 	for (const FLLMNPCTemplateCandidate& Candidate : Candidates)
 	{
 		TestFalse(TEXT("Candidate selection IDs are skeleton independent"), Candidate.SelectionId.ToString().Contains(TEXT(".manny.")));

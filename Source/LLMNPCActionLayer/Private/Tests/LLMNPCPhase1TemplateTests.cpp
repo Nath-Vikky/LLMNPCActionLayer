@@ -31,7 +31,7 @@ bool FLLMNPCTemplateLibraryTest::RunTest(const FString& Parameters)
 	ULLMNPCTemplateLibrarySubsystem* Library =
 		NewObject<ULLMNPCTemplateLibrarySubsystem>(TestGameInstance);
 	Library->RefreshLibrary();
-	TestEqual(TEXT("Three Published Phase 1 templates are indexed"), Library->GetPublishedTemplateCount(), 3);
+	TestEqual(TEXT("Four Published runtime templates are indexed"), Library->GetPublishedTemplateCount(), 4);
 	TestTrue(TEXT("The Phase 1 template scan has no errors"), Library->GetScanErrors().IsEmpty());
 
 	const ULLMNPCMotionTemplate* FaithfulWave = Library->FindPublishedTemplate(

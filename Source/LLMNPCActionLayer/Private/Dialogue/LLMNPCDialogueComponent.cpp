@@ -2,6 +2,10 @@
 
 #include "Async/Async.h"
 #include "Behavior/LLMNPCBehaviorCoordinator.h"
+#include "Context/LLMNPCEmotionComponent.h"
+#include "Context/LLMNPCPersonalityProfile.h"
+#include "Context/LLMNPCRelationshipComponent.h"
+#include "Context/LLMNPCSceneContextComponent.h"
 #include "Dialogue/LLMNPCConversationSession.h"
 #include "Dialogue/LLMNPCModelTurnValidator.h"
 #include "Engine/GameInstance.h"
@@ -11,6 +15,8 @@
 #include "Providers/LLMNPCBackendProxyProvider.h"
 #include "Providers/LLMNPCDeepSeekProvider.h"
 #include "Providers/LLMNPCMockProvider.h"
+#include "Selection/LLMNPCCandidateRetriever.h"
+#include "Selection/LLMNPCSelectionAnalyticsSubsystem.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
 #include "Templates/LLMNPCTemplateCandidate.h"
 #include "Templates/LLMNPCTemplateLibrarySubsystem.h"
@@ -70,25 +76,65 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	);
 	OnMessageAdded.Broadcast(PlayerMessage);
 
-	TArray<FLLMNPCTemplateCandidate> Candidates;
+	TArray<FLLMNPCTemplateCandidate> SourceCandidates;
 	if (GetWorld() && GetWorld()->GetGameInstance())
 	{
 		if (ULLMNPCTemplateLibrarySubsystem* Library =
 			GetWorld()->GetGameInstance()->GetSubsystem<ULLMNPCTemplateLibrarySubsystem>())
 		{
-			Library->QueryRuntimeCandidates(ResolveSkeletonProfileId(), Candidates);
+			Library->QueryRuntimeCandidates(ResolveSkeletonProfileId(), SourceCandidates);
 		}
 	}
+
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	FLLMNPCCandidateRetrievalRequest RetrievalRequest;
+	RetrievalRequest.UserMessage = CleanMessage;
+	RetrievalRequest.SourceCandidates = MoveTemp(SourceCandidates);
+	RetrievalRequest.Context = GetSelectionContextSnapshot();
+	RetrievalRequest.ActionHistory = ConversationSession->GetActionHistory();
+	RetrievalRequest.NowSeconds = FPlatformTime::Seconds();
+	RetrievalRequest.MaxCandidates = Settings ? Settings->MaxContextCandidates : 8;
+	RetrievalRequest.RepeatSuppressionSeconds = Settings ? Settings->RepeatSuppressionSeconds : 2.0f;
+	FLLMNPCCandidateRetrievalResult Retrieval = ULLMNPCCandidateRetriever::Retrieve(RetrievalRequest);
+	ActiveOfferedCandidates = MoveTemp(Retrieval.Candidates);
+	ActiveCandidateExclusions = MoveTemp(Retrieval.Exclusions);
+	LastOfferedCandidates = ActiveOfferedCandidates;
 
 	ActiveRequest = FLLMNPCModelTurnRequest();
 	ActiveRequest.RequestId = FGuid::NewGuid();
 	ActiveRequest.SessionId = ConversationSession->GetSessionId();
 	ActiveRequest.NPCId = NPCId;
 	ActiveRequest.UserMessage = CleanMessage;
-	ActiveRequest.ContextJson = ConversationSession->BuildRequestContextJson(
+	const FString PromptVersion = Settings
+		? Settings->SelectionPromptVersion
+		: FString(TEXT("llmnpc.selection_prompt.v1"));
+	ActiveRequest.ContextJson = ConversationSession->BuildContextualRequestJson(
 		ActiveRequest.RequestId,
-		Candidates
+		ActiveOfferedCandidates,
+		RetrievalRequest.Context,
+		PromptVersion
 	);
+	if (GetWorld() && GetWorld()->GetGameInstance())
+	{
+		SelectionAnalytics = GetWorld()->GetGameInstance()->GetSubsystem<ULLMNPCSelectionAnalyticsSubsystem>();
+	}
+	if (SelectionAnalytics)
+	{
+		TArray<FName> OfferedIds;
+		for (const FLLMNPCTemplateCandidate& Candidate : ActiveOfferedCandidates)
+		{
+			OfferedIds.Add(Candidate.SelectionId);
+		}
+		SelectionAnalytics->BeginSelection(
+			ActiveRequest.RequestId,
+			NPCId,
+			LastProviderId,
+			PromptVersion,
+			OfferedIds,
+			ActiveCandidateExclusions.Num(),
+			ActiveRequest.ContextJson
+		);
+	}
 	bRequestInFlight = true;
 	LastTurnResult = FLLMNPCDialogueTurnResult();
 	LastTurnResult.RequestId = ActiveRequest.RequestId;
@@ -137,10 +183,12 @@ void ULLMNPCDialogueComponent::CancelActiveRequest()
 	{
 		ModelProvider->CancelRequest(CancelledRequestId);
 	}
-	ActiveRequest = FLLMNPCModelTurnRequest();
 	LastTurnResult = FLLMNPCDialogueTurnResult();
 	LastTurnResult.RequestId = CancelledRequestId;
 	LastTurnResult.ErrorCode = TEXT("LLMNPC_PROVIDER_CANCELLED");
+	CompleteAnalytics(TEXT("cancelled"), LastTurnResult.ErrorCode, false);
+	ActiveRequest = FLLMNPCModelTurnRequest();
+	ResetActiveSelection();
 	SetState(ELLMNPCDialogueState::Cancelled);
 	OnTurnCompleted.Broadcast(LastTurnResult);
 }
@@ -184,6 +232,50 @@ void ULLMNPCDialogueComponent::RegisterTarget(const FString& TargetRef, AActor* 
 	if (MotionComponent)
 	{
 		MotionComponent->RegisterTarget(TargetRef, TargetActor);
+	}
+	if (SceneContextComponent)
+	{
+		SceneContextComponent->RegisterSceneTarget(
+			TargetRef,
+			TargetActor,
+			TEXT("generic"),
+			TArray<FName>(),
+			0.5f
+		);
+	}
+}
+
+void ULLMNPCDialogueComponent::RegisterSceneTarget(
+	const FString& TargetRef,
+	AActor* TargetActor,
+	FName Category,
+	const TArray<FName>& SemanticTags,
+	float Salience
+)
+{
+	EnsureRuntimeObjects();
+	if (MotionComponent)
+	{
+		MotionComponent->RegisterTarget(TargetRef, TargetActor);
+	}
+	if (SceneContextComponent)
+	{
+		SceneContextComponent->RegisterSceneTarget(
+			TargetRef,
+			TargetActor,
+			Category,
+			SemanticTags,
+			Salience
+		);
+	}
+}
+
+void ULLMNPCDialogueComponent::SetSceneStateActive(FName StateName, bool bActive)
+{
+	EnsureRuntimeObjects();
+	if (SceneContextComponent)
+	{
+		SceneContextComponent->SetStateActive(StateName, bActive);
 	}
 }
 
@@ -229,6 +321,28 @@ FLLMNPCDialogueDebugState ULLMNPCDialogueComponent::GetDebugState() const
 	return Debug;
 }
 
+FLLMNPCSelectionContextSnapshot ULLMNPCDialogueComponent::GetSelectionContextSnapshot() const
+{
+	FLLMNPCSelectionContextSnapshot Snapshot;
+	if (EmotionComponent)
+	{
+		Snapshot.Emotion = EmotionComponent->GetEmotionSnapshot();
+	}
+	if (PersonalityProfile)
+	{
+		Snapshot.Personality = PersonalityProfile->GetPersonalitySnapshot();
+	}
+	if (RelationshipComponent)
+	{
+		Snapshot.Relationship = RelationshipComponent->GetRelationshipSnapshot();
+	}
+	if (SceneContextComponent)
+	{
+		Snapshot = SceneContextComponent->AppendToSnapshot(Snapshot);
+	}
+	return Snapshot;
+}
+
 void ULLMNPCDialogueComponent::EnsureRuntimeObjects()
 {
 	if (!ConversationSession)
@@ -240,6 +354,26 @@ void ULLMNPCDialogueComponent::EnsureRuntimeObjects()
 	if (!MotionComponent && bAutoFindMotionComponent && GetOwner())
 	{
 		MotionComponent = GetOwner()->FindComponentByClass<ULLMNPCMotionComponent>();
+	}
+
+	if (bAutoFindContextComponents && GetOwner())
+	{
+		if (!EmotionComponent)
+		{
+			EmotionComponent = GetOwner()->FindComponentByClass<ULLMNPCEmotionComponent>();
+		}
+		if (!RelationshipComponent)
+		{
+			RelationshipComponent = GetOwner()->FindComponentByClass<ULLMNPCRelationshipComponent>();
+		}
+		if (!SceneContextComponent)
+		{
+			SceneContextComponent = GetOwner()->FindComponentByClass<ULLMNPCSceneContextComponent>();
+		}
+	}
+	if (!SceneContextComponent)
+	{
+		SceneContextComponent = NewObject<ULLMNPCSceneContextComponent>(this);
 	}
 
 	if (!BehaviorCoordinator)
@@ -387,14 +521,33 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 	{
 		LastTurnResult.ErrorCode = FName(*ParseError);
 		LastTurnResult.ErrorMessage = ParseError;
+		CompleteAnalytics(TEXT("parse_rejected"), LastTurnResult.ErrorCode, bUsedFallback);
 		bRequestInFlight = false;
 		ActiveRequest = FLLMNPCModelTurnRequest();
+		ResetActiveSelection();
 		SetState(ELLMNPCDialogueState::Failed);
 		OnTurnCompleted.Broadcast(LastTurnResult);
 		return;
 	}
 
 	LastTurnResult.SelectedActionId = Decision.Action.TemplateId;
+	FString SelectionError;
+	if (!ULLMNPCCandidateRetriever::ApplySelectionPolicy(
+		Decision,
+		ActiveOfferedCandidates,
+		SelectionError
+	))
+	{
+		LastTurnResult.ErrorCode = FName(*SelectionError);
+		LastTurnResult.ErrorMessage = SelectionError;
+		CompleteAnalytics(TEXT("selection_rejected"), LastTurnResult.ErrorCode, bUsedFallback);
+		bRequestInFlight = false;
+		ActiveRequest = FLLMNPCModelTurnRequest();
+		ResetActiveSelection();
+		SetState(ELLMNPCDialogueState::Failed);
+		OnTurnCompleted.Broadcast(LastTurnResult);
+		return;
+	}
 	SetState(ELLMNPCDialogueState::Validating);
 	SetState(ELLMNPCDialogueState::Executing);
 	const FLLMNPCBehaviorExecutionResult BehaviorResult = BehaviorCoordinator
@@ -404,7 +557,12 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 	LastTurnResult.ResolvedTemplateId = BehaviorResult.ResolvedTemplateId;
 	if (BehaviorResult.bActionExecuted && ConversationSession)
 	{
-		ConversationSession->AddRecentAction(BehaviorResult.ResolvedTemplateId);
+		ConversationSession->AddActionHistory(
+			Decision.Action.TemplateId,
+			BehaviorResult.ResolvedTemplateId,
+			Decision.Action.TargetRef,
+			Decision.Action.ReasonTag
+		);
 	}
 
 	if (!BehaviorResult.bAccepted)
@@ -418,8 +576,16 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 		LastTurnResult.ErrorMessage = TEXT("The remote provider failed; a local command fallback was used.");
 	}
 
+	CompleteAnalytics(
+		BehaviorResult.bActionExecuted
+			? FName(TEXT("executed"))
+			: (BehaviorResult.bAccepted ? FName(TEXT("no_action")) : FName(TEXT("execution_rejected"))),
+		LastTurnResult.ErrorCode,
+		bUsedFallback
+	);
 	bRequestInFlight = false;
 	ActiveRequest = FLLMNPCModelTurnRequest();
+	ResetActiveSelection();
 	SetState(BehaviorResult.bAccepted ? ELLMNPCDialogueState::Idle : ELLMNPCDialogueState::Failed);
 	OnTurnCompleted.Broadcast(LastTurnResult);
 }
@@ -434,6 +600,7 @@ void ULLMNPCDialogueComponent::CompleteFailure(
 	LastTurnResult.RequestId = ActiveRequest.RequestId;
 	LastTurnResult.ErrorCode = ErrorCode;
 	LastTurnResult.ErrorMessage = ErrorMessage;
+	CompleteAnalytics(TEXT("provider_failed"), ErrorCode, false);
 	if (bAddAssistantMessage && ConversationSession)
 	{
 		const FString FallbackText = TEXT("I cannot respond right now. Please try again.");
@@ -447,8 +614,30 @@ void ULLMNPCDialogueComponent::CompleteFailure(
 	}
 	bRequestInFlight = false;
 	ActiveRequest = FLLMNPCModelTurnRequest();
+	ResetActiveSelection();
 	SetState(ELLMNPCDialogueState::Failed);
 	OnTurnCompleted.Broadcast(LastTurnResult);
+}
+
+void ULLMNPCDialogueComponent::CompleteAnalytics(FName Outcome, FName ErrorCode, bool bUsedFallback)
+{
+	if (SelectionAnalytics && ActiveRequest.RequestId.IsValid())
+	{
+		SelectionAnalytics->CompleteSelection(
+			ActiveRequest.RequestId,
+			LastTurnResult.SelectedActionId,
+			LastTurnResult.ResolvedTemplateId,
+			Outcome,
+			ErrorCode,
+			bUsedFallback
+		);
+	}
+}
+
+void ULLMNPCDialogueComponent::ResetActiveSelection()
+{
+	ActiveOfferedCandidates.Reset();
+	ActiveCandidateExclusions.Reset();
 }
 
 FName ULLMNPCDialogueComponent::ResolveSkeletonProfileId() const

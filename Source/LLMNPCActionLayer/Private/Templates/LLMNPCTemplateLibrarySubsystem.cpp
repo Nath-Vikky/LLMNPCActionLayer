@@ -241,11 +241,20 @@ void ULLMNPCTemplateLibrarySubsystem::QueryRuntimeCandidates(
 		Candidate.Description = MotionTemplate->Metadata.Description;
 		Candidate.IntentTags = MotionTemplate->Metadata.IntentTags;
 		Candidate.EmotionTags = MotionTemplate->Metadata.EmotionTags;
+		Candidate.PersonalityTags = MotionTemplate->Metadata.PersonalityTags;
+		Candidate.RequiredChannels = MotionTemplate->Metadata.RequiredChannels;
+		Candidate.BlockedStates = MotionTemplate->Metadata.BlockedStates;
 		Candidate.bRequiresTarget = MotionTemplate->Metadata.bRequiresTarget;
 		Candidate.AmplitudeRange = MotionTemplate->ModifierPolicy.AmplitudeRange;
 		Candidate.SpeedRange = MotionTemplate->ModifierPolicy.SpeedRange;
 		Candidate.DurationRange = MotionTemplate->ModifierPolicy.DurationRange;
 		Candidate.AllowedStyles = MotionTemplate->ModifierPolicy.AllowedStyleTags;
+		Candidate.CooldownSeconds = MotionTemplate->Metadata.CooldownSeconds;
+		Candidate.RecommendedAmplitude = FMath::Clamp(
+			1.0f,
+			Candidate.AmplitudeRange.X,
+			Candidate.AmplitudeRange.Y
+		);
 	}
 
 	OutCandidates.Sort(

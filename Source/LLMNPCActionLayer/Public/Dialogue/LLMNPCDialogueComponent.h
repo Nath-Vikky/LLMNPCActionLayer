@@ -2,8 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Context/LLMNPCContextTypes.h"
 #include "Dialogue/LLMNPCDialogueTypes.h"
 #include "Providers/LLMNPCModelProvider.h"
+#include "Selection/LLMNPCCandidateRetriever.h"
 #include "LLMNPCDialogueComponent.generated.h"
 
 class APlayerController;
@@ -11,7 +13,12 @@ class ILLMNPCModelProvider;
 class ULLMNPCBehaviorCoordinator;
 class ULLMNPCChatWidget;
 class ULLMNPCConversationSession;
+class ULLMNPCEmotionComponent;
 class ULLMNPCMotionComponent;
+class ULLMNPCPersonalityProfile;
+class ULLMNPCRelationshipComponent;
+class ULLMNPCSceneContextComponent;
+class ULLMNPCSelectionAnalyticsSubsystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FLLMNPCDialogueMessageEvent,
@@ -58,6 +65,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue")
 	void RegisterTarget(const FString& TargetRef, AActor* TargetActor);
 
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue|Context")
+	void RegisterSceneTarget(
+		const FString& TargetRef,
+		AActor* TargetActor,
+		FName Category,
+		const TArray<FName>& SemanticTags,
+		float Salience = 0.5f
+	);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue|Context")
+	void SetSceneStateActive(FName StateName, bool bActive);
+
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue|UI")
 	ULLMNPCChatWidget* CreateChatWidget(APlayerController* PlayerController, int32 ZOrder = 10);
 
@@ -72,6 +91,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Dialogue|Debug")
 	FLLMNPCDialogueDebugState GetDebugState() const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Dialogue|Context")
+	FLLMNPCSelectionContextSnapshot GetSelectionContextSnapshot() const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Dialogue|Context")
+	const TArray<FLLMNPCTemplateCandidate>& GetLastOfferedCandidates() const { return LastOfferedCandidates; }
 
 	UPROPERTY(BlueprintAssignable, Category="LLM NPC|Dialogue")
 	FLLMNPCDialogueMessageEvent OnMessageAdded;
@@ -97,6 +122,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC|Dialogue")
 	bool bAutoFindMotionComponent = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC|Dialogue|Context")
+	bool bAutoFindContextComponents = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC|Dialogue|Context")
+	TObjectPtr<ULLMNPCPersonalityProfile> PersonalityProfile;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC|Dialogue|UI")
 	bool bAutoCreateChatWidget = false;
 
@@ -119,10 +150,27 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<ULLMNPCChatWidget> ChatWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<ULLMNPCEmotionComponent> EmotionComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<ULLMNPCRelationshipComponent> RelationshipComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<ULLMNPCSceneContextComponent> SceneContextComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<ULLMNPCSelectionAnalyticsSubsystem> SelectionAnalytics;
+
+	UPROPERTY(Transient)
+	TArray<FLLMNPCTemplateCandidate> LastOfferedCandidates;
+
 	TSharedPtr<ILLMNPCModelProvider> ModelProvider;
 	FLLMNPCModelTurnRequest ActiveRequest;
 	bool bRequestInFlight = false;
 	FName LastProviderId = NAME_None;
+	TArray<FLLMNPCTemplateCandidate> ActiveOfferedCandidates;
+	TArray<FLLMNPCCandidateExclusion> ActiveCandidateExclusions;
 
 	void EnsureRuntimeObjects();
 	void RecreateProvider();
@@ -142,5 +190,7 @@ private:
 		FName OriginalProviderError
 	);
 	void CompleteFailure(FName ErrorCode, const FString& ErrorMessage, bool bAddAssistantMessage);
+	void CompleteAnalytics(FName Outcome, FName ErrorCode, bool bUsedFallback);
+	void ResetActiveSelection();
 	FName ResolveSkeletonProfileId() const;
 };

@@ -55,6 +55,18 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|DeepSeek", meta=(MultiLine="true"))
 	FString DeepSeekSystemPrompt;
 
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection")
+	FString SelectionPromptVersion = TEXT("llmnpc.selection_prompt.v1");
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection", meta=(ClampMin="1", ClampMax="32"))
+	int32 MaxContextCandidates = 8;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection", meta=(ClampMin="0.0", ClampMax="30.0"))
+	float RepeatSuppressionSeconds = 2.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection", meta=(ClampMin="8", ClampMax="2048"))
+	int32 MaxSelectionAnalyticsEvents = 128;
+
 	UPROPERTY(Config, EditAnywhere, Category="Runtime|Post Process")
 	TSoftClassPtr<UAnimInstance> DefaultPostProcessAnimClass;
 

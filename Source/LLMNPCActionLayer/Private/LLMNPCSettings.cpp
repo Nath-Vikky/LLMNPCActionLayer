@@ -9,8 +9,9 @@ ULLMNPCSettings::ULLMNPCSettings()
 		TEXT("/LLMNPCActionLayer/LLMNPC/UI/WBP_LLMNPCChat.WBP_LLMNPCChat_C")
 	));
 	DeepSeekSystemPrompt =
-		TEXT("Return one JSON object matching llmnpc.model_turn.v1. ")
-		TEXT("Choose only a template_id from candidate_templates. ")
+		TEXT("Follow the prompt_version and return one JSON object matching llmnpc.model_turn.v1. ")
+		TEXT("Choose only a template_id from candidate_templates and only a target_ref listed for that candidate. ")
+		TEXT("Use the supplied emotion, personality, relationship, scene, and action history context. ")
 		TEXT("Never output bones, controls, transforms, animation tracks, asset paths, or code. ")
 		TEXT("Use action decision none when no candidate is appropriate. ")
 		TEXT("Use locomotion decision none. Output JSON only.");

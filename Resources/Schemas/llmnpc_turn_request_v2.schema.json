@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llmnpc.local/schemas/llmnpc_turn_request_v2.schema.json",
+  "title": "LLM NPC Turn Request v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "prompt_version",
+    "request_id",
+    "session_id",
+    "npc_id",
+    "conversation",
+    "selection_context",
+    "candidate_templates",
+    "recent_action_history"
+  ],
+  "properties": {
+    "schema_version": { "const": "llmnpc.turn_request.v2" },
+    "prompt_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "request_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "session_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "npc_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "conversation": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "content"],
+        "properties": {
+          "role": { "enum": ["system", "user", "assistant"] },
+          "content": { "type": "string", "maxLength": 4000 }
+        }
+      }
+    },
+    "selection_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["emotion", "personality", "relationship", "active_states", "scene_targets"],
+      "properties": {
+        "emotion": { "$ref": "#/$defs/emotion" },
+        "personality": { "$ref": "#/$defs/personality" },
+        "relationship": { "$ref": "#/$defs/relationship" },
+        "active_states": { "$ref": "#/$defs/name_array" },
+        "scene_targets": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/scene_target" }
+        }
+      }
+    },
+    "candidate_templates": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/candidate" }
+    },
+    "recent_action_history": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["selection_id", "target_ref", "reason_tag", "age_seconds"],
+        "properties": {
+          "selection_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "target_ref": { "type": "string", "maxLength": 128 },
+          "reason_tag": { "type": "string", "maxLength": 64 },
+          "age_seconds": { "type": "number", "minimum": 0 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name_array": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "type": "string", "maxLength": 128 }
+    },
+    "emotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "intensity", "valence", "arousal"],
+      "properties": {
+        "primary": { "type": "string", "maxLength": 64 },
+        "intensity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "valence": { "type": "number", "minimum": -1, "maximum": 1 },
+        "arousal": { "type": "number", "minimum": -1, "maximum": 1 }
+      }
+    },
+    "personality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "expressiveness", "shyness", "sociability", "tags"],
+      "properties": {
+        "profile_id": { "type": "string", "maxLength": 128 },
+        "expressiveness": { "type": "number", "minimum": 0.25, "maximum": 1.5 },
+        "shyness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "sociability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "tags": { "$ref": "#/$defs/name_array" }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["other_actor_ref", "familiarity", "trust", "affinity", "tags"],
+      "properties": {
+        "other_actor_ref": { "type": "string", "maxLength": 128 },
+        "familiarity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "trust": { "type": "number", "minimum": -1, "maximum": 1 },
+        "affinity": { "type": "number", "minimum": -1, "maximum": 1 },
+        "tags": { "$ref": "#/$defs/name_array" }
+      }
+    },
+    "scene_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_ref", "category", "semantic_tags", "salience"],
+      "properties": {
+        "target_ref": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 64 },
+        "semantic_tags": { "$ref": "#/$defs/name_array" },
+        "salience": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "range": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "number" }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "template_id",
+        "description",
+        "intent_tags",
+        "emotion_tags",
+        "requires_target",
+        "allowed_target_refs",
+        "default_target_ref",
+        "recommended_amplitude",
+        "allowed_modifiers"
+      ],
+      "properties": {
+        "template_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "intent_tags": { "$ref": "#/$defs/name_array" },
+        "emotion_tags": { "$ref": "#/$defs/name_array" },
+        "requires_target": { "type": "boolean" },
+        "allowed_target_refs": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "type": "string", "maxLength": 128 }
+        },
+        "default_target_ref": { "type": "string", "maxLength": 128 },
+        "recommended_amplitude": { "type": "number", "exclusiveMinimum": 0 },
+        "allowed_modifiers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["amplitude", "speed_scale", "duration_scale", "styles"],
+          "properties": {
+            "amplitude": { "$ref": "#/$defs/range" },
+            "speed_scale": { "$ref": "#/$defs/range" },
+            "duration_scale": { "$ref": "#/$defs/range" },
+            "styles": { "$ref": "#/$defs/name_array" }
+          }
+        }
+      }
+    }
+  }
+}

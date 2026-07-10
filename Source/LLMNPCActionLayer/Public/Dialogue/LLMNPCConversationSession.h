@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Context/LLMNPCContextTypes.h"
 #include "Dialogue/LLMNPCDialogueTypes.h"
 #include "Templates/LLMNPCTemplateCandidate.h"
 #include "UObject/Object.h"
@@ -22,12 +23,28 @@ public:
 	void AddRecentAction(FName TemplateId);
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Conversation")
+	void AddActionHistory(
+		FName SelectionId,
+		FName ResolvedTemplateId,
+		const FString& TargetRef,
+		FName ReasonTag
+	);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Conversation")
 	void ResetSession();
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Conversation")
 	FString BuildRequestContextJson(
 		const FGuid& RequestId,
 		const TArray<FLLMNPCTemplateCandidate>& Candidates
+	) const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Conversation")
+	FString BuildContextualRequestJson(
+		const FGuid& RequestId,
+		const TArray<FLLMNPCTemplateCandidate>& Candidates,
+		const FLLMNPCSelectionContextSnapshot& Context,
+		const FString& PromptVersion
 	) const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Conversation")
@@ -38,6 +55,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Conversation")
 	FName GetNPCId() const { return NPCId; }
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Conversation")
+	const TArray<FLLMNPCActionHistoryEntry>& GetActionHistory() const { return ActionHistory; }
 
 private:
 	UPROPERTY(Transient)
@@ -50,7 +70,7 @@ private:
 	TArray<FLLMNPCConversationMessage> Messages;
 
 	UPROPERTY(Transient)
-	TArray<FName> RecentTemplateIds;
+	TArray<FLLMNPCActionHistoryEntry> ActionHistory;
 
 	int32 MaxHistoryMessages = 12;
 	int32 MaxRecentActions = 8;
