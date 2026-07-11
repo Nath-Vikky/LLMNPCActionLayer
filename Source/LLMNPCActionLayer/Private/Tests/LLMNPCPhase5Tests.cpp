@@ -4,8 +4,10 @@
 
 #include "Dialogue/LLMNPCConversationSession.h"
 #include "Engine/GameInstance.h"
+#include "Animation/Skeleton.h"
 #include "GameFramework/Actor.h"
 #include "LLMNPCMotionSampler.h"
+#include "LLMNPCMotionMirror.h"
 #include "MicroMotion/LLMNPCMicroMotionScheduler.h"
 #include "Selection/LLMNPCCandidateRetriever.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
@@ -49,6 +51,54 @@ const FLLMMotionTrack* FindTrack(const FLLMMotionPlan& Plan, FName ControlId)
 			return Track.ControlId == ControlId;
 		}
 	);
+}
+
+FTransform BuildReferenceComponentTransform(const FReferenceSkeleton& ReferenceSkeleton, int32 BoneIndex)
+{
+	const TArray<FTransform>& RefPose = ReferenceSkeleton.GetRefBonePose();
+	FTransform Result = RefPose[BoneIndex];
+	for (int32 ParentIndex = ReferenceSkeleton.GetParentIndex(BoneIndex);
+		ParentIndex != INDEX_NONE;
+		ParentIndex = ReferenceSkeleton.GetParentIndex(ParentIndex))
+	{
+		Result = Result * RefPose[ParentIndex];
+	}
+	return Result;
+}
+
+FVector EvaluateReferenceHandPosition(
+	const USkeleton& Skeleton,
+	bool bLeft,
+	const FRotator& UpperDelta,
+	const FRotator& LowerDelta,
+	const FRotator& HandDelta
+)
+{
+	const FReferenceSkeleton& ReferenceSkeleton = Skeleton.GetReferenceSkeleton();
+	const int32 UpperIndex = ReferenceSkeleton.FindBoneIndex(bLeft ? TEXT("upperarm_l") : TEXT("upperarm_r"));
+	const int32 LowerIndex = ReferenceSkeleton.FindBoneIndex(bLeft ? TEXT("lowerarm_l") : TEXT("lowerarm_r"));
+	const int32 HandIndex = ReferenceSkeleton.FindBoneIndex(bLeft ? TEXT("hand_l") : TEXT("hand_r"));
+	if (UpperIndex == INDEX_NONE || LowerIndex == INDEX_NONE || HandIndex == INDEX_NONE)
+	{
+		return FVector::ZeroVector;
+	}
+	const int32 ParentIndex = ReferenceSkeleton.GetParentIndex(UpperIndex);
+	if (ParentIndex == INDEX_NONE)
+	{
+		return FVector::ZeroVector;
+	}
+
+	const TArray<FTransform>& RefPose = ReferenceSkeleton.GetRefBonePose();
+	FTransform UpperLocal = RefPose[UpperIndex];
+	FTransform LowerLocal = RefPose[LowerIndex];
+	FTransform HandLocal = RefPose[HandIndex];
+	UpperLocal.SetRotation(FQuat(UpperDelta) * UpperLocal.GetRotation());
+	LowerLocal.SetRotation(FQuat(LowerDelta) * LowerLocal.GetRotation());
+	HandLocal.SetRotation(FQuat(HandDelta) * HandLocal.GetRotation());
+	const FTransform UpperCS = UpperLocal * BuildReferenceComponentTransform(ReferenceSkeleton, ParentIndex);
+	const FTransform LowerCS = LowerLocal * UpperCS;
+	const FTransform HandCS = HandLocal * LowerCS;
+	return HandCS.GetLocation();
 }
 }
 
@@ -102,6 +152,18 @@ bool FLLMNPCPhase5VariantAndCurveTest::RunTest(const FString& Parameters)
 	if (SubtleVariant)
 	{
 		TestEqual(TEXT("The style-specific variant wins over generic variants"), SubtleVariant->Metadata.VariantId, FName(TEXT("subtle")));
+		TestTrue(TEXT("Subtle Wave contains the reviewed FK upper-arm curve"), SubtleVariant->ProceduralClip.Tracks.ContainsByPredicate(
+			[](const FLLMMotionTrack& Track)
+			{
+				return Track.ControlId == TEXT("right_upperarm.pitch");
+			}
+		));
+		TestFalse(TEXT("Subtle Wave no longer uses the unreviewed hand-anchor IK"), SubtleVariant->ProceduralClip.Tracks.ContainsByPredicate(
+			[](const FLLMMotionTrack& Track)
+			{
+				return Track.ControlId == TEXT("right_hand.ik");
+			}
+		));
 	}
 
 	const ULLMNPCMotionTemplate* DefaultVariant = Library->ResolvePublishedVariant(
@@ -117,6 +179,31 @@ bool FLLMNPCPhase5VariantAndCurveTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+	if (SubtleVariant)
+	{
+		FLLMNPCTemplateModifiers SubtleModifiers;
+		SubtleModifiers.Style = TEXT("subtle");
+		SubtleModifiers.Amplitude = 0.65f;
+		SubtleModifiers.ContextAmplitudeRange = FVector2D(0.65f, 0.65f);
+		FLLMMotionPlan SubtlePlan;
+		FString SubtleError;
+		TestTrue(TEXT("Subtle reviewed FK Wave compiles"), FLLMNPCTemplateCompiler::Compile(
+			*SubtleVariant, SubtleModifiers, *Profile, SubtlePlan, SubtleError
+		));
+		if (const FLLMMotionTrack* Fingers = FindTrack(SubtlePlan, TEXT("right_fingers.open")))
+		{
+			TestEqual(TEXT("Gesture amplitude does not weaken normalized open-hand pose"), Fingers->FloatKeys[1].V, 1.0f);
+		}
+		else
+		{
+			AddError(TEXT("Subtle Wave lost its open-hand pose track."));
+		}
+	}
+	TestEqual(
+		TEXT("Friendly style resolves the manually reviewed Wave"),
+		DefaultVariant->Metadata.TemplateId,
+		FName(TEXT("gesture.wave.right.manny.fk.v1"))
+	);
 
 	FLLMNPCTemplateModifiers Modifiers;
 	Modifiers.Style = TEXT("friendly");
@@ -127,24 +214,24 @@ bool FLLMNPCPhase5VariantAndCurveTest::RunTest(const FString& Parameters)
 	FString Error;
 	TestTrue(TEXT("Seeded style compiles"), FLLMNPCTemplateCompiler::Compile(*DefaultVariant, Modifiers, *Profile, PlanA, Error));
 	TestTrue(TEXT("The same seeded style compiles again"), FLLMNPCTemplateCompiler::Compile(*DefaultVariant, Modifiers, *Profile, PlanB, Error));
-	const FLLMMotionTrack* WaveA = FindTrack(PlanA, TEXT("right_hand.local_offset.y"));
-	const FLLMMotionTrack* WaveB = FindTrack(PlanB, TEXT("right_hand.local_offset.y"));
-	TestNotNull(TEXT("Compiled wave keeps its bounded oscillator"), WaveA);
-	TestNotNull(TEXT("Repeated compilation keeps the oscillator"), WaveB);
+	const FLLMMotionTrack* WaveA = FindTrack(PlanA, TEXT("right_upperarm.pitch"));
+	const FLLMMotionTrack* WaveB = FindTrack(PlanB, TEXT("right_upperarm.pitch"));
+	TestNotNull(TEXT("Compiled Wave keeps its reviewed FK curve"), WaveA);
+	TestNotNull(TEXT("Repeated compilation keeps the reviewed FK curve"), WaveB);
 	if (WaveA && WaveB)
 	{
-		TestEqual(TEXT("Seed jitter cannot escape the contextual amplitude range"), WaveA->Amplitude, 12.0f);
-		TestEqual(TEXT("Same seed reproduces frequency"), WaveA->Frequency, WaveB->Frequency);
-		TestEqual(TEXT("Same seed reproduces phase"), WaveA->Phase, WaveB->Phase);
+		TestEqual(TEXT("Same seed reproduces FK key count"), WaveA->FloatKeys.Num(), WaveB->FloatKeys.Num());
+		TestEqual(TEXT("Same seed reproduces FK value"), WaveA->FloatKeys[3].V, WaveB->FloatKeys[3].V);
+		TestEqual(TEXT("Same seed reproduces FK timing"), WaveA->FloatKeys[3].T, WaveB->FloatKeys[3].T);
 	}
 
 	Modifiers.RandomSeed = 2469;
 	FLLMMotionPlan PlanC;
 	TestTrue(TEXT("A different seed still compiles"), FLLMNPCTemplateCompiler::Compile(*DefaultVariant, Modifiers, *Profile, PlanC, Error));
-	const FLLMMotionTrack* WaveC = FindTrack(PlanC, TEXT("right_hand.local_offset.y"));
+	const FLLMMotionTrack* WaveC = FindTrack(PlanC, TEXT("right_upperarm.pitch"));
 	if (WaveA && WaveC)
 	{
-		TestTrue(TEXT("Different seeds vary a bounded curve parameter"), !FMath::IsNearlyEqual(WaveA->Frequency, WaveC->Frequency) || !FMath::IsNearlyEqual(WaveA->Phase, WaveC->Phase));
+		TestTrue(TEXT("Different seeds vary bounded FK timing"), !FMath::IsNearlyEqual(WaveA->FloatKeys[3].T, WaveC->FloatKeys[3].T));
 	}
 	return true;
 }
@@ -172,19 +259,110 @@ bool FLLMNPCPhase5MirrorTest::RunTest(const FString& Parameters)
 	FLLMNPCTemplateModifiers Modifiers;
 	Modifiers.Style = TEXT("friendly");
 	Modifiers.RandomSeed = 10;
+	FLLMMotionPlan RightPlan;
+	FString Error;
+	TestTrue(TEXT("Reviewed right Wave compiles"), FLLMNPCTemplateCompiler::Compile(*Wave, Modifiers, *Profile, RightPlan, Error));
 	Modifiers.bMirror = true;
 	FLLMMotionPlan Plan;
-	FString Error;
 	TestTrue(TEXT("Mirror-capable wave compiles"), FLLMNPCTemplateCompiler::Compile(*Wave, Modifiers, *Profile, Plan, Error));
-	TestNotNull(TEXT("Right-hand IK becomes left-hand IK"), FindTrack(Plan, TEXT("left_hand.ik")));
+	TestNotNull(TEXT("Right upper-arm FK becomes a mirrored left-arm source"), FindTrack(Plan, TEXT("mirror_left_upperarm.pitch")));
+	TestNotNull(TEXT("Right lower-arm FK becomes a mirrored left-arm source"), FindTrack(Plan, TEXT("mirror_left_lowerarm.pitch")));
+	TestNotNull(TEXT("Right hand FK becomes a mirrored left-hand source"), FindTrack(Plan, TEXT("mirror_left_hand.pitch")));
 	TestNotNull(TEXT("Right finger pose becomes left finger pose"), FindTrack(Plan, TEXT("left_fingers.open")));
-	TestNull(TEXT("Mirrored plan contains no right-hand IK"), FindTrack(Plan, TEXT("right_hand.ik")));
+	TestNull(TEXT("Mirrored plan contains no right upper-arm FK"), FindTrack(Plan, TEXT("right_upperarm.pitch")));
+	TestNull(TEXT("Mirrored plan contains no hand-anchor IK"), FindTrack(Plan, TEXT("left_hand.ik")));
+
+	const FLLMMotionTrack* RightPitch = FindTrack(RightPlan, TEXT("right_upperarm.pitch"));
+	const FLLMMotionTrack* LeftPitch = FindTrack(Plan, TEXT("mirror_left_upperarm.pitch"));
+	const FLLMMotionTrack* RightYaw = FindTrack(RightPlan, TEXT("right_upperarm.yaw"));
+	const FLLMMotionTrack* LeftYaw = FindTrack(Plan, TEXT("mirror_left_upperarm.yaw"));
+	const FLLMMotionTrack* RightRoll = FindTrack(RightPlan, TEXT("right_upperarm.roll"));
+	const FLLMMotionTrack* LeftRoll = FindTrack(Plan, TEXT("mirror_left_upperarm.roll"));
+	if (RightPitch && LeftPitch && RightYaw && LeftYaw && RightRoll && LeftRoll)
+	{
+		TestEqual(TEXT("Mirror compiler preserves source Pitch for basis-aware execution"), LeftPitch->FloatKeys[3].V, RightPitch->FloatKeys[3].V);
+		TestEqual(TEXT("Mirror compiler preserves source Yaw for basis-aware execution"), LeftYaw->FloatKeys[3].V, RightYaw->FloatKeys[3].V);
+		TestEqual(TEXT("Mirror compiler preserves source Roll for basis-aware execution"), LeftRoll->FloatKeys[3].V, RightRoll->FloatKeys[3].V);
+	}
 
 	FLLMProceduralPoseSnapshot Snapshot;
 	const TMap<FString, TObjectPtr<AActor>> EmptyTargets;
-	FLLMNPCMotionSampler::SampleClip(Plan.Clip, nullptr, nullptr, EmptyTargets, 0.6f, Snapshot);
-	TestTrue(TEXT("Mirrored sampling activates left-hand IK"), Snapshot.LeftHandIKAlpha > 0.0f);
-	TestEqual(TEXT("Mirrored sampling leaves right-hand IK inactive"), Snapshot.RightHandIKAlpha, 0.0f);
+	FLLMNPCMotionSampler::SampleClip(Plan.Clip, nullptr, nullptr, EmptyTargets, 0.67f, Snapshot);
+	TestFalse(TEXT("Mirrored sampling drives left-arm FK"), Snapshot.LeftUpperArmAdditiveRotation.IsNearlyZero());
+	TestTrue(TEXT("Mirrored sampling marks FK values as right-side source data"), Snapshot.bLeftArmFKMirroredSource);
+	TestTrue(TEXT("Mirrored sampling leaves right-arm FK inactive"), Snapshot.RightUpperArmAdditiveRotation.IsNearlyZero());
+	TestEqual(TEXT("Mirrored sampling leaves both IK solvers inactive"), Snapshot.LeftHandIKAlpha + Snapshot.RightHandIKAlpha, 0.0f);
+
+	FLLMProceduralPoseSnapshot RightSnapshot;
+	FLLMNPCMotionSampler::SampleClip(RightPlan.Clip, nullptr, nullptr, EmptyTargets, 0.67f, RightSnapshot);
+	if (const USkeleton* Skeleton = Profile->Skeleton.LoadSynchronous())
+	{
+		const FReferenceSkeleton& ReferenceSkeleton = Skeleton->GetReferenceSkeleton();
+		const int32 RightUpperIndex = ReferenceSkeleton.FindBoneIndex(TEXT("upperarm_r"));
+		const int32 RightLowerIndex = ReferenceSkeleton.FindBoneIndex(TEXT("lowerarm_r"));
+		const int32 RightHandIndex = ReferenceSkeleton.FindBoneIndex(TEXT("hand_r"));
+		const int32 LeftUpperIndex = ReferenceSkeleton.FindBoneIndex(TEXT("upperarm_l"));
+		const int32 LeftLowerIndex = ReferenceSkeleton.FindBoneIndex(TEXT("lowerarm_l"));
+		const int32 LeftHandIndex = ReferenceSkeleton.FindBoneIndex(TEXT("hand_l"));
+		const int32 RightParentIndex = ReferenceSkeleton.GetParentIndex(RightUpperIndex);
+		const int32 LeftParentIndex = ReferenceSkeleton.GetParentIndex(LeftUpperIndex);
+		const FVector RightHand = EvaluateReferenceHandPosition(
+			*Skeleton,
+			false,
+			RightSnapshot.RightUpperArmAdditiveRotation,
+			RightSnapshot.RightLowerArmAdditiveRotation,
+			RightSnapshot.RightHandAdditiveRotation
+		);
+		const FTransform RightParent = BuildReferenceComponentTransform(ReferenceSkeleton, RightParentIndex);
+		const FTransform LeftParent = BuildReferenceComponentTransform(ReferenceSkeleton, LeftParentIndex);
+		const FLLMNPCArmChainTransforms RightOriginal = {
+				BuildReferenceComponentTransform(ReferenceSkeleton, RightUpperIndex),
+				BuildReferenceComponentTransform(ReferenceSkeleton, RightLowerIndex),
+				BuildReferenceComponentTransform(ReferenceSkeleton, RightHandIndex)
+		};
+		const FLLMNPCArmChainTransforms LeftOriginal = {
+			BuildReferenceComponentTransform(ReferenceSkeleton, LeftUpperIndex),
+			BuildReferenceComponentTransform(ReferenceSkeleton, LeftLowerIndex),
+			BuildReferenceComponentTransform(ReferenceSkeleton, LeftHandIndex)
+		};
+		const FLLMNPCArmChainTransforms MirroredChain = FLLMNPCMotionMirror::MirrorRightArmFKAcrossSkeletonX(
+			RightParent,
+			RightOriginal,
+			Snapshot.LeftUpperArmAdditiveRotation,
+			Snapshot.LeftLowerArmAdditiveRotation,
+			Snapshot.LeftHandAdditiveRotation,
+			LeftParent,
+			LeftOriginal,
+			1.0f
+		);
+		const FLLMNPCArmChainTransforms ZeroAlphaChain = FLLMNPCMotionMirror::MirrorRightArmFKAcrossSkeletonX(
+			RightParent,
+			RightOriginal,
+			Snapshot.LeftUpperArmAdditiveRotation,
+			Snapshot.LeftLowerArmAdditiveRotation,
+			Snapshot.LeftHandAdditiveRotation,
+			LeftParent,
+			LeftOriginal,
+			0.0f
+		);
+		TestTrue(TEXT("Zero mirror alpha preserves the current left upper arm"), ZeroAlphaChain.UpperCS.Equals(LeftOriginal.UpperCS, 0.001f));
+		TestTrue(TEXT("Zero mirror alpha preserves the current left lower arm"), ZeroAlphaChain.LowerCS.Equals(LeftOriginal.LowerCS, 0.001f));
+		TestTrue(TEXT("Zero mirror alpha preserves the current left hand"), ZeroAlphaChain.HandCS.Equals(LeftOriginal.HandCS, 0.001f));
+		const FVector LeftHand = MirroredChain.HandCS.GetLocation();
+		AddInfo(FString::Printf(
+			TEXT("Basis mirror right=%s left=%s target=%s"),
+			*RightHand.ToCompactString(),
+			*LeftHand.ToCompactString(),
+			*FVector(-RightHand.X, RightHand.Y, RightHand.Z).ToCompactString()
+		));
+		TestTrue(TEXT("Mirrored FK reflects Manny's skeletal lateral axis"), FMath::IsNearlyEqual(LeftHand.X, -RightHand.X, 1.0f));
+		TestTrue(TEXT("Mirrored FK preserves skeletal forward placement"), FMath::IsNearlyEqual(LeftHand.Y, RightHand.Y, 1.0f));
+		TestTrue(TEXT("Mirrored FK preserves hand height"), FMath::IsNearlyEqual(LeftHand.Z, RightHand.Z, 1.0f));
+	}
+	else
+	{
+		AddError(TEXT("Manny Skeleton did not load for mirror geometry validation."));
+	}
 	return true;
 }
 

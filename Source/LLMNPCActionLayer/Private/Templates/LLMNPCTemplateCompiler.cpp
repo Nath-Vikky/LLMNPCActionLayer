@@ -18,6 +18,15 @@ bool TrackAcceptsResolvedTarget(const FLLMMotionTrack& Track)
 bool MirrorTrack(FLLMMotionTrack& Track)
 {
 	static const TMap<FName, FName> ControlMap = {
+		{TEXT("right_upperarm.pitch"), TEXT("mirror_left_upperarm.pitch")},
+		{TEXT("right_upperarm.yaw"), TEXT("mirror_left_upperarm.yaw")},
+		{TEXT("right_upperarm.roll"), TEXT("mirror_left_upperarm.roll")},
+		{TEXT("right_lowerarm.pitch"), TEXT("mirror_left_lowerarm.pitch")},
+		{TEXT("right_lowerarm.yaw"), TEXT("mirror_left_lowerarm.yaw")},
+		{TEXT("right_lowerarm.roll"), TEXT("mirror_left_lowerarm.roll")},
+		{TEXT("right_hand.pitch"), TEXT("mirror_left_hand.pitch")},
+		{TEXT("right_hand.yaw"), TEXT("mirror_left_hand.yaw")},
+		{TEXT("right_hand.roll"), TEXT("mirror_left_hand.roll")},
 		{TEXT("right_hand.ik"), TEXT("left_hand.ik")},
 		{TEXT("right_hand.local_offset.x"), TEXT("left_hand.local_offset.x")},
 		{TEXT("right_hand.local_offset.y"), TEXT("left_hand.local_offset.y")},
@@ -31,7 +40,8 @@ bool MirrorTrack(FLLMMotionTrack& Track)
 	{
 		return false;
 	}
-	const bool bMirrorLateralValue = Track.ControlId == TEXT("right_hand.local_offset.y");
+	const bool bMirrorScalarValue =
+		Track.ControlId == TEXT("right_hand.local_offset.y");
 	Track.ControlId = *MirroredControl;
 	Track.Offset.Y *= -1.0f;
 	if (Track.Anchor == TEXT("head_right"))
@@ -42,7 +52,7 @@ bool MirrorTrack(FLLMMotionTrack& Track)
 	{
 		Track.Anchor = TEXT("left_wave");
 	}
-	if (bMirrorLateralValue)
+	if (bMirrorScalarValue)
 	{
 		Track.Amplitude *= -1.0f;
 		for (FLLMMotionKeyFloat& Key : Track.FloatKeys)
@@ -51,6 +61,17 @@ bool MirrorTrack(FLLMMotionTrack& Track)
 		}
 	}
 	return true;
+}
+
+bool IsNormalizedPoseControl(FName ControlId)
+{
+	const FString Control = ControlId.ToString();
+	return
+		Control.StartsWith(TEXT("right_fingers.")) ||
+		Control.StartsWith(TEXT("left_fingers.")) ||
+		Control == TEXT("gaze.target") ||
+		Control == TEXT("right_hand.palm_target") ||
+		Control == TEXT("left_hand.palm_target");
 }
 
 FVector2D IntersectPolicyRange(const FVector2D& TemplateRange, const FVector2D& ContextRange)
@@ -201,9 +222,13 @@ bool FLLMNPCTemplateCompiler::Compile(
 
 	for (FLLMMotionTrack& Track : OutPlan.Clip.Tracks)
 	{
+		const bool bScaleTrackValue = !IsNormalizedPoseControl(Track.ControlId);
 		Track.StartTime *= TimeScale;
 		Track.EndTime *= TimeScale;
-		Track.Amplitude *= Amplitude;
+		if (bScaleTrackValue)
+		{
+			Track.Amplitude *= Amplitude;
+		}
 		Track.Offset *= Amplitude * StylePreset.OffsetScale;
 		if (Track.TrackType == ELLMMotionTrackType::Oscillator)
 		{
@@ -227,7 +252,10 @@ bool FLLMNPCTemplateCompiler::Compile(
 		for (FLLMMotionKeyFloat& Key : Track.FloatKeys)
 		{
 			Key.T *= TimeScale;
-			Key.V *= Amplitude;
+			if (bScaleTrackValue)
+			{
+				Key.V *= Amplitude;
+			}
 		}
 
 		if (TrackAcceptsResolvedTarget(Track) && !TargetRef.IsEmpty())

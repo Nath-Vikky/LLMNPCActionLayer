@@ -253,17 +253,7 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolveRuntimeMode
 		return nullptr;
 	}
 
-	if (const ULLMNPCMotionTemplate* ExactTemplate = FindPublishedTemplate(SelectionId))
-	{
-		if (
-			ExactTemplate->Metadata.bAllowRuntimeModelSelection &&
-			ExactTemplate->Metadata.SkeletonProfileId == SkeletonProfileId
-		)
-		{
-			return ExactTemplate;
-		}
-	}
-
+	// Provider-facing resolution accepts only skeleton-independent public IDs.
 	return FindPublishedVariant(SelectionId, SkeletonProfileId);
 }
 

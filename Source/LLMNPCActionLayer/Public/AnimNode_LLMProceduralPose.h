@@ -175,6 +175,12 @@ private:
 		float Alpha
 	) const;
 
+	void ApplyLeftArmAdditiveRotationsLocal(
+		FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& OutBoneTransforms,
+		float Alpha
+	) const;
+
 	void PropagateRightHandChildrenCS(
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms

@@ -3,6 +3,7 @@
 #include "Animation/AnimInstanceProxy.h"
 #include "AnimationRuntime.h"
 #include "BonePose.h"
+#include "LLMNPCMotionMirror.h"
 #include "Math/RotationMatrix.h"
 #include "TwoBoneIK.h"
 
@@ -297,6 +298,7 @@ void FAnimNode_LLMProceduralPose::EvaluateSkeletalControl_AnyThread(
 	}
 
 	ApplyRightArmAdditiveRotationsLocal(Output, OutBoneTransforms, NodeAlpha);
+	ApplyLeftArmAdditiveRotationsLocal(Output, OutBoneTransforms, NodeAlpha);
 	PropagateRightHandChildrenCS(Output, OutBoneTransforms);
 	ApplyRightFingerPoseLocal(Output, OutBoneTransforms, NodeAlpha);
 	PropagateLeftHandChildrenCS(Output, OutBoneTransforms);
@@ -505,6 +507,91 @@ void FAnimNode_LLMProceduralPose::ApplyRightArmAdditiveRotationsLocal(
 	FTransform LowerTM = LowerLocalTM * UpperTM;
 	LowerTM.NormalizeRotation();
 
+	FTransform HandTM = HandLocalTM * LowerTM;
+	HandTM.NormalizeRotation();
+
+	AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, UpperTM);
+	AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, LowerTM);
+	AddOrReplaceBoneTransform(OutBoneTransforms, HandIndex, HandTM);
+}
+
+void FAnimNode_LLMProceduralPose::ApplyLeftArmAdditiveRotationsLocal(
+	FComponentSpacePoseContext& Output,
+	TArray<FBoneTransform>& OutBoneTransforms,
+	float InAlpha
+) const
+{
+	if (InAlpha <= KINDA_SMALL_NUMBER ||
+		(
+			Snapshot.LeftUpperArmAdditiveRotation.IsNearlyZero() &&
+			Snapshot.LeftLowerArmAdditiveRotation.IsNearlyZero() &&
+			Snapshot.LeftHandAdditiveRotation.IsNearlyZero()
+		))
+	{
+		return;
+	}
+
+	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
+	if (!LeftUpperArmBone.IsValidToEvaluate(BoneContainer) ||
+		!LeftLowerArmBone.IsValidToEvaluate(BoneContainer) ||
+		!LeftHandBone.IsValidToEvaluate(BoneContainer))
+	{
+		return;
+	}
+
+	const FCompactPoseBoneIndex UpperIndex = LeftUpperArmBone.GetCompactPoseIndex(BoneContainer);
+	const FCompactPoseBoneIndex LowerIndex = LeftLowerArmBone.GetCompactPoseIndex(BoneContainer);
+	const FCompactPoseBoneIndex HandIndex = LeftHandBone.GetCompactPoseIndex(BoneContainer);
+	const FCompactPoseBoneIndex UpperParentIndex = BoneContainer.GetParentBoneIndex(UpperIndex);
+
+	const FTransform UpperParentTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperParentIndex);
+	const FTransform OriginalUpperTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperIndex);
+	const FTransform OriginalLowerTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, LowerIndex);
+	const FTransform OriginalHandTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, HandIndex);
+	if (Snapshot.bLeftArmFKMirroredSource)
+	{
+		if (!RightUpperArmBone.IsValidToEvaluate(BoneContainer) ||
+			!RightLowerArmBone.IsValidToEvaluate(BoneContainer) ||
+			!RightHandBone.IsValidToEvaluate(BoneContainer))
+		{
+			return;
+		}
+		const FCompactPoseBoneIndex RightUpperIndex = RightUpperArmBone.GetCompactPoseIndex(BoneContainer);
+		const FCompactPoseBoneIndex RightLowerIndex = RightLowerArmBone.GetCompactPoseIndex(BoneContainer);
+		const FCompactPoseBoneIndex RightHandIndex = RightHandBone.GetCompactPoseIndex(BoneContainer);
+		const FCompactPoseBoneIndex RightParentIndex = BoneContainer.GetParentBoneIndex(RightUpperIndex);
+		const FLLMNPCArmChainTransforms Mirrored = FLLMNPCMotionMirror::MirrorRightArmFKAcrossSkeletonX(
+			GetCurrentBoneTransformCS(Output, OutBoneTransforms, RightParentIndex),
+			{
+				GetCurrentBoneTransformCS(Output, OutBoneTransforms, RightUpperIndex),
+				GetCurrentBoneTransformCS(Output, OutBoneTransforms, RightLowerIndex),
+				GetCurrentBoneTransformCS(Output, OutBoneTransforms, RightHandIndex)
+			},
+			Snapshot.LeftUpperArmAdditiveRotation,
+			Snapshot.LeftLowerArmAdditiveRotation,
+			Snapshot.LeftHandAdditiveRotation,
+			UpperParentTM,
+			{ OriginalUpperTM, OriginalLowerTM, OriginalHandTM },
+			InAlpha
+		);
+		AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, Mirrored.UpperCS);
+		AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, Mirrored.LowerCS);
+		AddOrReplaceBoneTransform(OutBoneTransforms, HandIndex, Mirrored.HandCS);
+		return;
+	}
+
+	FTransform UpperLocalTM = OriginalUpperTM.GetRelativeTransform(UpperParentTM);
+	FTransform LowerLocalTM = OriginalLowerTM.GetRelativeTransform(OriginalUpperTM);
+	FTransform HandLocalTM = OriginalHandTM.GetRelativeTransform(OriginalLowerTM);
+
+	UpperLocalTM = ApplyLocalRotationDelta(UpperLocalTM, Snapshot.LeftUpperArmAdditiveRotation, InAlpha);
+	LowerLocalTM = ApplyLocalRotationDelta(LowerLocalTM, Snapshot.LeftLowerArmAdditiveRotation, InAlpha);
+	HandLocalTM = ApplyLocalRotationDelta(HandLocalTM, Snapshot.LeftHandAdditiveRotation, InAlpha);
+
+	FTransform UpperTM = UpperLocalTM * UpperParentTM;
+	UpperTM.NormalizeRotation();
+	FTransform LowerTM = LowerLocalTM * UpperTM;
+	LowerTM.NormalizeRotation();
 	FTransform HandTM = HandLocalTM * LowerTM;
 	HandTM.NormalizeRotation();
 

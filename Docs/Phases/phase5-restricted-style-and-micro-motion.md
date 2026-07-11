@@ -2,7 +2,7 @@
 
 ## Release
 
-- Plugin version: `0.7.0`
+- Plugin version: `0.7.1`
 - Engine: Unreal Engine 5.3.2
 - Request schema: `llmnpc.turn_request.v2`
 - Prompt contract: `llmnpc.selection_prompt.v2`
@@ -18,11 +18,14 @@
   blend-time variation in `FLLMNPCTemplateCompiler`.
 - Stable weighted Template Variant resolution by public action, skeleton,
   Style Tag, and seed.
-- Published `gesture.wave.right.manny.subtle.v1` style-specific Variant.
+- Published `gesture.wave.right.manny.subtle.v1` style-specific Variant, based
+  on the manually reviewed Waving FK reconstruction.
+- Default runtime Wave resolves only to the reviewed FK reconstruction; the
+  earlier hand-anchor experiment remains internal-only.
 - Semantic procedural-template mirroring from right-hand controls to left-hand
   controls.
 - Left arm IK, local offsets, palm orientation, open-hand pose, point-hand pose,
-  motion channels, snapshot merge, and AnimNode execution.
+  mirrored FK, motion channels, snapshot merge, and AnimNode execution.
 - Right-hand occupancy keeps mirror-capable Wave available and marks it for
   UE-side left-hand execution.
 - Local breathing, head sway, occasional low-amplitude nod, and ambient gaze.
@@ -70,11 +73,15 @@ Different seeds may vary only within local Template Policy.
 ## Mirror Rules
 
 - Mirror must be enabled by the selected template's Modifier Policy.
-- Compiler maps semantic controls and anchors; it does not mirror raw bones.
+- Compiler maps semantic controls and anchors; it does not accept raw bones
+  from providers.
 - Unsupported controls fail compilation with a stable error.
-- The current shipped mirror path covers procedural hand IK, local offsets,
-  palm target, open fingers, and point fingers.
-- Internal direct-FK Wave remains non-mirrorable.
+- Hand IK, local offsets, palm target, open fingers, and point fingers retain
+  semantic mirror support.
+- Wave FK values remain source-side semantic data until the AnimNode reflects
+  component-space rotations across Manny's skeletal X axis. This avoids
+  incorrect Euler sign mirroring between different left/right local bases.
+- Normalized hand-pose controls are not weakened by gesture amplitude scaling.
 
 ## Micro Motion Rules
 
@@ -105,7 +112,8 @@ Different seeds may vary only within local Template Policy.
 - Different seeds produce bounded curve differences.
 - Shy Wave resolves `gesture.wave.right.manny.subtle.v1`.
 - `right_hand_busy` selects a left-hand mirrored Wave when the left hand is free.
-- Mirrored sampling activates left-hand IK and leaves right-hand IK inactive.
+- Mirrored Wave sampling activates left-arm FK, leaves both hand IK solvers
+  inactive, and produces a geometrically symmetric reference-pose hand path.
 - Local micro motion produces breathing and gaze without model calls.
 - Formal channels suppress conflicting micro motion.
 - Provider context contains recommendations but no curve or seed authority.

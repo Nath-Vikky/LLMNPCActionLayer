@@ -69,6 +69,10 @@ void FLLMNPCMotionSampler::SampleClip(
 		}
 
 		const FName Control = Track.ControlId;
+		if (Control.ToString().StartsWith(TEXT("mirror_left_")))
+		{
+			OutSnapshot.bLeftArmFKMirroredSource = true;
+		}
 		const float FloatValue = EvaluateFloatTrack(Track, Time) * TrackAlpha;
 
 		if (Control == TEXT("head.pitch"))
@@ -154,6 +158,42 @@ void FLLMNPCMotionSampler::SampleClip(
 		else if (Control == TEXT("right_hand.roll"))
 		{
 			OutSnapshot.RightHandAdditiveRotation.Roll += FloatValue;
+		}
+		else if (Control == TEXT("left_upperarm.pitch") || Control == TEXT("mirror_left_upperarm.pitch"))
+		{
+			OutSnapshot.LeftUpperArmAdditiveRotation.Pitch += FloatValue;
+		}
+		else if (Control == TEXT("left_upperarm.yaw") || Control == TEXT("mirror_left_upperarm.yaw"))
+		{
+			OutSnapshot.LeftUpperArmAdditiveRotation.Yaw += FloatValue;
+		}
+		else if (Control == TEXT("left_upperarm.roll") || Control == TEXT("mirror_left_upperarm.roll"))
+		{
+			OutSnapshot.LeftUpperArmAdditiveRotation.Roll += FloatValue;
+		}
+		else if (Control == TEXT("left_lowerarm.pitch") || Control == TEXT("mirror_left_lowerarm.pitch"))
+		{
+			OutSnapshot.LeftLowerArmAdditiveRotation.Pitch += FloatValue;
+		}
+		else if (Control == TEXT("left_lowerarm.yaw") || Control == TEXT("mirror_left_lowerarm.yaw"))
+		{
+			OutSnapshot.LeftLowerArmAdditiveRotation.Yaw += FloatValue;
+		}
+		else if (Control == TEXT("left_lowerarm.roll") || Control == TEXT("mirror_left_lowerarm.roll"))
+		{
+			OutSnapshot.LeftLowerArmAdditiveRotation.Roll += FloatValue;
+		}
+		else if (Control == TEXT("left_hand.pitch") || Control == TEXT("mirror_left_hand.pitch"))
+		{
+			OutSnapshot.LeftHandAdditiveRotation.Pitch += FloatValue;
+		}
+		else if (Control == TEXT("left_hand.yaw") || Control == TEXT("mirror_left_hand.yaw"))
+		{
+			OutSnapshot.LeftHandAdditiveRotation.Yaw += FloatValue;
+		}
+		else if (Control == TEXT("left_hand.roll") || Control == TEXT("mirror_left_hand.roll"))
+		{
+			OutSnapshot.LeftHandAdditiveRotation.Roll += FloatValue;
 		}
 		else if (Control == TEXT("right_fingers.open"))
 		{

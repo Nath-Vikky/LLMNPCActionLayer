@@ -202,6 +202,18 @@ struct FLLMProceduralPoseSnapshot
 	FRotator RightHandAdditiveRotation = FRotator::ZeroRotator;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FRotator LeftUpperArmAdditiveRotation = FRotator::ZeroRotator;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FRotator LeftLowerArmAdditiveRotation = FRotator::ZeroRotator;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FRotator LeftHandAdditiveRotation = FRotator::ZeroRotator;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	bool bLeftArmFKMirroredSource = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	FVector RightHandPalmTargetCS = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")

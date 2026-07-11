@@ -16,7 +16,7 @@
     "intent_tags": ["greet", "farewell", "acknowledge"],
     "emotion_tags": ["neutral", "friendly"],
     "personality_tags": ["shy", "reserved"],
-    "required_channels": ["right_arm_ik", "right_hand_pose"],
+    "required_channels": ["right_arm_fk", "right_hand_pose"],
     "blocked_states": ["dead", "ragdoll", "stunned", "right_hand_busy"],
     "requires_target": false,
     "can_run_while_moving": true,
@@ -24,68 +24,113 @@
     "cooldown_seconds": 0.8
   },
   "modifier_policy": {
-    "amplitude": [0.65, 0.95],
+    "amplitude": [0.65, 0.9],
     "speed": [0.8, 1.0],
     "duration": [1.0, 1.0],
     "allow_mirror": true,
     "allowed_styles": ["subtle"],
-    "random_amplitude_jitter": 0.02,
-    "random_speed_jitter": 0.02,
-    "random_frequency_jitter": 0.03,
-    "random_phase_jitter_radians": 0.06
+    "random_amplitude_jitter": 0.015,
+    "random_speed_jitter": 0.015,
+    "random_frequency_jitter": 0.0,
+    "random_phase_jitter_radians": 0.0
   },
   "clip": {
     "clip_id": "gesture.wave.right.manny.subtle.v1.clip",
-    "duration": 1.65,
-    "blend_in": 0.22,
-    "blend_out": 0.3,
-    "priority": 0.45,
+    "duration": 2.2,
+    "blend_in": 0.18,
+    "blend_out": 0.32,
+    "priority": 0.5,
     "interruptible": true,
     "tracks": [
       {
-        "control_id": "right_hand.ik",
-        "track_type": "anchor",
-        "value_type": "vector",
+        "control_id": "right_upperarm.pitch",
+        "track_type": "keyframes",
+        "value_type": "float",
         "start_time": 0.0,
-        "end_time": 1.65,
-        "anchor": "head_right",
-        "offset": [10.0, 6.0, -2.0],
+        "end_time": 2.2,
         "envelope": "none",
-        "strength": 0.9
+        "keys": [[0.0, 0.0], [0.22, 0.4], [0.43, -17.5], [0.67, -49.9], [0.88, -5.5], [1.1, -45.6], [1.32, 14.0], [1.53, 3.2], [1.77, 0.9], [2.2, 0.0]]
       },
       {
-        "control_id": "right_hand.local_offset.y",
-        "track_type": "oscillator",
+        "control_id": "right_upperarm.yaw",
+        "track_type": "keyframes",
         "value_type": "float",
-        "start_time": 0.4,
-        "end_time": 1.28,
-        "amplitude": 10.0,
-        "frequency": 2.5,
-        "phase": 0.0,
-        "envelope": "smooth",
-        "strength": 0.9
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "keys": [[0.0, 0.0], [0.22, -13.6], [0.43, -11.1], [0.67, -11.5], [0.88, -3.1], [1.1, -13.2], [1.32, -2.3], [1.53, -5.0], [1.77, -2.7], [2.2, 0.0]]
       },
       {
-        "control_id": "right_hand.local_offset.z",
-        "track_type": "oscillator",
+        "control_id": "right_upperarm.roll",
+        "track_type": "keyframes",
         "value_type": "float",
-        "start_time": 0.4,
-        "end_time": 1.28,
-        "amplitude": 3.0,
-        "frequency": 2.5,
-        "phase": 1.57079632679,
-        "envelope": "smooth",
-        "strength": 0.8
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "keys": [[0.0, 0.0], [0.22, -6.2], [0.43, -75.2], [0.67, -83.7], [0.88, -80.0], [1.1, -77.7], [1.32, -25.8], [1.53, -3.9], [1.77, -0.3], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_lowerarm.pitch",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "keys": [[0.0, 0.0], [0.22, -0.1], [0.43, -3.3], [0.67, -2.2], [0.88, -3.3], [1.1, -2.6], [1.32, -3.3], [1.53, -0.1], [1.77, 0.1], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_lowerarm.yaw",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "keys": [[0.0, 0.0], [0.22, 2.1], [0.43, 85.2], [0.67, 40.6], [0.88, 91.4], [1.1, 52.6], [1.32, 82.4], [1.53, 0.8], [1.77, -1.2], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_lowerarm.roll",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "keys": [[0.0, 0.0], [0.22, 0.0], [0.43, -3.0], [0.67, -0.8], [0.88, -3.4], [1.1, -1.3], [1.32, -2.9], [1.53, 0.0], [1.77, 0.0], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_hand.pitch",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "keys": [[0.0, 0.0], [0.22, -5.6], [0.43, -0.2], [0.67, 43.1], [0.88, -10.0], [1.1, 28.9], [1.32, -9.9], [1.53, -6.3], [1.77, -1.9], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_hand.yaw",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "keys": [[0.0, 0.0], [0.22, 4.0], [0.43, 20.0], [0.67, 16.9], [0.88, 16.4], [1.1, 15.0], [1.32, 7.4], [1.53, 6.7], [1.77, 0.0], [2.2, 0.0]]
+      },
+      {
+        "control_id": "right_hand.roll",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 2.2,
+        "envelope": "none",
+        "keys": [[0.0, 0.0], [0.22, -9.2], [0.43, 56.3], [0.67, 42.3], [0.88, 57.5], [1.1, 30.9], [1.32, 32.1], [1.53, 6.5], [1.77, 1.6], [2.2, 0.0]]
       },
       {
         "control_id": "right_fingers.open",
         "track_type": "keyframes",
         "value_type": "float",
         "start_time": 0.0,
-        "end_time": 1.65,
+        "end_time": 2.2,
         "envelope": "none",
-        "strength": 0.9,
-        "keys": [[0.0, 0.0], [0.3, 0.85], [1.35, 0.85], [1.65, 0.0]]
+        "keys": [[0.0, 0.0], [0.35, 1.0], [1.45, 1.0], [1.65, 0.35], [2.2, 0.0]]
       }
     ]
   },

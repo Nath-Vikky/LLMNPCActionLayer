@@ -20,14 +20,14 @@
     "blocked_states": ["dead", "ragdoll", "stunned", "right_hand_busy"],
     "requires_target": false,
     "can_run_while_moving": true,
-    "allow_runtime_model_selection": true,
+    "allow_runtime_model_selection": false,
     "cooldown_seconds": 1.0
   },
   "modifier_policy": {
     "amplitude": [0.75, 1.2],
     "speed": [0.85, 1.25],
     "duration": [1.0, 1.0],
-    "allow_mirror": true,
+    "allow_mirror": false,
     "allowed_styles": ["neutral", "friendly", "subtle", "excited"],
     "random_amplitude_jitter": 0.03,
     "random_speed_jitter": 0.025,

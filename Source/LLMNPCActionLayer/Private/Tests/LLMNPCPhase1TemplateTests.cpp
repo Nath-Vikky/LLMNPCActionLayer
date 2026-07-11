@@ -40,8 +40,8 @@ bool FLLMNPCTemplateLibraryTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("The faithful FK wave is addressable by exact ID"), FaithfulWave);
 	if (FaithfulWave)
 	{
-		TestFalse(
-			TEXT("The faithful FK wave is hidden from runtime model selection"),
+		TestTrue(
+			TEXT("The manually reviewed FK Wave backs runtime model selection"),
 			FaithfulWave->Metadata.bAllowRuntimeModelSelection
 		);
 	}
@@ -54,9 +54,9 @@ bool FLLMNPCTemplateLibraryTest::RunTest(const FString& Parameters)
 	if (ModelWave)
 	{
 		TestEqual(
-			TEXT("The runtime model receives the semantic procedural wave"),
+			TEXT("The public Wave resolves to the manually reviewed FK implementation"),
 			ModelWave->Metadata.TemplateId,
-			FName(TEXT("gesture.wave.right.manny.procedural.v1"))
+			FName(TEXT("gesture.wave.right.manny.fk.v1"))
 		);
 	}
 

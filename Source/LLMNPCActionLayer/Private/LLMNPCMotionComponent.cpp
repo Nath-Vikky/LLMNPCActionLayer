@@ -663,6 +663,19 @@ TArray<FName> ULLMNPCMotionComponent::DeriveMotionChannels(const FLLMMotionPlan&
 			Channel = TEXT("right_arm_fk");
 		}
 		else if (
+			Control.StartsWith(TEXT("left_upperarm.")) ||
+			Control.StartsWith(TEXT("left_lowerarm.")) ||
+			Control.StartsWith(TEXT("mirror_left_upperarm.")) ||
+			Control.StartsWith(TEXT("mirror_left_lowerarm.")) ||
+			Control == TEXT("left_hand.pitch") ||
+			Control == TEXT("left_hand.yaw") ||
+			Control == TEXT("left_hand.roll") ||
+			Control.StartsWith(TEXT("mirror_left_hand."))
+		)
+		{
+			Channel = TEXT("left_arm_fk");
+		}
+		else if (
 			Control.StartsWith(TEXT("right_fingers.")) ||
 			Control == TEXT("right_hand.palm_target")
 		)
@@ -691,6 +704,8 @@ bool ULLMNPCMotionComponent::ChannelsConflict(const TArray<FName>& A, const TArr
 	static const FName FullBodyChannel(TEXT("full_body"));
 	static const FName RightArmIKChannel(TEXT("right_arm_ik"));
 	static const FName RightArmFKChannel(TEXT("right_arm_fk"));
+	static const FName LeftArmIKChannel(TEXT("left_arm_ik"));
+	static const FName LeftArmFKChannel(TEXT("left_arm_fk"));
 
 	if (A.Contains(FullBodyChannel) || B.Contains(FullBodyChannel))
 	{
@@ -707,7 +722,9 @@ bool ULLMNPCMotionComponent::ChannelsConflict(const TArray<FName>& A, const TArr
 
 	return
 		(A.Contains(RightArmIKChannel) && B.Contains(RightArmFKChannel)) ||
-		(A.Contains(RightArmFKChannel) && B.Contains(RightArmIKChannel));
+		(A.Contains(RightArmFKChannel) && B.Contains(RightArmIKChannel)) ||
+		(A.Contains(LeftArmIKChannel) && B.Contains(LeftArmFKChannel)) ||
+		(A.Contains(LeftArmFKChannel) && B.Contains(LeftArmIKChannel));
 }
 
 void ULLMNPCMotionComponent::MergeSnapshot(
@@ -726,6 +743,11 @@ void ULLMNPCMotionComponent::MergeSnapshot(
 	InOutSnapshot.RightUpperArmAdditiveRotation += Snapshot.RightUpperArmAdditiveRotation;
 	InOutSnapshot.RightLowerArmAdditiveRotation += Snapshot.RightLowerArmAdditiveRotation;
 	InOutSnapshot.RightHandAdditiveRotation += Snapshot.RightHandAdditiveRotation;
+	InOutSnapshot.LeftUpperArmAdditiveRotation += Snapshot.LeftUpperArmAdditiveRotation;
+	InOutSnapshot.LeftLowerArmAdditiveRotation += Snapshot.LeftLowerArmAdditiveRotation;
+	InOutSnapshot.LeftHandAdditiveRotation += Snapshot.LeftHandAdditiveRotation;
+	InOutSnapshot.bLeftArmFKMirroredSource =
+		InOutSnapshot.bLeftArmFKMirroredSource || Snapshot.bLeftArmFKMirroredSource;
 
 	if (Snapshot.RightHandIKAlpha > InOutSnapshot.RightHandIKAlpha)
 	{

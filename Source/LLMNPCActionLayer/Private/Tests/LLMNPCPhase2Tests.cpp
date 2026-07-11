@@ -207,7 +207,7 @@ bool FLLMNPCCandidateBoundaryTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("Candidate selection IDs are skeleton independent"), Candidate.SelectionId.ToString().Contains(TEXT(".manny.")));
 	}
 	TestNull(
-		TEXT("The internal faithful FK wave is not model-selectable"),
+		TEXT("Internal template IDs remain unavailable to the model"),
 		Library->ResolveRuntimeModelTemplate(TEXT("gesture.wave.right.manny.fk.v1"), TEXT("ue5_manny.v1"))
 	);
 

@@ -120,9 +120,11 @@ stable, weighted, skeleton-specific, style-aware, and reproducible from the
 action seed. The shipped `subtle` Wave variant is selected for shy contexts.
 
 Templates that explicitly allow Mirror are mirrored through semantic controls.
-The procedural Wave can move to the left arm when `right_hand_busy` is active
-and `left_hand_busy` is not. Mirroring never exposes bones or sign rules to the
-model.
+The reviewed FK reconstruction backs both the default and `subtle` Wave; the
+older hand-anchor experiment is internal-only. When `right_hand_busy` is active
+and `left_hand_busy` is not, UE reflects the reviewed right-arm FK chain across
+Manny's skeletal X axis and executes it on the left. Mirroring never exposes
+bones, transforms, or axis rules to the model.
 
 `ULLMNPCMotionComponent` also runs a low-amplitude local breathing, head sway,
 occasional nod, and ambient gaze scheduler. It makes no model calls and yields

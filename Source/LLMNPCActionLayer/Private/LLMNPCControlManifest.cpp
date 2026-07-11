@@ -59,6 +59,24 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			Result.Add(MakeRotationControl(TEXT("right_hand.pitch"), TEXT("hand_r"), -95.0f, 95.0f, false));
 			Result.Add(MakeRotationControl(TEXT("right_hand.yaw"), TEXT("hand_r"), -95.0f, 95.0f, false));
 			Result.Add(MakeRotationControl(TEXT("right_hand.roll"), TEXT("hand_r"), -95.0f, 95.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_upperarm.pitch"), TEXT("upperarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_upperarm.yaw"), TEXT("upperarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_upperarm.roll"), TEXT("upperarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_lowerarm.pitch"), TEXT("lowerarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_lowerarm.yaw"), TEXT("lowerarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_lowerarm.roll"), TEXT("lowerarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_hand.pitch"), TEXT("hand_l"), -95.0f, 95.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_hand.yaw"), TEXT("hand_l"), -95.0f, 95.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_hand.roll"), TEXT("hand_l"), -95.0f, 95.0f, false));
+			Result.Add(MakeRotationControl(TEXT("mirror_left_upperarm.pitch"), TEXT("upperarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("mirror_left_upperarm.yaw"), TEXT("upperarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("mirror_left_upperarm.roll"), TEXT("upperarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("mirror_left_lowerarm.pitch"), TEXT("lowerarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("mirror_left_lowerarm.yaw"), TEXT("lowerarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("mirror_left_lowerarm.roll"), TEXT("lowerarm_l"), -125.0f, 125.0f, false));
+			Result.Add(MakeRotationControl(TEXT("mirror_left_hand.pitch"), TEXT("hand_l"), -95.0f, 95.0f, false));
+			Result.Add(MakeRotationControl(TEXT("mirror_left_hand.yaw"), TEXT("hand_l"), -95.0f, 95.0f, false));
+			Result.Add(MakeRotationControl(TEXT("mirror_left_hand.roll"), TEXT("hand_l"), -95.0f, 95.0f, false));
 
 			FLLMControlDefinition RightHandIK;
 			RightHandIK.ControlId = TEXT("right_hand.ik");

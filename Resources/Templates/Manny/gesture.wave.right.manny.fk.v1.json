@@ -4,6 +4,9 @@
   "template_id": "gesture.wave.right.manny.fk.v1",
   "public_action_id": "gesture.wave.right",
   "semantic_version": "1.0.0",
+  "variant_id": "default",
+  "variant_weight": 1.0,
+  "variant_style_tags": [],
   "kind": "procedural_motion",
   "review_state": "published",
   "display_name": "Manny Faithful FK Right Wave",
@@ -17,15 +20,19 @@
     "blocked_states": ["dead", "ragdoll", "stunned", "right_hand_busy"],
     "requires_target": false,
     "can_run_while_moving": true,
-    "allow_runtime_model_selection": false,
+    "allow_runtime_model_selection": true,
     "cooldown_seconds": 1.0
   },
   "modifier_policy": {
-    "amplitude": [0.95, 1.05],
-    "speed": [0.9, 1.1],
+    "amplitude": [0.65, 1.15],
+    "speed": [0.8, 1.2],
     "duration": [1.0, 1.0],
-    "allow_mirror": false,
-    "allowed_styles": ["neutral", "faithful"]
+    "allow_mirror": true,
+    "allowed_styles": ["neutral", "friendly", "subtle", "excited"],
+    "random_amplitude_jitter": 0.025,
+    "random_speed_jitter": 0.02,
+    "random_frequency_jitter": 0.0,
+    "random_phase_jitter_radians": 0.0
   },
   "clip": {
     "clip_id": "gesture.wave.right.manny.fk.v1.clip",
