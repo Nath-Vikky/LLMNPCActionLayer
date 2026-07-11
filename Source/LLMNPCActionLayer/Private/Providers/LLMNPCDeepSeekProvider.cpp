@@ -6,6 +6,7 @@
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "LLMNPCSettings.h"
+#include "Providers/LLMNPCProviderCredentials.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -122,14 +123,16 @@ void FLLMNPCDeepSeekProvider::StartHttpRequest(const FGuid& RequestId)
 		return;
 	}
 
-	const FString ApiKey = FPlatformMisc::GetEnvironmentVariable(*Settings->ApiKeyEnvironmentVariable);
-	if (ApiKey.IsEmpty())
+	FString ApiKey;
+	ELLMNPCCredentialSource CredentialSource = ELLMNPCCredentialSource::Missing;
+	if (!FLLMNPCProviderCredentials::ResolveDeepSeekApiKey(*Settings, ApiKey, CredentialSource))
 	{
 		FLLMNPCModelTurnResult Result = MakeDirectDisabledResult(RequestId);
 		Result.ErrorCode = TEXT("LLMNPC_DEEPSEEK_API_KEY_MISSING");
 		Complete(RequestId, MoveTemp(Result));
 		return;
 	}
+	static_cast<void>(CredentialSource);
 
 	TSharedPtr<FPendingRequest> Pending = *Found;
 	++Pending->Attempt;

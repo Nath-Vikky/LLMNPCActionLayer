@@ -22,9 +22,14 @@ public class LLMNPCActionLayerEditor : ModuleRules
 				"AssetRegistry",
 				"AssetTools",
 				"EditorSubsystem",
+				"InputCore",
 				"Json",
 				"JsonUtilities",
+				"LevelEditor",
 				"Projects",
+				"Slate",
+				"SlateCore",
+				"ToolMenus",
 				"UnrealEd"
 			}
 		);
