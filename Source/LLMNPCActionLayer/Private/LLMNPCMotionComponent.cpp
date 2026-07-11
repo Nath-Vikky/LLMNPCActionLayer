@@ -1,5 +1,6 @@
 #include "LLMNPCMotionComponent.h"
 
+#include "Animation/LLMNPCAnimationAssetPlayer.h"
 #include "LLMNPCAPIClient.h"
 #include "LLMNPCActionLayer.h"
 #include "LLMNPCMotionSampler.h"
@@ -32,6 +33,8 @@ void ULLMNPCMotionComponent::BeginPlay()
 	Validator = NewObject<ULLMNPCMotionValidator>(this);
 	Validator->Manifest = ControlManifest;
 	APIClient = NewObject<ULLMNPCAPIClient>(this);
+	AnimationAssetPlayer = NewObject<ULLMNPCAnimationAssetPlayer>(this);
+	AnimationAssetPlayer->Initialize(GetOwner());
 	const int32 ResolvedMicroMotionSeed = MicroMotionSeed != 0
 		? MicroMotionSeed
 		: static_cast<int32>(GetTypeHash(GetOwner() ? GetOwner()->GetFName() : GetFName()) & 0x7fffffffU);
@@ -45,6 +48,10 @@ void ULLMNPCMotionComponent::BeginPlay()
 
 void ULLMNPCMotionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (AnimationAssetPlayer)
+	{
+		AnimationAssetPlayer->Shutdown();
+	}
 	RestorePostProcessAnimBP();
 	Super::EndPlay(EndPlayReason);
 }
@@ -143,6 +150,16 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 	if (!MotionTemplate)
 	{
 		LastValidationError = TEXT("LLMNPC_TEMPLATE_NOT_FOUND_OR_NOT_PUBLISHED");
+		return false;
+	}
+
+	if (MotionTemplate->Kind == ELLMNPCTemplateKind::AnimationAsset)
+	{
+		return SubmitAnimationAssetTemplate(*MotionTemplate, Modifiers);
+	}
+	if (MotionTemplate->Kind != ELLMNPCTemplateKind::ProceduralMotion)
+	{
+		LastValidationError = TEXT("LLMNPC_TEMPLATE_KIND_NOT_EXECUTABLE");
 		return false;
 	}
 
@@ -396,11 +413,24 @@ FLLMNPCMotionDebugState ULLMNPCMotionComponent::GetDebugState() const
 		? 0.0f
 		: ActiveMotions[0].Request.Plan.Clip.Duration;
 	State.QueueCount = Queue.Num();
-	State.bHasActivePlan = bHasActivePlan;
-	State.ActivePlanCount = ActiveMotions.Num();
+	const bool bAnimationPlaying = AnimationAssetPlayer && AnimationAssetPlayer->IsPlaying();
+	State.bHasActivePlan = bHasActivePlan || bAnimationPlaying;
+	State.ActivePlanCount = ActiveMotions.Num() + (bAnimationPlaying ? 1 : 0);
 	State.bMotionRequestInFlight = bMotionRequestInFlight;
 	State.bPostProcessInstalled = bPostProcessInstalled;
 	State.LastPostProcessError = LastPostProcessError;
+	if (AnimationAssetPlayer)
+	{
+		const FLLMNPCAnimationPlaybackDebugState AnimationState = AnimationAssetPlayer->GetDebugState();
+		State.bAnimationAssetPlaying = bAnimationPlaying;
+		State.AnimationPlaybackState = StaticEnum<ELLMNPCAnimationPlaybackState>()->GetNameStringByValue(
+			static_cast<int64>(AnimationState.State)
+		);
+		State.ActiveAnimationTemplateId = AnimationState.TemplateId;
+		State.ActiveAnimationSlot = AnimationState.SlotName;
+		State.ActiveAnimationPlayRate = AnimationState.PlayRate;
+		State.LastAnimationError = AnimationState.ErrorCode;
+	}
 	State.Snapshot = CurrentSnapshot;
 	return State;
 }
@@ -426,6 +456,11 @@ void ULLMNPCMotionComponent::StartEligiblePlans()
 	for (int32 QueueIndex = 0; QueueIndex < Queue.Num();)
 	{
 		const FLLMNPCQueuedMotionPlan& Candidate = Queue[QueueIndex];
+		if (AnimationAssetPlayer && AnimationAssetPlayer->ConflictsWith(Candidate.Channels))
+		{
+			++QueueIndex;
+			continue;
+		}
 		if (!Candidate.SourceTemplateId.IsNone() && Candidate.CooldownSeconds > 0.0f)
 		{
 			if (const double* LastStart = LastTemplateStartTimes.Find(Candidate.SourceTemplateId))
@@ -609,14 +644,83 @@ void ULLMNPCMotionComponent::UpdateMicroMotion(float DeltaTime)
 
 bool ULLMNPCMotionComponent::IsChannelActive(FName Channel) const
 {
+	if (
+		AnimationAssetPlayer &&
+		AnimationAssetPlayer->IsPlaying() &&
+		(
+			AnimationAssetPlayer->GetActiveChannels().Contains(Channel) ||
+			AnimationAssetPlayer->GetActiveChannels().Contains(TEXT("full_body"))
+		)
+	)
+	{
+		return true;
+	}
 	for (const FLLMNPCActiveMotionPlan& Active : ActiveMotions)
 	{
-		if (Active.Request.Channels.Contains(Channel))
+		if (
+			Active.Request.Channels.Contains(Channel) ||
+			Active.Request.Channels.Contains(TEXT("full_body"))
+		)
 		{
 			return true;
 		}
 	}
 	return false;
+}
+
+bool ULLMNPCMotionComponent::SubmitAnimationAssetTemplate(
+	const ULLMNPCMotionTemplate& MotionTemplate,
+	const FLLMNPCTemplateModifiers& Modifiers
+)
+{
+	for (const FLLMNPCActiveMotionPlan& Active : ActiveMotions)
+	{
+		if (ChannelsConflict(MotionTemplate.Metadata.RequiredChannels, Active.Request.Channels))
+		{
+			LastValidationError = TEXT("LLMNPC_ANIMATION_CHANNEL_CONFLICT");
+			return false;
+		}
+	}
+
+	if (!AnimationAssetPlayer)
+	{
+		AnimationAssetPlayer = NewObject<ULLMNPCAnimationAssetPlayer>(this);
+		AnimationAssetPlayer->Initialize(GetOwner());
+	}
+	if (AnimationAssetPlayer->ConflictsWith(MotionTemplate.Metadata.RequiredChannels))
+	{
+		if (!AnimationAssetPlayer->CanInterrupt())
+		{
+			LastValidationError = TEXT("LLMNPC_ANIMATION_ACTIVE_NOT_INTERRUPTIBLE");
+			return false;
+		}
+		AnimationAssetPlayer->Stop(true);
+	}
+
+	const double NowSeconds = FPlatformTime::Seconds();
+	if (const double* LastStart = LastTemplateStartTimes.Find(MotionTemplate.Metadata.TemplateId))
+	{
+		if (NowSeconds - *LastStart < MotionTemplate.Metadata.CooldownSeconds)
+		{
+			LastValidationError = TEXT("LLMNPC_TEMPLATE_COOLDOWN_ACTIVE");
+			return false;
+		}
+	}
+
+	FString PlaybackError;
+	if (!AnimationAssetPlayer->Play(MotionTemplate, Modifiers, PlaybackError))
+	{
+		LastValidationError = PlaybackError;
+		return false;
+	}
+
+	LastTemplateStartTimes.Add(MotionTemplate.Metadata.TemplateId, NowSeconds);
+	LastAcceptedMotionJson = FString::Printf(
+		TEXT("{\"kind\":\"animation_asset\",\"template_id\":\"%s\"}"),
+		*MotionTemplate.Metadata.TemplateId.ToString()
+	);
+	LastValidationError.Reset();
+	return true;
 }
 
 TArray<FName> ULLMNPCMotionComponent::DeriveMotionChannels(const FLLMMotionPlan& Plan)

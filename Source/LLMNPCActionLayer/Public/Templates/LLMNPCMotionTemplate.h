@@ -60,6 +60,39 @@ struct FLLMNPCModifierPolicy
 };
 
 USTRUCT(BlueprintType)
+struct FLLMNPCAnimationPlaybackPolicy
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Animation")
+	FName SlotName = TEXT("DefaultSlot");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Animation", meta=(ClampMin="0.0", ClampMax="2.0"))
+	float BlendInSeconds = 0.15f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Animation", meta=(ClampMin="0.0", ClampMax="2.0"))
+	float BlendOutSeconds = 0.15f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Animation", meta=(ClampMin="0.0"))
+	float StartPositionSeconds = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Animation", meta=(ClampMin="0.1", ClampMax="60.0"))
+	float MaxDurationSeconds = 10.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Animation")
+	bool bLoop = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Animation")
+	bool bInterruptible = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Animation")
+	bool bStopOtherMontages = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Animation")
+	bool bAllowRootMotion = false;
+};
+
+USTRUCT(BlueprintType)
 struct FLLMNPCTemplateMetadata
 {
 	GENERATED_BODY()
@@ -142,6 +175,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
 	TSoftObjectPtr<UAnimationAsset> AnimationAsset;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
+	FLLMNPCAnimationPlaybackPolicy AnimationPlayback;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template", meta=(MultiLine="true"))
 	FString SourceProvenanceJson;

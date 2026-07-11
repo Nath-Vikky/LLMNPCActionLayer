@@ -10,6 +10,23 @@ bool IsOrderedPositiveRange(const FVector2D& Range)
 		Range.X > 0.0f &&
 		Range.Y >= Range.X;
 }
+
+bool IsValidAnimationPlaybackPolicy(const FLLMNPCAnimationPlaybackPolicy& Policy)
+{
+	return
+		!Policy.SlotName.IsNone() &&
+		FMath::IsFinite(Policy.BlendInSeconds) &&
+		FMath::IsFinite(Policy.BlendOutSeconds) &&
+		FMath::IsFinite(Policy.StartPositionSeconds) &&
+		FMath::IsFinite(Policy.MaxDurationSeconds) &&
+		Policy.BlendInSeconds >= 0.0f &&
+		Policy.BlendInSeconds <= 2.0f &&
+		Policy.BlendOutSeconds >= 0.0f &&
+		Policy.BlendOutSeconds <= 2.0f &&
+		Policy.StartPositionSeconds >= 0.0f &&
+		Policy.MaxDurationSeconds >= 0.1f &&
+		Policy.MaxDurationSeconds <= 60.0f;
+}
 }
 
 bool ULLMNPCMotionTemplate::IsPublished() const
@@ -91,10 +108,23 @@ bool ULLMNPCMotionTemplate::ValidateTemplate(FString& OutError) const
 			return false;
 		}
 	}
-	else if (Kind == ELLMNPCTemplateKind::AnimationAsset && AnimationAsset.IsNull())
+	else if (Kind == ELLMNPCTemplateKind::AnimationAsset)
 	{
-		OutError = TEXT("LLMNPC_TEMPLATE_ANIMATION_ASSET_MISSING");
-		return false;
+		if (AnimationAsset.IsNull())
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_ANIMATION_ASSET_MISSING");
+			return false;
+		}
+		if (Metadata.RequiredChannels.IsEmpty())
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_ANIMATION_CHANNELS_MISSING");
+			return false;
+		}
+		if (!IsValidAnimationPlaybackPolicy(AnimationPlayback))
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_ANIMATION_PLAYBACK_POLICY_INVALID");
+			return false;
+		}
 	}
 
 	if (IsPublished() && SourceProvenanceJson.TrimStartAndEnd().IsEmpty())

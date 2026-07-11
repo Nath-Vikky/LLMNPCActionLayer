@@ -9,6 +9,7 @@
 #include "LLMNPCMotionComponent.generated.h"
 
 class UAnimInstance;
+class ULLMNPCAnimationAssetPlayer;
 class ULLMNPCAPIClient;
 class ULLMNPCMotionValidator;
 class ULLMNPCSkeletonProfile;
@@ -178,6 +179,9 @@ private:
 	UPROPERTY()
 	TObjectPtr<ULLMNPCAPIClient> APIClient;
 
+	UPROPERTY(Transient)
+	TObjectPtr<ULLMNPCAnimationAssetPlayer> AnimationAssetPlayer;
+
 	TArray<FLLMNPCQueuedMotionPlan> Queue;
 	TArray<FLLMNPCActiveMotionPlan> ActiveMotions;
 	TMap<FName, double> LastTemplateStartTimes;
@@ -210,6 +214,10 @@ private:
 		const ULLMNPCMotionTemplate* SourceTemplate = nullptr
 	);
 	bool ValidateTargetRefs(const FLLMMotionPlan& Plan, FString& OutError) const;
+	bool SubmitAnimationAssetTemplate(
+		const ULLMNPCMotionTemplate& MotionTemplate,
+		const FLLMNPCTemplateModifiers& Modifiers
+	);
 	void UpdateActivePlans(float DeltaTime);
 	void UpdateMicroMotion(float DeltaTime);
 	bool IsChannelActive(FName Channel) const;

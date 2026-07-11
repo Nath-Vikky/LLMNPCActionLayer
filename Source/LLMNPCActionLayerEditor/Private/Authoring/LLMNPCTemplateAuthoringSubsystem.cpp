@@ -56,6 +56,7 @@ void CopyTemplateData(
 	Destination.ModifierPolicy = Source.ModifierPolicy;
 	Destination.ProceduralClip = Source.ProceduralClip;
 	Destination.AnimationAsset = Source.AnimationAsset;
+	Destination.AnimationPlayback = Source.AnimationPlayback;
 	Destination.SourceProvenanceJson = Source.SourceProvenanceJson;
 	Destination.ValidationReportJson = Source.ValidationReportJson;
 }
@@ -997,12 +998,14 @@ FString ULLMNPCTemplateAuthoringSubsystem::BuildTemplateContentHash(
 	FString MetadataJson;
 	FString ModifierJson;
 	FString ClipJson;
+	FString AnimationPlaybackJson;
 	FString StableProvenanceJson = Template.SourceProvenanceJson;
 	FLLMNPCTemplateMetadata StableMetadata = Template.Metadata;
 	StableMetadata.ReviewState = ELLMNPCTemplateReviewState::Generated;
 	FJsonObjectConverter::UStructToJsonObjectString(StableMetadata, MetadataJson);
 	FJsonObjectConverter::UStructToJsonObjectString(Template.ModifierPolicy, ModifierJson);
 	FJsonObjectConverter::UStructToJsonObjectString(Template.ProceduralClip, ClipJson);
+	FJsonObjectConverter::UStructToJsonObjectString(Template.AnimationPlayback, AnimationPlaybackJson);
 	TSharedPtr<FJsonObject> StableProvenance;
 	if (ParseJsonObject(Template.SourceProvenanceJson, StableProvenance))
 	{
@@ -1010,16 +1013,26 @@ FString ULLMNPCTemplateAuthoringSubsystem::BuildTemplateContentHash(
 		StableProvenance->RemoveField(TEXT("human_review"));
 		SerializeJsonObject(StableProvenance.ToSharedRef(), StableProvenanceJson);
 	}
-	return FLLMNPCUEPIArtifactAdapter::HashJson(
-		FString::Printf(
+	const FString StableContent = Template.Kind == ELLMNPCTemplateKind::AnimationAsset
+		? FString::Printf(
+			TEXT("%d|%s|%s|%s|%s|%s|%s"),
+			static_cast<int32>(Template.Kind),
+			*MetadataJson,
+			*ModifierJson,
+			*ClipJson,
+			*Template.AnimationAsset.ToSoftObjectPath().ToString(),
+			*AnimationPlaybackJson,
+			*StableProvenanceJson
+		)
+		: FString::Printf(
 			TEXT("%d|%s|%s|%s|%s"),
 			static_cast<int32>(Template.Kind),
 			*MetadataJson,
 			*ModifierJson,
 			*ClipJson,
 			*StableProvenanceJson
-		)
-	);
+		);
+	return FLLMNPCUEPIArtifactAdapter::HashJson(StableContent);
 }
 
 bool ULLMNPCTemplateAuthoringSubsystem::HasCurrentPassingQualityReport(

@@ -295,5 +295,23 @@ struct FLLMNPCMotionDebugState
 	FString LastPostProcessError;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bAnimationAssetPlaying = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString AnimationPlaybackState;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FName ActiveAnimationTemplateId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FName ActiveAnimationSlot = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ActiveAnimationPlayRate = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString LastAnimationError;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FLLMProceduralPoseSnapshot Snapshot;
 };
