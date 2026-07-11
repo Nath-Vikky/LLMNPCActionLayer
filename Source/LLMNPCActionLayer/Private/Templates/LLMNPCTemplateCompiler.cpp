@@ -1,6 +1,7 @@
 #include "Templates/LLMNPCTemplateCompiler.h"
 
 #include "Skeleton/LLMNPCSkeletonProfile.h"
+#include "Style/LLMNPCStyleResolver.h"
 #include "Templates/LLMNPCMotionTemplate.h"
 
 namespace
@@ -10,7 +11,57 @@ bool TrackAcceptsResolvedTarget(const FLLMMotionTrack& Track)
 	return
 		Track.TrackType == ELLMMotionTrackType::IKReach ||
 		Track.TrackType == ELLMMotionTrackType::LookAt ||
-		Track.ControlId == TEXT("right_hand.palm_target");
+		Track.ControlId == TEXT("right_hand.palm_target") ||
+		Track.ControlId == TEXT("left_hand.palm_target");
+}
+
+bool MirrorTrack(FLLMMotionTrack& Track)
+{
+	static const TMap<FName, FName> ControlMap = {
+		{TEXT("right_hand.ik"), TEXT("left_hand.ik")},
+		{TEXT("right_hand.local_offset.x"), TEXT("left_hand.local_offset.x")},
+		{TEXT("right_hand.local_offset.y"), TEXT("left_hand.local_offset.y")},
+		{TEXT("right_hand.local_offset.z"), TEXT("left_hand.local_offset.z")},
+		{TEXT("right_hand.palm_target"), TEXT("left_hand.palm_target")},
+		{TEXT("right_fingers.open"), TEXT("left_fingers.open")},
+		{TEXT("right_fingers.point"), TEXT("left_fingers.point")}
+	};
+	const FName* MirroredControl = ControlMap.Find(Track.ControlId);
+	if (!MirroredControl)
+	{
+		return false;
+	}
+	const bool bMirrorLateralValue = Track.ControlId == TEXT("right_hand.local_offset.y");
+	Track.ControlId = *MirroredControl;
+	Track.Offset.Y *= -1.0f;
+	if (Track.Anchor == TEXT("head_right"))
+	{
+		Track.Anchor = TEXT("head_left");
+	}
+	else if (Track.Anchor == TEXT("right_wave"))
+	{
+		Track.Anchor = TEXT("left_wave");
+	}
+	if (bMirrorLateralValue)
+	{
+		Track.Amplitude *= -1.0f;
+		for (FLLMMotionKeyFloat& Key : Track.FloatKeys)
+		{
+			Key.V *= -1.0f;
+		}
+	}
+	return true;
+}
+
+FVector2D IntersectPolicyRange(const FVector2D& TemplateRange, const FVector2D& ContextRange)
+{
+	if (ContextRange.X <= 0.0 || ContextRange.Y < ContextRange.X)
+	{
+		return TemplateRange;
+	}
+	const double MinValue = FMath::Max(TemplateRange.X, ContextRange.X);
+	const double MaxValue = FMath::Min(TemplateRange.Y, ContextRange.Y);
+	return MaxValue >= MinValue ? FVector2D(MinValue, MaxValue) : FVector2D::ZeroVector;
 }
 }
 
@@ -62,10 +113,11 @@ bool FLLMNPCTemplateCompiler::Compile(
 
 	if (Modifiers.bMirror)
 	{
-		OutError = MotionTemplate.ModifierPolicy.bAllowMirror
-			? TEXT("LLMNPC_TEMPLATE_MIRROR_NOT_IMPLEMENTED")
-			: TEXT("LLMNPC_TEMPLATE_MIRROR_FORBIDDEN");
-		return false;
+		if (!MotionTemplate.ModifierPolicy.bAllowMirror)
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_MIRROR_FORBIDDEN");
+			return false;
+		}
 	}
 
 	if (
@@ -85,37 +137,92 @@ bool FLLMNPCTemplateCompiler::Compile(
 		return false;
 	}
 
+	FRandomStream RandomStream(Modifiers.RandomSeed);
+	const float AmplitudeJitter = Modifiers.RandomSeed == 0
+		? 1.0f
+		: 1.0f + RandomStream.FRandRange(
+			-MotionTemplate.ModifierPolicy.RandomAmplitudeJitter,
+			MotionTemplate.ModifierPolicy.RandomAmplitudeJitter
+		);
+	const float SpeedJitter = Modifiers.RandomSeed == 0
+		? 1.0f
+		: 1.0f + RandomStream.FRandRange(
+			-MotionTemplate.ModifierPolicy.RandomSpeedJitter,
+			MotionTemplate.ModifierPolicy.RandomSpeedJitter
+		);
+	const FLLMNPCStylePreset StylePreset = ULLMNPCStyleResolver::GetBuiltInPreset(Modifiers.Style);
+	const FVector2D AmplitudeRange = IntersectPolicyRange(
+		MotionTemplate.ModifierPolicy.AmplitudeRange,
+		Modifiers.ContextAmplitudeRange
+	);
+	const FVector2D SpeedRange = IntersectPolicyRange(
+		MotionTemplate.ModifierPolicy.SpeedRange,
+		Modifiers.ContextSpeedRange
+	);
+	const FVector2D DurationRange = IntersectPolicyRange(
+		MotionTemplate.ModifierPolicy.DurationRange,
+		Modifiers.ContextDurationRange
+	);
+	if (AmplitudeRange.X <= 0.0 || SpeedRange.X <= 0.0 || DurationRange.X <= 0.0)
+	{
+		OutError = TEXT("LLMNPC_TEMPLATE_CONTEXT_POLICY_INCOMPATIBLE");
+		return false;
+	}
 	const float Amplitude = FMath::Clamp(
-		Modifiers.Amplitude,
-		MotionTemplate.ModifierPolicy.AmplitudeRange.X,
-		MotionTemplate.ModifierPolicy.AmplitudeRange.Y
+		Modifiers.Amplitude * AmplitudeJitter,
+		AmplitudeRange.X,
+		AmplitudeRange.Y
 	);
 	const float SpeedScale = FMath::Clamp(
-		Modifiers.SpeedScale,
-		MotionTemplate.ModifierPolicy.SpeedRange.X,
-		MotionTemplate.ModifierPolicy.SpeedRange.Y
+		Modifiers.SpeedScale * SpeedJitter,
+		SpeedRange.X,
+		SpeedRange.Y
 	);
 	const float DurationScale = FMath::Clamp(
 		Modifiers.DurationScale,
-		MotionTemplate.ModifierPolicy.DurationRange.X,
-		MotionTemplate.ModifierPolicy.DurationRange.Y
+		DurationRange.X,
+		DurationRange.Y
 	);
 	const float TimeScale = DurationScale / FMath::Max(SpeedScale, KINDA_SMALL_NUMBER);
 
 	OutPlan.Version = TEXT("1.0");
 	OutPlan.Intent = MotionTemplate.Metadata.PublicActionId.ToString();
 	OutPlan.Clip = MotionTemplate.ProceduralClip;
-	OutPlan.Clip.ClipId = MotionTemplate.Metadata.TemplateId.ToString();
+	OutPlan.Clip.ClipId = FString::Printf(
+		TEXT("%s:%s:%d%s"),
+		*MotionTemplate.Metadata.TemplateId.ToString(),
+		*StylePreset.StyleTag.ToString(),
+		Modifiers.RandomSeed,
+		Modifiers.bMirror ? TEXT(":mirror") : TEXT("")
+	);
 	OutPlan.Clip.Duration *= TimeScale;
-	OutPlan.Clip.BlendIn *= TimeScale;
-	OutPlan.Clip.BlendOut *= TimeScale;
+	OutPlan.Clip.BlendIn *= TimeScale * StylePreset.BlendTimeScale;
+	OutPlan.Clip.BlendOut *= TimeScale * StylePreset.BlendTimeScale;
 
 	for (FLLMMotionTrack& Track : OutPlan.Clip.Tracks)
 	{
 		Track.StartTime *= TimeScale;
 		Track.EndTime *= TimeScale;
 		Track.Amplitude *= Amplitude;
-		Track.Offset *= Amplitude;
+		Track.Offset *= Amplitude * StylePreset.OffsetScale;
+		if (Track.TrackType == ELLMMotionTrackType::Oscillator)
+		{
+			const float FrequencyJitter = Modifiers.RandomSeed == 0
+				? 1.0f
+				: 1.0f + RandomStream.FRandRange(
+					-MotionTemplate.ModifierPolicy.RandomFrequencyJitter,
+					MotionTemplate.ModifierPolicy.RandomFrequencyJitter
+				);
+			Track.Frequency *= StylePreset.FrequencyScale * FrequencyJitter;
+			const float PhaseLimit = FMath::Min(
+				StylePreset.MaxPhaseJitterRadians,
+				MotionTemplate.ModifierPolicy.RandomPhaseJitterRadians
+			);
+			if (Modifiers.RandomSeed != 0 && PhaseLimit > 0.0f)
+			{
+				Track.Phase += RandomStream.FRandRange(-PhaseLimit, PhaseLimit);
+			}
+		}
 
 		for (FLLMMotionKeyFloat& Key : Track.FloatKeys)
 		{
@@ -126,6 +233,14 @@ bool FLLMNPCTemplateCompiler::Compile(
 		if (TrackAcceptsResolvedTarget(Track) && !TargetRef.IsEmpty())
 		{
 			Track.TargetRef = TargetRef;
+		}
+		if (Modifiers.bMirror && !MirrorTrack(Track))
+		{
+			OutError = FString::Printf(
+				TEXT("LLMNPC_TEMPLATE_MIRROR_CONTROL_UNSUPPORTED:%s"),
+				*Track.ControlId.ToString()
+			);
+			return false;
 		}
 	}
 

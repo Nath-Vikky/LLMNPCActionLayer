@@ -149,6 +149,10 @@ void ULLMNPCTemplateLibrarySubsystem::RefreshLibrary()
 			);
 		}
 	}
+	for (TPair<FName, TArray<FName>>& Pair : PublicActionIndex)
+	{
+		Pair.Value.Sort(FNameLexicalLess());
+	}
 
 	UE_LOG(
 		LogLLMNPCActionLayer,
@@ -171,22 +175,66 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::FindPublishedVaria
 	FName SkeletonProfileId
 ) const
 {
+	return ResolvePublishedVariant(PublicActionId, SkeletonProfileId, TEXT("neutral"), 0);
+}
+
+const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolvePublishedVariant(
+	FName PublicActionId,
+	FName SkeletonProfileId,
+	FName StyleTag,
+	int32 RandomSeed
+) const
+{
 	const TArray<FName>* TemplateIds = PublicActionIndex.Find(PublicActionId);
 	if (!TemplateIds)
 	{
 		return nullptr;
 	}
 
+	TArray<const ULLMNPCMotionTemplate*> GenericVariants;
+	TArray<const ULLMNPCMotionTemplate*> StyleVariants;
 	for (const FName TemplateId : *TemplateIds)
 	{
 		const ULLMNPCMotionTemplate* MotionTemplate = FindPublishedTemplate(TemplateId);
 		if (MotionTemplate && MotionTemplate->Metadata.SkeletonProfileId == SkeletonProfileId)
 		{
-			return MotionTemplate;
+			if (
+				!MotionTemplate->Metadata.VariantStyleTags.IsEmpty() &&
+				MotionTemplate->Metadata.VariantStyleTags.Contains(StyleTag)
+			)
+			{
+				StyleVariants.Add(MotionTemplate);
+			}
+			else if (MotionTemplate->Metadata.VariantStyleTags.IsEmpty())
+			{
+				GenericVariants.Add(MotionTemplate);
+			}
 		}
 	}
+	const TArray<const ULLMNPCMotionTemplate*>& Variants = StyleVariants.IsEmpty()
+		? GenericVariants
+		: StyleVariants;
+	if (Variants.IsEmpty())
+	{
+		return nullptr;
+	}
 
-	return nullptr;
+	float TotalWeight = 0.0f;
+	for (const ULLMNPCMotionTemplate* Variant : Variants)
+	{
+		TotalWeight += Variant->Metadata.VariantWeight;
+	}
+	FRandomStream Stream(RandomSeed);
+	float Choice = RandomSeed == 0 ? 0.0f : Stream.FRandRange(0.0f, TotalWeight);
+	for (const ULLMNPCMotionTemplate* Variant : Variants)
+	{
+		Choice -= Variant->Metadata.VariantWeight;
+		if (Choice <= 0.0f)
+		{
+			return Variant;
+		}
+	}
+	return Variants.Last();
 }
 
 const ULLMNPCSkeletonProfile* ULLMNPCTemplateLibrarySubsystem::FindSkeletonProfile(FName ProfileId) const
@@ -249,6 +297,23 @@ void ULLMNPCTemplateLibrarySubsystem::QueryRuntimeCandidates(
 		Candidate.SpeedRange = MotionTemplate->ModifierPolicy.SpeedRange;
 		Candidate.DurationRange = MotionTemplate->ModifierPolicy.DurationRange;
 		Candidate.AllowedStyles = MotionTemplate->ModifierPolicy.AllowedStyleTags;
+		Candidate.bAllowMirror = MotionTemplate->ModifierPolicy.bAllowMirror;
+		if (const TArray<FName>* VariantIds = PublicActionIndex.Find(Pair.Key))
+		{
+			for (const FName VariantId : *VariantIds)
+			{
+				const ULLMNPCMotionTemplate* Variant = FindPublishedTemplate(VariantId);
+				if (!Variant || Variant->Metadata.SkeletonProfileId != SkeletonProfileId)
+				{
+					continue;
+				}
+				for (const FName AllowedStyle : Variant->ModifierPolicy.AllowedStyleTags)
+				{
+					Candidate.AllowedStyles.AddUnique(AllowedStyle);
+				}
+				Candidate.bAllowMirror |= Variant->ModifierPolicy.bAllowMirror;
+			}
+		}
 		Candidate.CooldownSeconds = MotionTemplate->Metadata.CooldownSeconds;
 		Candidate.RecommendedAmplitude = FMath::Clamp(
 			1.0f,

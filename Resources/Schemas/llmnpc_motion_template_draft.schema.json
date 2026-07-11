@@ -25,6 +25,9 @@
     "template_id": { "type": "string", "minLength": 3, "maxLength": 128 },
     "public_action_id": { "type": "string", "minLength": 3, "maxLength": 128 },
     "semantic_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "variant_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "variant_weight": { "type": "number", "minimum": 0.01, "maximum": 100 },
+    "variant_style_tags": { "type": "array", "items": { "type": "string" }, "maxItems": 32 },
     "kind": { "const": "procedural_motion" },
     "review_state": { "enum": ["draft", "generated"] },
     "display_name": { "type": "string", "minLength": 1, "maxLength": 128 },
@@ -65,7 +68,11 @@
         "speed": { "$ref": "#/$defs/positive_range" },
         "duration": { "$ref": "#/$defs/positive_range" },
         "allow_mirror": { "type": "boolean" },
-        "allowed_styles": { "type": "array", "items": { "type": "string" }, "maxItems": 32 }
+        "allowed_styles": { "type": "array", "items": { "type": "string" }, "maxItems": 32 },
+        "random_amplitude_jitter": { "type": "number", "minimum": 0, "maximum": 0.25 },
+        "random_speed_jitter": { "type": "number", "minimum": 0, "maximum": 0.25 },
+        "random_frequency_jitter": { "type": "number", "minimum": 0, "maximum": 0.25 },
+        "random_phase_jitter_radians": { "type": "number", "minimum": 0, "maximum": 0.5 }
       }
     },
     "clip": {

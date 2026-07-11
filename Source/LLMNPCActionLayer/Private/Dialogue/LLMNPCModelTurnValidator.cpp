@@ -326,10 +326,20 @@ bool FLLMNPCModelTurnValidator::ValidateAndResolve(
 		return false;
 	}
 
-	OutTemplate = TemplateLibrary.ResolveRuntimeModelTemplate(
-		InOutDecision.Action.TemplateId,
-		SkeletonProfileId
-	);
+	OutTemplate = TemplateLibrary.FindPublishedTemplate(InOutDecision.Action.TemplateId);
+	if (
+		!OutTemplate ||
+		!OutTemplate->Metadata.bAllowRuntimeModelSelection ||
+		OutTemplate->Metadata.SkeletonProfileId != SkeletonProfileId
+	)
+	{
+		OutTemplate = TemplateLibrary.ResolvePublishedVariant(
+			InOutDecision.Action.TemplateId,
+			SkeletonProfileId,
+			InOutDecision.Action.Style,
+			InOutDecision.Action.RandomSeed
+		);
+	}
 	if (!OutTemplate)
 	{
 		OutError = TEXT("LLMNPC_MODEL_TEMPLATE_NOT_RUNTIME_SELECTABLE");
@@ -372,5 +382,10 @@ bool FLLMNPCModelTurnValidator::ValidateAndResolve(
 	OutModifiers.SpeedScale = InOutDecision.Action.SpeedScale;
 	OutModifiers.DurationScale = InOutDecision.Action.DurationScale;
 	OutModifiers.Style = InOutDecision.Action.Style;
+	OutModifiers.bMirror = InOutDecision.Action.bMirror;
+	OutModifiers.RandomSeed = InOutDecision.Action.RandomSeed;
+	OutModifiers.ContextAmplitudeRange = InOutDecision.Action.ContextAmplitudeRange;
+	OutModifiers.ContextSpeedRange = InOutDecision.Action.ContextSpeedRange;
+	OutModifiers.ContextDurationRange = InOutDecision.Action.ContextDurationRange;
 	return true;
 }

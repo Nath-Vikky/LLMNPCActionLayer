@@ -77,6 +77,21 @@ struct FLLMNPCSelectedAction
 
 	UPROPERTY(BlueprintReadWrite, Category="LLM NPC|Model Turn")
 	FName ReasonTag = NAME_None;
+
+	UPROPERTY(Transient, BlueprintReadWrite, Category="LLM NPC|Model Turn")
+	int32 RandomSeed = 0;
+
+	UPROPERTY(Transient, BlueprintReadWrite, Category="LLM NPC|Model Turn")
+	bool bMirror = false;
+
+	UPROPERTY(Transient, BlueprintReadWrite, Category="LLM NPC|Model Turn")
+	FVector2D ContextAmplitudeRange = FVector2D::ZeroVector;
+
+	UPROPERTY(Transient, BlueprintReadWrite, Category="LLM NPC|Model Turn")
+	FVector2D ContextSpeedRange = FVector2D::ZeroVector;
+
+	UPROPERTY(Transient, BlueprintReadWrite, Category="LLM NPC|Model Turn")
+	FVector2D ContextDurationRange = FVector2D::ZeroVector;
 };
 
 USTRUCT(BlueprintType)

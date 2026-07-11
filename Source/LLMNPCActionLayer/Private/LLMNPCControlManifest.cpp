@@ -78,6 +78,14 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			RightHandIK.IKChain.MaxReach = 95.0f;
 			Result.Add(RightHandIK);
 
+			FLLMControlDefinition LeftHandIK = RightHandIK;
+			LeftHandIK.ControlId = TEXT("left_hand.ik");
+			LeftHandIK.IKChain.RootBone = TEXT("upperarm_l");
+			LeftHandIK.IKChain.MidBone = TEXT("lowerarm_l");
+			LeftHandIK.IKChain.EndBone = TEXT("hand_l");
+			LeftHandIK.IKChain.PoleVectorCS = FVector(0.0f, -45.0f, 0.0f);
+			Result.Add(LeftHandIK);
+
 			FLLMControlDefinition Gaze;
 			Gaze.ControlId = TEXT("gaze.target");
 			Gaze.SolverType = ELLMControlSolverType::LookAt;
@@ -91,6 +99,10 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			RightHandPalmTarget.ControlId = TEXT("right_hand.palm_target");
 			RightHandPalmTarget.bRequiresTarget = true;
 			Result.Add(RightHandPalmTarget);
+
+			FLLMControlDefinition LeftHandPalmTarget = RightHandPalmTarget;
+			LeftHandPalmTarget.ControlId = TEXT("left_hand.palm_target");
+			Result.Add(LeftHandPalmTarget);
 
 			FLLMControlDefinition RightHandOffsetX;
 			RightHandOffsetX.ControlId = TEXT("right_hand.local_offset.x");
@@ -108,6 +120,18 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			RightHandOffsetZ.ControlId = TEXT("right_hand.local_offset.z");
 			Result.Add(RightHandOffsetZ);
 
+			FLLMControlDefinition LeftHandOffsetX = RightHandOffsetX;
+			LeftHandOffsetX.ControlId = TEXT("left_hand.local_offset.x");
+			Result.Add(LeftHandOffsetX);
+
+			FLLMControlDefinition LeftHandOffsetY = RightHandOffsetX;
+			LeftHandOffsetY.ControlId = TEXT("left_hand.local_offset.y");
+			Result.Add(LeftHandOffsetY);
+
+			FLLMControlDefinition LeftHandOffsetZ = RightHandOffsetX;
+			LeftHandOffsetZ.ControlId = TEXT("left_hand.local_offset.z");
+			Result.Add(LeftHandOffsetZ);
+
 			FLLMControlDefinition FingersOpen;
 			FingersOpen.ControlId = TEXT("right_fingers.open");
 			FingersOpen.SolverType = ELLMControlSolverType::FingerPoseBlend;
@@ -122,6 +146,14 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			FLLMControlDefinition FingersPoint = FingersOpen;
 			FingersPoint.ControlId = TEXT("right_fingers.point");
 			Result.Add(FingersPoint);
+
+			FLLMControlDefinition LeftFingersOpen = FingersOpen;
+			LeftFingersOpen.ControlId = TEXT("left_fingers.open");
+			Result.Add(LeftFingersOpen);
+
+			FLLMControlDefinition LeftFingersPoint = FingersOpen;
+			LeftFingersPoint.ControlId = TEXT("left_fingers.point");
+			Result.Add(LeftFingersPoint);
 
 			return Result;
 		}();
@@ -142,11 +174,21 @@ const TArray<FLLMAnchorDefinition>& BuiltInAnchors()
 			HeadRight.OffsetCS = FVector(25.0f, 35.0f, 10.0f);
 			Result.Add(HeadRight);
 
+			FLLMAnchorDefinition HeadLeft = HeadRight;
+			HeadLeft.AnchorId = TEXT("head_left");
+			HeadLeft.OffsetCS.Y *= -1.0f;
+			Result.Add(HeadLeft);
+
 			FLLMAnchorDefinition RightWave;
 			RightWave.AnchorId = TEXT("right_wave");
 			RightWave.BoneName = TEXT("head");
 			RightWave.OffsetCS = FVector(-22.0f, 27.0f, -10.0f);
 			Result.Add(RightWave);
+
+			FLLMAnchorDefinition LeftWave = RightWave;
+			LeftWave.AnchorId = TEXT("left_wave");
+			LeftWave.OffsetCS.Y *= -1.0f;
+			Result.Add(LeftWave);
 
 			FLLMAnchorDefinition ChestFront;
 			ChestFront.AnchorId = TEXT("chest_front");

@@ -11,6 +11,9 @@ struct FMockCandidate
 {
 	FString DefaultTargetRef;
 	float RecommendedAmplitude = 1.0f;
+	float RecommendedSpeedScale = 1.0f;
+	float RecommendedDurationScale = 1.0f;
+	FName RecommendedStyle = TEXT("neutral");
 };
 
 struct FMockContext
@@ -49,6 +52,21 @@ FMockContext ParseMockContext(const FLLMNPCModelTurnRequest& Request)
 		if (CandidateObject->TryGetNumberField(TEXT("recommended_amplitude"), RecommendedAmplitude))
 		{
 			Candidate.RecommendedAmplitude = static_cast<float>(RecommendedAmplitude);
+		}
+		double RecommendedSpeedScale = 1.0;
+		if (CandidateObject->TryGetNumberField(TEXT("recommended_speed_scale"), RecommendedSpeedScale))
+		{
+			Candidate.RecommendedSpeedScale = static_cast<float>(RecommendedSpeedScale);
+		}
+		double RecommendedDurationScale = 1.0;
+		if (CandidateObject->TryGetNumberField(TEXT("recommended_duration_scale"), RecommendedDurationScale))
+		{
+			Candidate.RecommendedDurationScale = static_cast<float>(RecommendedDurationScale);
+		}
+		FString RecommendedStyle;
+		if (CandidateObject->TryGetStringField(TEXT("recommended_style"), RecommendedStyle))
+		{
+			Candidate.RecommendedStyle = FName(*RecommendedStyle);
 		}
 		Context.Candidates.Add(FName(*SelectionId), Candidate);
 	}
@@ -133,6 +151,8 @@ FString BuildMockResponse(const FLLMNPCModelTurnRequest& Request)
 	FName ReasonTag(TEXT("no_body_action_needed"));
 	FString TargetRef;
 	float Amplitude = 1.0f;
+	float SpeedScale = 1.0f;
+	float DurationScale = 1.0f;
 	if (bWantsDirection && IsCandidateAvailable(Context, TEXT("gesture.point.target")))
 	{
 		SelectedAction = TEXT("gesture.point.target");
@@ -162,6 +182,12 @@ FString BuildMockResponse(const FLLMNPCModelTurnRequest& Request)
 	{
 		TargetRef = Candidate->DefaultTargetRef;
 		Amplitude = Candidate->RecommendedAmplitude;
+		SpeedScale = Candidate->RecommendedSpeedScale;
+		DurationScale = Candidate->RecommendedDurationScale;
+		if (Candidate->RecommendedStyle != TEXT("neutral"))
+		{
+			Style = Candidate->RecommendedStyle;
+		}
 	}
 
 	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
@@ -192,8 +218,8 @@ FString BuildMockResponse(const FLLMNPCModelTurnRequest& Request)
 
 	Action->SetStringField(TEXT("target_ref"), TargetRef);
 	Action->SetNumberField(TEXT("amplitude"), Amplitude);
-	Action->SetNumberField(TEXT("speed_scale"), 1.0);
-	Action->SetNumberField(TEXT("duration_scale"), 1.0);
+	Action->SetNumberField(TEXT("speed_scale"), SpeedScale);
+	Action->SetNumberField(TEXT("duration_scale"), DurationScale);
 	Root->SetObjectField(TEXT("action"), Action);
 
 	TSharedRef<FJsonObject> Locomotion = MakeShared<FJsonObject>();

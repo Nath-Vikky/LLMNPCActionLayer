@@ -1,45 +1,45 @@
 {
   "schema_version": "llmnpc.motion_template.v1",
-  "asset_name": "MT_Wave_Right_Manny_Procedural_v1",
-  "template_id": "gesture.wave.right.manny.procedural.v1",
+  "asset_name": "MT_Wave_Right_Manny_Subtle_v1",
+  "template_id": "gesture.wave.right.manny.subtle.v1",
   "public_action_id": "gesture.wave.right",
   "semantic_version": "1.0.0",
-  "variant_id": "default",
+  "variant_id": "subtle",
   "variant_weight": 1.0,
-  "variant_style_tags": [],
+  "variant_style_tags": ["subtle"],
   "kind": "procedural_motion",
   "review_state": "published",
-  "display_name": "Manny Procedural Right Wave",
-  "description": "A target-independent right-hand wave driven by a semantic hand anchor, IK offsets, and an open-hand pose.",
+  "display_name": "Manny Subtle Procedural Wave",
+  "description": "A restrained mirrored-capable hand wave for shy or low-expression contexts.",
   "skeleton_profile_id": "ue5_manny.v1",
   "metadata": {
-    "intent_tags": ["greet", "farewell", "attract_attention"],
-    "emotion_tags": ["neutral", "friendly", "excited"],
-    "personality_tags": [],
+    "intent_tags": ["greet", "farewell", "acknowledge"],
+    "emotion_tags": ["neutral", "friendly"],
+    "personality_tags": ["shy", "reserved"],
     "required_channels": ["right_arm_ik", "right_hand_pose"],
     "blocked_states": ["dead", "ragdoll", "stunned", "right_hand_busy"],
     "requires_target": false,
     "can_run_while_moving": true,
     "allow_runtime_model_selection": true,
-    "cooldown_seconds": 1.0
+    "cooldown_seconds": 0.8
   },
   "modifier_policy": {
-    "amplitude": [0.75, 1.2],
-    "speed": [0.85, 1.25],
+    "amplitude": [0.65, 0.95],
+    "speed": [0.8, 1.0],
     "duration": [1.0, 1.0],
     "allow_mirror": true,
-    "allowed_styles": ["neutral", "friendly", "subtle", "excited"],
-    "random_amplitude_jitter": 0.03,
-    "random_speed_jitter": 0.025,
-    "random_frequency_jitter": 0.04,
-    "random_phase_jitter_radians": 0.08
+    "allowed_styles": ["subtle"],
+    "random_amplitude_jitter": 0.02,
+    "random_speed_jitter": 0.02,
+    "random_frequency_jitter": 0.03,
+    "random_phase_jitter_radians": 0.06
   },
   "clip": {
-    "clip_id": "gesture.wave.right.manny.procedural.v1.clip",
-    "duration": 1.7,
-    "blend_in": 0.18,
-    "blend_out": 0.25,
-    "priority": 0.5,
+    "clip_id": "gesture.wave.right.manny.subtle.v1.clip",
+    "duration": 1.65,
+    "blend_in": 0.22,
+    "blend_out": 0.3,
+    "priority": 0.45,
     "interruptible": true,
     "tracks": [
       {
@@ -47,58 +47,58 @@
         "track_type": "anchor",
         "value_type": "vector",
         "start_time": 0.0,
-        "end_time": 1.7,
+        "end_time": 1.65,
         "anchor": "head_right",
-        "offset": [15.0, 8.0, 5.0],
+        "offset": [10.0, 6.0, -2.0],
         "envelope": "none",
-        "strength": 1.0
+        "strength": 0.9
       },
       {
         "control_id": "right_hand.local_offset.y",
         "track_type": "oscillator",
         "value_type": "float",
-        "start_time": 0.35,
-        "end_time": 1.35,
-        "amplitude": 16.0,
-        "frequency": 3.0,
+        "start_time": 0.4,
+        "end_time": 1.28,
+        "amplitude": 10.0,
+        "frequency": 2.5,
         "phase": 0.0,
         "envelope": "smooth",
-        "strength": 1.0
+        "strength": 0.9
       },
       {
         "control_id": "right_hand.local_offset.z",
         "track_type": "oscillator",
         "value_type": "float",
-        "start_time": 0.35,
-        "end_time": 1.35,
-        "amplitude": 5.0,
-        "frequency": 3.0,
+        "start_time": 0.4,
+        "end_time": 1.28,
+        "amplitude": 3.0,
+        "frequency": 2.5,
         "phase": 1.57079632679,
         "envelope": "smooth",
-        "strength": 1.0
+        "strength": 0.8
       },
       {
         "control_id": "right_fingers.open",
         "track_type": "keyframes",
         "value_type": "float",
         "start_time": 0.0,
-        "end_time": 1.7,
+        "end_time": 1.65,
         "envelope": "none",
-        "strength": 1.0,
-        "keys": [[0.0, 0.0], [0.25, 1.0], [1.45, 1.0], [1.7, 0.0]]
+        "strength": 0.9,
+        "keys": [[0.0, 0.0], [0.3, 0.85], [1.35, 0.85], [1.65, 0.0]]
       }
     ]
   },
   "provenance": {
-    "source_type": "semantic_procedural_authoring",
+    "source_type": "semantic_procedural_variant",
     "source_repository": "LLMNPCActionLayer",
-    "source_revision": "phase1",
+    "source_revision": "phase5",
     "source_license": "project_owned",
     "redistribution_allowed": true
   },
   "validation_report": {
     "schema_version": "llmnpc.template_validation.v1",
     "status": "pass",
-    "manual_review": "requires_comparison_with_faithful_fk"
+    "manual_review": "phase5_subtle_variant"
   }
 }

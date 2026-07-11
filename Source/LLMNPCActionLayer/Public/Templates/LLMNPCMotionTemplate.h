@@ -45,6 +45,18 @@ struct FLLMNPCModifierPolicy
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
 	TArray<FName> AllowedStyleTags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template", meta=(ClampMin="0.0", ClampMax="0.25"))
+	float RandomAmplitudeJitter = 0.03f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template", meta=(ClampMin="0.0", ClampMax="0.25"))
+	float RandomSpeedJitter = 0.025f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template", meta=(ClampMin="0.0", ClampMax="0.25"))
+	float RandomFrequencyJitter = 0.04f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template", meta=(ClampMin="0.0", ClampMax="0.5"))
+	float RandomPhaseJitterRadians = 0.08f;
 };
 
 USTRUCT(BlueprintType)
@@ -60,6 +72,15 @@ struct FLLMNPCTemplateMetadata
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
 	FString SemanticVersion = TEXT("1.0.0");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
+	FName VariantId = TEXT("default");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template", meta=(ClampMin="0.01", ClampMax="100.0"))
+	float VariantWeight = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
+	TArray<FName> VariantStyleTags;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
 	FText DisplayName;

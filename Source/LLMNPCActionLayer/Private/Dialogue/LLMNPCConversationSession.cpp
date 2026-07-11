@@ -192,6 +192,10 @@ FString ULLMNPCConversationSession::BuildContextualRequestJson(
 		CandidateObject->SetArrayField(TEXT("allowed_target_refs"), StringsToJson(Candidate.AllowedTargetRefs));
 		CandidateObject->SetStringField(TEXT("default_target_ref"), Candidate.DefaultTargetRef);
 		CandidateObject->SetNumberField(TEXT("recommended_amplitude"), Candidate.RecommendedAmplitude);
+		CandidateObject->SetNumberField(TEXT("recommended_speed_scale"), Candidate.RecommendedSpeedScale);
+		CandidateObject->SetNumberField(TEXT("recommended_duration_scale"), Candidate.RecommendedDurationScale);
+		CandidateObject->SetStringField(TEXT("recommended_style"), Candidate.RecommendedStyle.ToString());
+		CandidateObject->SetBoolField(TEXT("mirror_recommended"), Candidate.bMirrorRecommended);
 
 		TSharedRef<FJsonObject> Modifiers = MakeShared<FJsonObject>();
 		Modifiers->SetArrayField(TEXT("amplitude"), {

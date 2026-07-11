@@ -29,6 +29,13 @@ struct FLLMNPCTemplateModifiers
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC|Template")
 	bool bMirror = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC|Template")
+	int32 RandomSeed = 0;
+
+	FVector2D ContextAmplitudeRange = FVector2D::ZeroVector;
+	FVector2D ContextSpeedRange = FVector2D::ZeroVector;
+	FVector2D ContextDurationRange = FVector2D::ZeroVector;
 };
 
 class LLMNPCACTIONLAYER_API FLLMNPCTemplateCompiler

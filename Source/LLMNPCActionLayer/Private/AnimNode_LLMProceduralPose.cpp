@@ -170,6 +170,24 @@ FAnimNode_LLMProceduralPose::FAnimNode_LLMProceduralPose()
 	RightPinky01Bone.BoneName = TEXT("pinky_01_r");
 	RightPinky02Bone.BoneName = TEXT("pinky_02_r");
 	RightPinky03Bone.BoneName = TEXT("pinky_03_r");
+	LeftUpperArmBone.BoneName = TEXT("upperarm_l");
+	LeftLowerArmBone.BoneName = TEXT("lowerarm_l");
+	LeftHandBone.BoneName = TEXT("hand_l");
+	LeftThumb01Bone.BoneName = TEXT("thumb_01_l");
+	LeftThumb02Bone.BoneName = TEXT("thumb_02_l");
+	LeftThumb03Bone.BoneName = TEXT("thumb_03_l");
+	LeftIndex01Bone.BoneName = TEXT("index_01_l");
+	LeftIndex02Bone.BoneName = TEXT("index_02_l");
+	LeftIndex03Bone.BoneName = TEXT("index_03_l");
+	LeftMiddle01Bone.BoneName = TEXT("middle_01_l");
+	LeftMiddle02Bone.BoneName = TEXT("middle_02_l");
+	LeftMiddle03Bone.BoneName = TEXT("middle_03_l");
+	LeftRing01Bone.BoneName = TEXT("ring_01_l");
+	LeftRing02Bone.BoneName = TEXT("ring_02_l");
+	LeftRing03Bone.BoneName = TEXT("ring_03_l");
+	LeftPinky01Bone.BoneName = TEXT("pinky_01_l");
+	LeftPinky02Bone.BoneName = TEXT("pinky_02_l");
+	LeftPinky03Bone.BoneName = TEXT("pinky_03_l");
 	Alpha = 1.0f;
 }
 
@@ -208,6 +226,24 @@ void FAnimNode_LLMProceduralPose::InitializeBoneReferences(const FBoneContainer&
 	RightPinky01Bone.Initialize(RequiredBones);
 	RightPinky02Bone.Initialize(RequiredBones);
 	RightPinky03Bone.Initialize(RequiredBones);
+	LeftUpperArmBone.Initialize(RequiredBones);
+	LeftLowerArmBone.Initialize(RequiredBones);
+	LeftHandBone.Initialize(RequiredBones);
+	LeftThumb01Bone.Initialize(RequiredBones);
+	LeftThumb02Bone.Initialize(RequiredBones);
+	LeftThumb03Bone.Initialize(RequiredBones);
+	LeftIndex01Bone.Initialize(RequiredBones);
+	LeftIndex02Bone.Initialize(RequiredBones);
+	LeftIndex03Bone.Initialize(RequiredBones);
+	LeftMiddle01Bone.Initialize(RequiredBones);
+	LeftMiddle02Bone.Initialize(RequiredBones);
+	LeftMiddle03Bone.Initialize(RequiredBones);
+	LeftRing01Bone.Initialize(RequiredBones);
+	LeftRing02Bone.Initialize(RequiredBones);
+	LeftRing03Bone.Initialize(RequiredBones);
+	LeftPinky01Bone.Initialize(RequiredBones);
+	LeftPinky02Bone.Initialize(RequiredBones);
+	LeftPinky03Bone.Initialize(RequiredBones);
 }
 
 bool FAnimNode_LLMProceduralPose::IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones)
@@ -215,11 +251,18 @@ bool FAnimNode_LLMProceduralPose::IsValidToEvaluate(const USkeleton* Skeleton, c
 	return HeadBone.IsValidToEvaluate(RequiredBones) ||
 		ChestBone.IsValidToEvaluate(RequiredBones) ||
 		HasAnyRightFingerBone(RequiredBones) ||
+		HasAnyLeftFingerBone(RequiredBones) ||
 		(
 			bEnableRightArmIK &&
 			RightUpperArmBone.IsValidToEvaluate(RequiredBones) &&
 			RightLowerArmBone.IsValidToEvaluate(RequiredBones) &&
 			RightHandBone.IsValidToEvaluate(RequiredBones)
+		) ||
+		(
+			bEnableLeftArmIK &&
+			LeftUpperArmBone.IsValidToEvaluate(RequiredBones) &&
+			LeftLowerArmBone.IsValidToEvaluate(RequiredBones) &&
+			LeftHandBone.IsValidToEvaluate(RequiredBones)
 		);
 }
 
@@ -248,10 +291,16 @@ void FAnimNode_LLMProceduralPose::EvaluateSkeletalControl_AnyThread(
 	{
 		ApplySimpleRightArmIK(Output, OutBoneTransforms);
 	}
+	if (bEnableLeftArmIK && Snapshot.LeftHandIKAlpha > KINDA_SMALL_NUMBER)
+	{
+		ApplySimpleLeftArmIK(Output, OutBoneTransforms);
+	}
 
 	ApplyRightArmAdditiveRotationsLocal(Output, OutBoneTransforms, NodeAlpha);
 	PropagateRightHandChildrenCS(Output, OutBoneTransforms);
 	ApplyRightFingerPoseLocal(Output, OutBoneTransforms, NodeAlpha);
+	PropagateLeftHandChildrenCS(Output, OutBoneTransforms);
+	ApplyLeftFingerPoseLocal(Output, OutBoneTransforms, NodeAlpha);
 
 	OutBoneTransforms.Sort(FCompareBoneTransformIndex());
 }
@@ -341,6 +390,68 @@ void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
 	LowerTM.Blend(OriginalLowerTM, LowerTM, IKAlpha);
 	HandTM.Blend(OriginalHandTM, HandTM, IKAlpha);
 
+	AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, UpperTM);
+	AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, LowerTM);
+	AddOrReplaceBoneTransform(OutBoneTransforms, HandIndex, HandTM);
+}
+
+void FAnimNode_LLMProceduralPose::ApplySimpleLeftArmIK(
+	FComponentSpacePoseContext& Output,
+	TArray<FBoneTransform>& OutBoneTransforms
+) const
+{
+	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
+	if (!LeftUpperArmBone.IsValidToEvaluate(BoneContainer) ||
+		!LeftLowerArmBone.IsValidToEvaluate(BoneContainer) ||
+		!LeftHandBone.IsValidToEvaluate(BoneContainer))
+	{
+		return;
+	}
+
+	const float IKAlpha = FMath::Clamp(Snapshot.LeftHandIKAlpha * ActualAlpha, 0.0f, 1.0f);
+	if (IKAlpha <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	const FCompactPoseBoneIndex UpperIndex = LeftUpperArmBone.GetCompactPoseIndex(BoneContainer);
+	const FCompactPoseBoneIndex LowerIndex = LeftLowerArmBone.GetCompactPoseIndex(BoneContainer);
+	const FCompactPoseBoneIndex HandIndex = LeftHandBone.GetCompactPoseIndex(BoneContainer);
+	FTransform UpperTM = Output.Pose.GetComponentSpaceTransform(UpperIndex);
+	FTransform LowerTM = Output.Pose.GetComponentSpaceTransform(LowerIndex);
+	FTransform HandTM = Output.Pose.GetComponentSpaceTransform(HandIndex);
+	const FTransform OriginalUpperTM = UpperTM;
+	const FTransform OriginalLowerTM = LowerTM;
+	const FTransform OriginalHandTM = HandTM;
+	const FVector JointTarget = UpperTM.GetLocation() + FVector(0.0f, -45.0f, 0.0f);
+
+	AnimationCore::SolveTwoBoneIK(
+		UpperTM,
+		LowerTM,
+		HandTM,
+		JointTarget,
+		Snapshot.LeftHandIKTargetCS,
+		false,
+		1.0f,
+		1.2f
+	);
+
+	const float PalmAlpha = FMath::Clamp(Snapshot.LeftHandPalmAlpha * ActualAlpha, 0.0f, 1.0f);
+	if (PalmAlpha > KINDA_SMALL_NUMBER && !Snapshot.LeftHandPalmTargetCS.IsNearlyZero())
+	{
+		const FVector PalmDirection = (Snapshot.LeftHandPalmTargetCS - HandTM.GetLocation()).GetSafeNormal();
+		if (!PalmDirection.IsNearlyZero())
+		{
+			const FQuat PalmTargetRotation =
+				FRotationMatrix::MakeFromXZ(PalmDirection, FVector::UpVector).ToQuat() *
+				LeftHandPalmRotationOffset.Quaternion();
+			HandTM.SetRotation(FQuat::Slerp(HandTM.GetRotation(), PalmTargetRotation, PalmAlpha).GetNormalized());
+		}
+	}
+
+	UpperTM.Blend(OriginalUpperTM, UpperTM, IKAlpha);
+	LowerTM.Blend(OriginalLowerTM, LowerTM, IKAlpha);
+	HandTM.Blend(OriginalHandTM, HandTM, IKAlpha);
 	AddOrReplaceBoneTransform(OutBoneTransforms, UpperIndex, UpperTM);
 	AddOrReplaceBoneTransform(OutBoneTransforms, LowerIndex, LowerTM);
 	AddOrReplaceBoneTransform(OutBoneTransforms, HandIndex, HandTM);
@@ -450,6 +561,32 @@ void FAnimNode_LLMProceduralPose::PropagateRightHandChildrenCS(
 	}
 }
 
+void FAnimNode_LLMProceduralPose::PropagateLeftHandChildrenCS(
+	FComponentSpacePoseContext& Output,
+	TArray<FBoneTransform>& OutBoneTransforms
+) const
+{
+	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
+	const FCompactPoseBoneIndex HandIndex = ResolveBoneIndex(BoneContainer, LeftHandBone, TEXT("hand_l"));
+	if (!IsValidCompactPoseBoneIndex(HandIndex) || !HasBoneTransform(OutBoneTransforms, HandIndex))
+	{
+		return;
+	}
+
+	const FName LeftHandChildren[] = {
+		TEXT("wrist_inner_l"), TEXT("wrist_outer_l"), TEXT("weapon_l"),
+		TEXT("thumb_01_l"), TEXT("thumb_02_l"), TEXT("thumb_03_l"),
+		TEXT("index_metacarpal_l"), TEXT("index_01_l"), TEXT("index_02_l"), TEXT("index_03_l"),
+		TEXT("middle_metacarpal_l"), TEXT("middle_01_l"), TEXT("middle_02_l"), TEXT("middle_03_l"),
+		TEXT("ring_metacarpal_l"), TEXT("ring_01_l"), TEXT("ring_02_l"), TEXT("ring_03_l"),
+		TEXT("pinky_metacarpal_l"), TEXT("pinky_01_l"), TEXT("pinky_02_l"), TEXT("pinky_03_l")
+	};
+	for (const FName BoneName : LeftHandChildren)
+	{
+		RebaseBoneToCurrentParentCS(Output, OutBoneTransforms, ResolveBoneNameIndex(BoneContainer, BoneName));
+	}
+}
+
 bool FAnimNode_LLMProceduralPose::HasAnyRightFingerBone(const FBoneContainer& RequiredBones) const
 {
 	struct FFingerBoneBinding
@@ -484,6 +621,30 @@ bool FAnimNode_LLMProceduralPose::HasAnyRightFingerBone(const FBoneContainer& Re
 		}
 	}
 
+	return false;
+}
+
+bool FAnimNode_LLMProceduralPose::HasAnyLeftFingerBone(const FBoneContainer& RequiredBones) const
+{
+	struct FFingerBoneBinding
+	{
+		const FBoneReference& Bone;
+		FName FallbackBoneName;
+	};
+	const FFingerBoneBinding FingerBones[] = {
+		{LeftThumb01Bone, TEXT("thumb_01_l")}, {LeftThumb02Bone, TEXT("thumb_02_l")}, {LeftThumb03Bone, TEXT("thumb_03_l")},
+		{LeftIndex01Bone, TEXT("index_01_l")}, {LeftIndex02Bone, TEXT("index_02_l")}, {LeftIndex03Bone, TEXT("index_03_l")},
+		{LeftMiddle01Bone, TEXT("middle_01_l")}, {LeftMiddle02Bone, TEXT("middle_02_l")}, {LeftMiddle03Bone, TEXT("middle_03_l")},
+		{LeftRing01Bone, TEXT("ring_01_l")}, {LeftRing02Bone, TEXT("ring_02_l")}, {LeftRing03Bone, TEXT("ring_03_l")},
+		{LeftPinky01Bone, TEXT("pinky_01_l")}, {LeftPinky02Bone, TEXT("pinky_02_l")}, {LeftPinky03Bone, TEXT("pinky_03_l")}
+	};
+	for (const FFingerBoneBinding& FingerBone : FingerBones)
+	{
+		if (IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, FingerBone.Bone, FingerBone.FallbackBoneName)))
+		{
+			return true;
+		}
+	}
 	return false;
 }
 
@@ -583,6 +744,70 @@ void FAnimNode_LLMProceduralPose::ApplyRightFingerPoseLocal(
 		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky01Bone, TEXT("pinky_01_r"), FRotator(2.0f, -48.0f, 4.0f), PointAlpha);
 		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky02Bone, TEXT("pinky_02_r"), FRotator(2.0f, -58.0f, 0.0f), PointAlpha);
 		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky03Bone, TEXT("pinky_03_r"), FRotator(0.0f, -32.0f, 0.0f), PointAlpha);
+	}
+}
+
+void FAnimNode_LLMProceduralPose::ApplyLeftFingerPoseLocal(
+	FComponentSpacePoseContext& Output,
+	TArray<FBoneTransform>& OutBoneTransforms,
+	float InAlpha
+) const
+{
+	const float OpenAlpha = FMath::Clamp(Snapshot.LeftFingersOpen * InAlpha, 0.0f, 1.0f);
+	const float PointAlpha = FMath::Clamp(Snapshot.LeftFingersPoint * InAlpha, 0.0f, 1.0f);
+	if (OpenAlpha <= KINDA_SMALL_NUMBER && PointAlpha <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	struct FFingerPoseBinding
+	{
+		const FBoneReference* Bone;
+		FName BoneName;
+		FRotator OpenRotation;
+		FRotator PointRotation;
+	};
+	const FFingerPoseBinding Bindings[] = {
+		{&LeftThumb01Bone, TEXT("thumb_01_l"), FRotator(-5.0f, -2.0f, -6.0f), FRotator(12.0f, 18.0f, 8.0f)},
+		{&LeftThumb02Bone, TEXT("thumb_02_l"), FRotator(-2.0f, -2.0f, -2.0f), FRotator(8.0f, 16.0f, 4.0f)},
+		{&LeftThumb03Bone, TEXT("thumb_03_l"), FRotator(0.0f, -1.0f, 0.0f), FRotator(2.0f, 8.0f, 0.0f)},
+		{&LeftIndex01Bone, TEXT("index_01_l"), FRotator(0.0f, -7.0f, 0.0f), FRotator(0.0f, 3.0f, 0.0f)},
+		{&LeftIndex02Bone, TEXT("index_02_l"), FRotator(0.0f, -5.0f, 0.0f), FRotator(0.0f, 2.0f, 0.0f)},
+		{&LeftIndex03Bone, TEXT("index_03_l"), FRotator(0.0f, -2.0f, 0.0f), FRotator(0.0f, 1.0f, 0.0f)},
+		{&LeftMiddle01Bone, TEXT("middle_01_l"), FRotator(0.0f, -6.0f, 0.0f), FRotator(0.0f, 44.0f, 0.0f)},
+		{&LeftMiddle02Bone, TEXT("middle_02_l"), FRotator(0.0f, -5.0f, 0.0f), FRotator(0.0f, 54.0f, 0.0f)},
+		{&LeftMiddle03Bone, TEXT("middle_03_l"), FRotator(0.0f, -2.0f, 0.0f), FRotator(0.0f, 28.0f, 0.0f)},
+		{&LeftRing01Bone, TEXT("ring_01_l"), FRotator(0.0f, -6.0f, -1.0f), FRotator(0.0f, 46.0f, -2.0f)},
+		{&LeftRing02Bone, TEXT("ring_02_l"), FRotator(0.0f, -5.0f, 0.0f), FRotator(0.0f, 56.0f, 0.0f)},
+		{&LeftRing03Bone, TEXT("ring_03_l"), FRotator(0.0f, -2.0f, 0.0f), FRotator(0.0f, 30.0f, 0.0f)},
+		{&LeftPinky01Bone, TEXT("pinky_01_l"), FRotator(0.0f, -6.0f, -2.0f), FRotator(2.0f, 48.0f, -4.0f)},
+		{&LeftPinky02Bone, TEXT("pinky_02_l"), FRotator(0.0f, -5.0f, 0.0f), FRotator(2.0f, 58.0f, 0.0f)},
+		{&LeftPinky03Bone, TEXT("pinky_03_l"), FRotator(0.0f, -2.0f, 0.0f), FRotator(0.0f, 32.0f, 0.0f)}
+	};
+	for (const FFingerPoseBinding& Binding : Bindings)
+	{
+		if (OpenAlpha > KINDA_SMALL_NUMBER)
+		{
+			ApplyFingerRotationLocal(
+				Output,
+				OutBoneTransforms,
+				*Binding.Bone,
+				Binding.BoneName,
+				Binding.OpenRotation,
+				OpenAlpha
+			);
+		}
+		if (PointAlpha > KINDA_SMALL_NUMBER)
+		{
+			ApplyFingerRotationLocal(
+				Output,
+				OutBoneTransforms,
+				*Binding.Bone,
+				Binding.BoneName,
+				Binding.PointRotation,
+				PointAlpha
+			);
+		}
 	}
 }
 

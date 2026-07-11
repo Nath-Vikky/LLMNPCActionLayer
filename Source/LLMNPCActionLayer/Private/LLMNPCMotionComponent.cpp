@@ -7,6 +7,7 @@
 #include "LLMNPCPostProcessAnimInstance.h"
 #include "LLMNPCSettings.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
+#include "Style/LLMNPCStyleResolver.h"
 #include "Templates/LLMNPCMotionTemplate.h"
 #include "Templates/LLMNPCTemplateLibrarySubsystem.h"
 
@@ -31,6 +32,10 @@ void ULLMNPCMotionComponent::BeginPlay()
 	Validator = NewObject<ULLMNPCMotionValidator>(this);
 	Validator->Manifest = ControlManifest;
 	APIClient = NewObject<ULLMNPCAPIClient>(this);
+	const int32 ResolvedMicroMotionSeed = MicroMotionSeed != 0
+		? MicroMotionSeed
+		: static_cast<int32>(GetTypeHash(GetOwner() ? GetOwner()->GetFName() : GetFName()) & 0x7fffffffU);
+	MicroMotionState.Initialize(ResolvedMicroMotionSeed);
 
 	if (bAutoInstallPostProcessAnimBP && PostProcessInstallMode != ELLMNPCPostProcessInstallMode::Disabled)
 	{
@@ -50,6 +55,12 @@ void ULLMNPCMotionComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	StartEligiblePlans();
 	UpdateActivePlans(DeltaTime);
+	UpdateMicroMotion(DeltaTime);
+}
+
+void ULLMNPCMotionComponent::SetAmbientStyle(FName StyleTag)
+{
+	AmbientStyle = StyleTag.IsNone() ? FName(TEXT("neutral")) : StyleTag;
 }
 
 bool ULLMNPCMotionComponent::SubmitMotionPlanJson(const FString& JsonString)
@@ -121,9 +132,11 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 	);
 	if (!MotionTemplate)
 	{
-		MotionTemplate = Library->FindPublishedVariant(
+		MotionTemplate = Library->ResolvePublishedVariant(
 			TemplateOrPublicActionId,
-			ResolvedProfile->ProfileId
+			ResolvedProfile->ProfileId,
+			Modifiers.Style,
+			Modifiers.RandomSeed
 		);
 	}
 
@@ -554,6 +567,58 @@ void ULLMNPCMotionComponent::UpdateActivePlans(float DeltaTime)
 	}
 }
 
+void ULLMNPCMotionComponent::UpdateMicroMotion(float DeltaTime)
+{
+	FLLMNPCMicroMotionConfig Config;
+	const FLLMNPCStylePreset AmbientPreset = ULLMNPCStyleResolver::GetBuiltInPreset(AmbientStyle);
+	Config.bEnabled = bEnableMicroMotion;
+	Config.bEnableGaze = bEnableGazeScheduler;
+	Config.Amplitude = MicroMotionAmplitude * AmbientPreset.MicroMotionScale;
+	Config.BreathingFrequencyHz = BreathingFrequencyHz;
+	Config.GazeAlpha = AmbientGazeAlpha * FMath::Lerp(0.5f, 1.25f, AmbientPreset.GazeEngagement);
+	Config.GazeSwitchInterval = GazeSwitchInterval;
+
+	TMap<FString, FVector> GazeTargetsCS;
+	if (USkeletalMeshComponent* Mesh = GetOwnerMesh())
+	{
+		for (const TPair<FString, TObjectPtr<AActor>>& Pair : TargetMap)
+		{
+			if (IsValid(Pair.Value))
+			{
+				GazeTargetsCS.Add(
+					Pair.Key,
+					Mesh->GetComponentTransform().InverseTransformPosition(
+						Pair.Value->GetActorLocation() + FVector(0.0f, 0.0f, 80.0f)
+					)
+				);
+			}
+		}
+	}
+
+	FLLMNPCMicroMotionScheduler::Update(
+		Config,
+		MicroMotionState,
+		DeltaTime,
+		GazeTargetsCS,
+		IsChannelActive(TEXT("head")),
+		IsChannelActive(TEXT("chest")),
+		IsChannelActive(TEXT("gaze")),
+		CurrentSnapshot
+	);
+}
+
+bool ULLMNPCMotionComponent::IsChannelActive(FName Channel) const
+{
+	for (const FLLMNPCActiveMotionPlan& Active : ActiveMotions)
+	{
+		if (Active.Request.Channels.Contains(Channel))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 TArray<FName> ULLMNPCMotionComponent::DeriveMotionChannels(const FLLMMotionPlan& Plan)
 {
 	TArray<FName> Channels;
@@ -581,6 +646,13 @@ TArray<FName> ULLMNPCMotionComponent::DeriveMotionChannels(const FLLMMotionPlan&
 			Channel = TEXT("right_arm_ik");
 		}
 		else if (
+			Control == TEXT("left_hand.ik") ||
+			Control.StartsWith(TEXT("left_hand.local_offset."))
+		)
+		{
+			Channel = TEXT("left_arm_ik");
+		}
+		else if (
 			Control.StartsWith(TEXT("right_upperarm.")) ||
 			Control.StartsWith(TEXT("right_lowerarm.")) ||
 			Control == TEXT("right_hand.pitch") ||
@@ -596,6 +668,13 @@ TArray<FName> ULLMNPCMotionComponent::DeriveMotionChannels(const FLLMMotionPlan&
 		)
 		{
 			Channel = TEXT("right_hand_pose");
+		}
+		else if (
+			Control.StartsWith(TEXT("left_fingers.")) ||
+			Control == TEXT("left_hand.palm_target")
+		)
+		{
+			Channel = TEXT("left_hand_pose");
 		}
 
 		if (!Channel.IsNone())
@@ -663,6 +742,12 @@ void ULLMNPCMotionComponent::MergeSnapshot(
 		InOutSnapshot.LeftHandIKAlpha = Snapshot.LeftHandIKAlpha;
 		InOutSnapshot.LeftHandIKTargetCS = Snapshot.LeftHandIKTargetCS;
 	}
+	InOutSnapshot.LeftHandLocalOffsetCS += Snapshot.LeftHandLocalOffsetCS;
+	if (Snapshot.LeftHandPalmAlpha > InOutSnapshot.LeftHandPalmAlpha)
+	{
+		InOutSnapshot.LeftHandPalmAlpha = Snapshot.LeftHandPalmAlpha;
+		InOutSnapshot.LeftHandPalmTargetCS = Snapshot.LeftHandPalmTargetCS;
+	}
 	if (Snapshot.GazeAlpha > InOutSnapshot.GazeAlpha)
 	{
 		InOutSnapshot.GazeAlpha = Snapshot.GazeAlpha;
@@ -672,6 +757,7 @@ void ULLMNPCMotionComponent::MergeSnapshot(
 	InOutSnapshot.RightFingersOpen = FMath::Max(InOutSnapshot.RightFingersOpen, Snapshot.RightFingersOpen);
 	InOutSnapshot.RightFingersPoint = FMath::Max(InOutSnapshot.RightFingersPoint, Snapshot.RightFingersPoint);
 	InOutSnapshot.LeftFingersOpen = FMath::Max(InOutSnapshot.LeftFingersOpen, Snapshot.LeftFingersOpen);
+	InOutSnapshot.LeftFingersPoint = FMath::Max(InOutSnapshot.LeftFingersPoint, Snapshot.LeftFingersPoint);
 }
 
 bool ULLMNPCMotionComponent::InstallPostProcessAnimBP()

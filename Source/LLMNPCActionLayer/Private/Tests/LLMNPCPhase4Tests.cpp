@@ -144,8 +144,14 @@ bool FLLMNPCPhase4CandidateRetrieverTest::RunTest(const FString& Parameters)
 	Door.Salience = 0.9f;
 
 	FLLMNPCCandidateRetrievalResult Result = ULLMNPCCandidateRetriever::Retrieve(Request);
-	TestEqual(TEXT("A busy right hand leaves only the head-only fallback"), Result.Candidates.Num(), 1);
-	TestEqual(TEXT("The safe fallback is nod"), Result.Candidates[0].SelectionId, FName(TEXT("gesture.nod")));
+	TestNotNull(TEXT("A busy right hand keeps head-only nod"), FindCandidate(Result.Candidates, TEXT("gesture.nod")));
+	const FLLMNPCTemplateCandidate* MirroredWave = FindCandidate(Result.Candidates, TEXT("gesture.wave.right"));
+	TestNotNull(TEXT("A mirror-capable wave remains available"), MirroredWave);
+	if (MirroredWave)
+	{
+		TestTrue(TEXT("The wave is marked for UE-side mirroring"), MirroredWave->bMirrorRecommended);
+	}
+	TestNull(TEXT("Non-mirrorable point remains blocked"), FindCandidate(Result.Candidates, TEXT("gesture.point.target")));
 
 	Request.Context.ActiveStates.Reset();
 	Result = ULLMNPCCandidateRetriever::Retrieve(Request);
@@ -295,7 +301,10 @@ bool FLLMNPCPhase4AutonomousAcceptanceTest::RunTest(const FString& Parameters)
 	Offered = Retrieve(Greeting);
 	ContextJson = Session->BuildContextualRequestJson(FGuid::NewGuid(), Offered, Context, TEXT("llmnpc.selection_prompt.v1"));
 	Decision = RunMock(Greeting, ContextJson, *this);
-	TestEqual(TEXT("A busy right hand downgrades greeting to nod"), Decision.Action.TemplateId, FName(TEXT("gesture.nod")));
+	TestEqual(TEXT("A busy right hand retains the mirror-capable wave"), Decision.Action.TemplateId, FName(TEXT("gesture.wave.right")));
+	FString PolicyError;
+	TestTrue(TEXT("The mirrored wave passes contextual policy"), ULLMNPCCandidateRetriever::ApplySelectionPolicy(Decision, Offered, PolicyError));
+	TestTrue(TEXT("UE marks the selected wave for left-hand execution"), Decision.Action.bMirror);
 	return true;
 }
 

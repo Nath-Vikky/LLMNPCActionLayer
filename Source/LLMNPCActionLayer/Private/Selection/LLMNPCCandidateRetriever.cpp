@@ -1,5 +1,7 @@
 #include "Selection/LLMNPCCandidateRetriever.h"
 
+#include "Style/LLMNPCStyleResolver.h"
+
 namespace
 {
 const FName ExclusionTargetMissing(TEXT("target_missing"));
@@ -110,7 +112,27 @@ FLLMNPCCandidateRetrievalResult ULLMNPCCandidateRetriever::Retrieve(
 
 	for (const FLLMNPCTemplateCandidate& Source : Request.SourceCandidates)
 	{
-		if (ContainsAny(Source.BlockedStates, Request.Context.ActiveStates))
+		bool bMirrorRecommended = false;
+		bool bBlocked = false;
+		for (const FName BlockedState : Source.BlockedStates)
+		{
+			if (!Request.Context.ActiveStates.Contains(BlockedState))
+			{
+				continue;
+			}
+			if (
+				BlockedState == TEXT("right_hand_busy") &&
+				Source.bAllowMirror &&
+				!Request.Context.ActiveStates.Contains(TEXT("left_hand_busy"))
+			)
+			{
+				bMirrorRecommended = true;
+				continue;
+			}
+			bBlocked = true;
+			break;
+		}
+		if (bBlocked)
 		{
 			AddExclusion(Result, Source.SelectionId, ExclusionBlockedState);
 			continue;
@@ -137,6 +159,7 @@ FLLMNPCCandidateRetrievalResult ULLMNPCCandidateRetriever::Retrieve(
 		}
 
 		FLLMNPCTemplateCandidate Candidate = Source;
+		Candidate.bMirrorRecommended = bMirrorRecommended;
 		Candidate.RelevanceScore = ContainsAny(Candidate.IntentTags, InferredIntentTags) ? 4.0f : 0.0f;
 		if (Candidate.EmotionTags.Contains(Request.Context.Emotion.PrimaryEmotion))
 		{
@@ -150,6 +173,13 @@ FLLMNPCCandidateRetrievalResult ULLMNPCCandidateRetriever::Retrieve(
 			Candidate.RelevanceScore += 1.0f;
 		}
 
+		Candidate.RecommendedStyle = ULLMNPCStyleResolver::ResolveRecommendedStyle(
+			Request.Context,
+			Candidate.AllowedStyles
+		);
+		const FLLMNPCStylePreset StylePreset = ULLMNPCStyleResolver::GetBuiltInPreset(
+			Candidate.RecommendedStyle
+		);
 		const float ExpressionScale = FMath::Clamp(
 			Request.Context.Personality.Expressiveness *
 			FMath::Lerp(1.0f, 0.65f, Request.Context.Personality.Shyness),
@@ -161,9 +191,19 @@ FLLMNPCCandidateRetrievalResult ULLMNPCCandidateRetriever::Retrieve(
 			FMath::Min(Candidate.AmplitudeRange.Y, Candidate.AmplitudeRange.Y * ExpressionScale)
 		);
 		Candidate.RecommendedAmplitude = FMath::Clamp(
-			ExpressionScale,
+			ExpressionScale * StylePreset.AmplitudeScale,
 			Candidate.AmplitudeRange.X,
 			Candidate.AmplitudeRange.Y
+		);
+		Candidate.RecommendedSpeedScale = FMath::Clamp(
+			StylePreset.SpeedScale,
+			Candidate.SpeedRange.X,
+			Candidate.SpeedRange.Y
+		);
+		Candidate.RecommendedDurationScale = FMath::Clamp(
+			StylePreset.DurationScale,
+			Candidate.DurationRange.X,
+			Candidate.DurationRange.Y
 		);
 
 		if (Candidate.bRequiresTarget)
@@ -258,6 +298,17 @@ bool ULLMNPCCandidateRetriever::ApplySelectionPolicy(
 		Decision.Action.TargetRef.Reset();
 	}
 
+	const bool bApplyRecommendedStyle =
+		Decision.Action.Style == TEXT("neutral") &&
+		Candidate->RecommendedStyle != TEXT("neutral");
+	if (bApplyRecommendedStyle)
+	{
+		Decision.Action.Style = Candidate->RecommendedStyle;
+		Decision.Action.Amplitude = Candidate->RecommendedAmplitude;
+		Decision.Action.SpeedScale = Candidate->RecommendedSpeedScale;
+		Decision.Action.DurationScale = Candidate->RecommendedDurationScale;
+	}
+
 	if (
 		!Candidate->AllowedStyles.IsEmpty() &&
 		!Candidate->AllowedStyles.Contains(Decision.Action.Style)
@@ -282,5 +333,9 @@ bool ULLMNPCCandidateRetriever::ApplySelectionPolicy(
 		Candidate->DurationRange.X,
 		Candidate->DurationRange.Y
 	);
+	Decision.Action.bMirror = Candidate->bMirrorRecommended;
+	Decision.Action.ContextAmplitudeRange = Candidate->AmplitudeRange;
+	Decision.Action.ContextSpeedRange = Candidate->SpeedRange;
+	Decision.Action.ContextDurationRange = Candidate->DurationRange;
 	return true;
 }

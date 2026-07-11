@@ -32,6 +32,7 @@ private:
 	static FVector BuildReachTargetCS(
 		const FLLMMotionTrack& Track,
 		USkeletalMeshComponent* Mesh,
-		const TMap<FString, TObjectPtr<AActor>>& TargetMap
+		const TMap<FString, TObjectPtr<AActor>>& TargetMap,
+		bool bLeftHand
 	);
 };

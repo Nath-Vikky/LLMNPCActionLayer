@@ -18,6 +18,7 @@
 #include "Selection/LLMNPCCandidateRetriever.h"
 #include "Selection/LLMNPCSelectionAnalyticsSubsystem.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
+#include "Style/LLMNPCStyleResolver.h"
 #include "Templates/LLMNPCTemplateCandidate.h"
 #include "Templates/LLMNPCTemplateLibrarySubsystem.h"
 #include "UI/LLMNPCChatWidget.h"
@@ -91,6 +92,13 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	RetrievalRequest.UserMessage = CleanMessage;
 	RetrievalRequest.SourceCandidates = MoveTemp(SourceCandidates);
 	RetrievalRequest.Context = GetSelectionContextSnapshot();
+	if (MotionComponent)
+	{
+		MotionComponent->SetAmbientStyle(ULLMNPCStyleResolver::ResolveRecommendedStyle(
+			RetrievalRequest.Context,
+			{ TEXT("neutral"), TEXT("friendly"), TEXT("subtle"), TEXT("excited") }
+		));
+	}
 	RetrievalRequest.ActionHistory = ConversationSession->GetActionHistory();
 	RetrievalRequest.NowSeconds = FPlatformTime::Seconds();
 	RetrievalRequest.MaxCandidates = Settings ? Settings->MaxContextCandidates : 8;
@@ -531,6 +539,12 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 	}
 
 	LastTurnResult.SelectedActionId = Decision.Action.TemplateId;
+	Decision.Action.RandomSeed = ULLMNPCStyleResolver::BuildDeterministicSeed(
+		ConversationSession->GetSessionId(),
+		ActiveRequest.RequestId,
+		NPCId,
+		Decision.Action.TemplateId
+	);
 	FString SelectionError;
 	if (!ULLMNPCCandidateRetriever::ApplySelectionPolicy(
 		Decision,

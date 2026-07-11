@@ -56,7 +56,7 @@ public:
 	FString DeepSeekSystemPrompt;
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection")
-	FString SelectionPromptVersion = TEXT("llmnpc.selection_prompt.v1");
+	FString SelectionPromptVersion = TEXT("llmnpc.selection_prompt.v2");
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection", meta=(ClampMin="1", ClampMax="32"))
 	int32 MaxContextCandidates = 8;

@@ -17,8 +17,14 @@ struct LLMNPCACTIONLAYER_API FAnimNode_LLMProceduralPose : public FAnimNode_Skel
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(PinShownByDefault))
 	bool bEnableRightArmIK = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(PinShownByDefault))
+	bool bEnableLeftArmIK = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	FRotator RightHandPalmRotationOffset = FRotator::ZeroRotator;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FRotator LeftHandPalmRotationOffset = FRotator::ZeroRotator;
 
 	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
 	FBoneReference HeadBone;
@@ -34,6 +40,15 @@ struct LLMNPCACTIONLAYER_API FAnimNode_LLMProceduralPose : public FAnimNode_Skel
 
 	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
 	FBoneReference RightHandBone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
+	FBoneReference LeftUpperArmBone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
+	FBoneReference LeftLowerArmBone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
+	FBoneReference LeftHandBone;
 
 	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Right Fingers")
 	FBoneReference RightThumb01Bone;
@@ -80,6 +95,51 @@ struct LLMNPCACTIONLAYER_API FAnimNode_LLMProceduralPose : public FAnimNode_Skel
 	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Right Fingers")
 	FBoneReference RightPinky03Bone;
 
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftThumb01Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftThumb02Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftThumb03Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftIndex01Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftIndex02Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftIndex03Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftMiddle01Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftMiddle02Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftMiddle03Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftRing01Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftRing02Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftRing03Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftPinky01Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftPinky02Bone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones|Left Fingers")
+	FBoneReference LeftPinky03Bone;
+
 	FAnimNode_LLMProceduralPose();
 
 	virtual void Initialize_AnyThread(const FAnimationInitializeContext& Context) override;
@@ -104,6 +164,11 @@ private:
 		TArray<FBoneTransform>& OutBoneTransforms
 	) const;
 
+	void ApplySimpleLeftArmIK(
+		FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& OutBoneTransforms
+	) const;
+
 	void ApplyRightArmAdditiveRotationsLocal(
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms,
@@ -115,7 +180,13 @@ private:
 		TArray<FBoneTransform>& OutBoneTransforms
 	) const;
 
+	void PropagateLeftHandChildrenCS(
+		FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& OutBoneTransforms
+	) const;
+
 	bool HasAnyRightFingerBone(const FBoneContainer& RequiredBones) const;
+	bool HasAnyLeftFingerBone(const FBoneContainer& RequiredBones) const;
 
 	void ApplyFingerRotationLocal(
 		FComponentSpacePoseContext& Output,
@@ -127,6 +198,12 @@ private:
 	) const;
 
 	void ApplyRightFingerPoseLocal(
+		FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& OutBoneTransforms,
+		float InAlpha
+	) const;
+
+	void ApplyLeftFingerPoseLocal(
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms,
 		float InAlpha

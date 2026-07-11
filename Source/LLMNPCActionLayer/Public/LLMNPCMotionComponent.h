@@ -4,6 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "LLMNPCControlManifest.h"
 #include "LLMNPCMotionTypes.h"
+#include "MicroMotion/LLMNPCMicroMotionScheduler.h"
 #include "Templates/LLMNPCTemplateCompiler.h"
 #include "LLMNPCMotionComponent.generated.h"
 
@@ -74,6 +75,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion")
 	void ClearQueue();
 
+	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Micro Motion")
+	void SetAmbientStyle(FName StyleTag);
+
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Test")
 	void TestNod();
 
@@ -115,6 +119,30 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(ClampMin="0.1", ClampMax="30.0"))
 	float MaxQueueWaitSeconds = 4.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Micro Motion")
+	bool bEnableMicroMotion = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Micro Motion", meta=(ClampMin="0.0", ClampMax="2.0"))
+	float MicroMotionAmplitude = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Micro Motion", meta=(ClampMin="0.05", ClampMax="1.0"))
+	float BreathingFrequencyHz = 0.2f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Micro Motion")
+	int32 MicroMotionSeed = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Gaze Scheduler")
+	bool bEnableGazeScheduler = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Gaze Scheduler", meta=(ClampMin="0.0", ClampMax="0.35"))
+	float AmbientGazeAlpha = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Gaze Scheduler")
+	FVector2D GazeSwitchInterval = FVector2D(2.5f, 5.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Micro Motion")
+	FName AmbientStyle = TEXT("neutral");
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FString LastValidationError;
@@ -168,6 +196,7 @@ private:
 
 	bool bHasActivePlan = false;
 	bool bOriginalPostProcessDisabled = false;
+	FLLMNPCMicroMotionState MicroMotionState;
 
 private:
 #if WITH_DEV_AUTOMATION_TESTS
@@ -182,6 +211,8 @@ private:
 	);
 	bool ValidateTargetRefs(const FLLMMotionPlan& Plan, FString& OutError) const;
 	void UpdateActivePlans(float DeltaTime);
+	void UpdateMicroMotion(float DeltaTime);
+	bool IsChannelActive(FName Channel) const;
 	static TArray<FName> DeriveMotionChannels(const FLLMMotionPlan& Plan);
 	static bool ChannelsConflict(const TArray<FName>& A, const TArray<FName>& B);
 	static void MergeSnapshot(

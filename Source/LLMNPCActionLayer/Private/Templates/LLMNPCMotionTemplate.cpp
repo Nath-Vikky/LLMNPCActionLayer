@@ -37,6 +37,11 @@ bool ULLMNPCMotionTemplate::ValidateTemplate(FString& OutError) const
 		OutError = TEXT("LLMNPC_TEMPLATE_VERSION_MISSING");
 		return false;
 	}
+	if (Metadata.VariantId.IsNone() || !FMath::IsFinite(Metadata.VariantWeight) || Metadata.VariantWeight <= 0.0f)
+	{
+		OutError = TEXT("LLMNPC_TEMPLATE_VARIANT_INVALID");
+		return false;
+	}
 
 	if (Metadata.SkeletonProfileId.IsNone())
 	{
@@ -51,6 +56,24 @@ bool ULLMNPCMotionTemplate::ValidateTemplate(FString& OutError) const
 	)
 	{
 		OutError = TEXT("LLMNPC_TEMPLATE_MODIFIER_RANGE_INVALID");
+		return false;
+	}
+	if (
+		!FMath::IsFinite(ModifierPolicy.RandomAmplitudeJitter) ||
+		!FMath::IsFinite(ModifierPolicy.RandomSpeedJitter) ||
+		!FMath::IsFinite(ModifierPolicy.RandomFrequencyJitter) ||
+		!FMath::IsFinite(ModifierPolicy.RandomPhaseJitterRadians) ||
+		ModifierPolicy.RandomAmplitudeJitter < 0.0f ||
+		ModifierPolicy.RandomAmplitudeJitter > 0.25f ||
+		ModifierPolicy.RandomSpeedJitter < 0.0f ||
+		ModifierPolicy.RandomSpeedJitter > 0.25f ||
+		ModifierPolicy.RandomFrequencyJitter < 0.0f ||
+		ModifierPolicy.RandomFrequencyJitter > 0.25f ||
+		ModifierPolicy.RandomPhaseJitterRadians < 0.0f ||
+		ModifierPolicy.RandomPhaseJitterRadians > 0.5f
+	)
+	{
+		OutError = TEXT("LLMNPC_TEMPLATE_RANDOMIZATION_POLICY_INVALID");
 		return false;
 	}
 

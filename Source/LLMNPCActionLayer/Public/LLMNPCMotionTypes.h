@@ -214,6 +214,15 @@ struct FLLMProceduralPoseSnapshot
 	FVector LeftHandIKTargetCS = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FVector LeftHandLocalOffsetCS = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FVector LeftHandPalmTargetCS = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	float LeftHandPalmAlpha = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	FVector GazeTargetCS = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
@@ -227,6 +236,9 @@ struct FLLMProceduralPoseSnapshot
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	float LeftFingersOpen = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	float LeftFingersPoint = 0.0f;
 };
 
 USTRUCT(BlueprintType)

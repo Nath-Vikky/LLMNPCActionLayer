@@ -57,5 +57,20 @@ struct FLLMNPCTemplateCandidate
 	float RecommendedAmplitude = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	float RecommendedSpeedScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	float RecommendedDurationScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	FName RecommendedStyle = TEXT("neutral");
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	bool bAllowMirror = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	bool bMirrorRecommended = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	float RelevanceScore = 0.0f;
 };

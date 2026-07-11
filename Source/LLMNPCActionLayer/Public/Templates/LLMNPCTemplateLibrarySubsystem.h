@@ -30,6 +30,14 @@ public:
 	) const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
+	const ULLMNPCMotionTemplate* ResolvePublishedVariant(
+		FName PublicActionId,
+		FName SkeletonProfileId,
+		FName StyleTag,
+		int32 RandomSeed
+	) const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
 	const ULLMNPCSkeletonProfile* FindSkeletonProfile(FName ProfileId) const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")

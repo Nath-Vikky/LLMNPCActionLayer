@@ -536,6 +536,7 @@ bool FLLMNPCTemplateDraftImporter::ParseDraftJson(
 	static const TSet<FString> RootFields = {
 		TEXT("schema_version"), TEXT("asset_name"), TEXT("template_id"),
 		TEXT("public_action_id"), TEXT("semantic_version"), TEXT("kind"),
+		TEXT("variant_id"), TEXT("variant_weight"), TEXT("variant_style_tags"),
 		TEXT("review_state"), TEXT("display_name"), TEXT("description"),
 		TEXT("skeleton_profile_id"), TEXT("metadata"), TEXT("modifier_policy"),
 		TEXT("clip"), TEXT("provenance")
@@ -591,6 +592,28 @@ bool FLLMNPCTemplateDraftImporter::ParseDraftJson(
 	if (!IsSemanticVersion(OutTemplate.Metadata.SemanticVersion))
 	{
 		OutError = TEXT("LLMNPC_DRAFT_SEMANTIC_VERSION_INVALID");
+		return false;
+	}
+	if (Root->HasField(TEXT("variant_id")))
+	{
+		if (!GetString(Root, TEXT("variant_id"), Value, OutError) || !IsSafeIdentifier(Value, 64))
+		{
+			OutError = TEXT("LLMNPC_DRAFT_VARIANT_ID_INVALID");
+			return false;
+		}
+		OutTemplate.Metadata.VariantId = FName(*Value);
+	}
+	if (!GetOptionalNumber(Root, TEXT("variant_weight"), 1.0f, OutTemplate.Metadata.VariantWeight, OutError))
+	{
+		return false;
+	}
+	if (Root->HasField(TEXT("variant_style_tags")) && !GetNameArray(
+		Root,
+		TEXT("variant_style_tags"),
+		OutTemplate.Metadata.VariantStyleTags,
+		OutError
+	))
+	{
 		return false;
 	}
 	if (!GetString(Root, TEXT("kind"), Value, OutError) || Value != TEXT("procedural_motion"))
@@ -685,7 +708,9 @@ bool FLLMNPCTemplateDraftImporter::ParseDraftJson(
 	}
 	static const TSet<FString> ModifierFields = {
 		TEXT("amplitude"), TEXT("speed"), TEXT("duration"),
-		TEXT("allow_mirror"), TEXT("allowed_styles")
+		TEXT("allow_mirror"), TEXT("allowed_styles"),
+		TEXT("random_amplitude_jitter"), TEXT("random_speed_jitter"),
+		TEXT("random_frequency_jitter"), TEXT("random_phase_jitter_radians")
 	};
 	if (!ValidateFields(*ModifierPolicy, ModifierFields, TEXT("LLMNPC_DRAFT_MODIFIER"), OutError))
 	{
@@ -696,7 +721,11 @@ bool FLLMNPCTemplateDraftImporter::ParseDraftJson(
 		!GetRange(*ModifierPolicy, TEXT("speed"), OutTemplate.ModifierPolicy.SpeedRange, OutError) ||
 		!GetRange(*ModifierPolicy, TEXT("duration"), OutTemplate.ModifierPolicy.DurationRange, OutError) ||
 		!GetBool(*ModifierPolicy, TEXT("allow_mirror"), OutTemplate.ModifierPolicy.bAllowMirror, OutError) ||
-		!GetNameArray(*ModifierPolicy, TEXT("allowed_styles"), OutTemplate.ModifierPolicy.AllowedStyleTags, OutError)
+		!GetNameArray(*ModifierPolicy, TEXT("allowed_styles"), OutTemplate.ModifierPolicy.AllowedStyleTags, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("random_amplitude_jitter"), 0.03f, OutTemplate.ModifierPolicy.RandomAmplitudeJitter, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("random_speed_jitter"), 0.025f, OutTemplate.ModifierPolicy.RandomSpeedJitter, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("random_frequency_jitter"), 0.04f, OutTemplate.ModifierPolicy.RandomFrequencyJitter, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("random_phase_jitter_radians"), 0.08f, OutTemplate.ModifierPolicy.RandomPhaseJitterRadians, OutError)
 	)
 	{
 		return false;

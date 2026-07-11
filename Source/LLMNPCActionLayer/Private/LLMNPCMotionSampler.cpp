@@ -58,6 +58,7 @@ void FLLMNPCMotionSampler::SampleClip(
 	}
 
 	FVector PendingRightHandLocalOffsetCS = FVector::ZeroVector;
+	FVector PendingLeftHandLocalOffsetCS = FVector::ZeroVector;
 
 	for (const FLLMMotionTrack& Track : Clip.Tracks)
 	{
@@ -106,6 +107,18 @@ void FLLMNPCMotionSampler::SampleClip(
 		{
 			PendingRightHandLocalOffsetCS.Z += FloatValue;
 		}
+		else if (Control == TEXT("left_hand.local_offset.x"))
+		{
+			PendingLeftHandLocalOffsetCS.X += FloatValue;
+		}
+		else if (Control == TEXT("left_hand.local_offset.y"))
+		{
+			PendingLeftHandLocalOffsetCS.Y += FloatValue;
+		}
+		else if (Control == TEXT("left_hand.local_offset.z"))
+		{
+			PendingLeftHandLocalOffsetCS.Z += FloatValue;
+		}
 		else if (Control == TEXT("right_upperarm.pitch"))
 		{
 			OutSnapshot.RightUpperArmAdditiveRotation.Pitch += FloatValue;
@@ -150,6 +163,14 @@ void FLLMNPCMotionSampler::SampleClip(
 		{
 			OutSnapshot.RightFingersPoint = FMath::Max(OutSnapshot.RightFingersPoint, FMath::Clamp(FloatValue, 0.0f, 1.0f));
 		}
+		else if (Control == TEXT("left_fingers.open"))
+		{
+			OutSnapshot.LeftFingersOpen = FMath::Max(OutSnapshot.LeftFingersOpen, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
+		else if (Control == TEXT("left_fingers.point"))
+		{
+			OutSnapshot.LeftFingersPoint = FMath::Max(OutSnapshot.LeftFingersPoint, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
 		else if (Control == TEXT("right_hand.ik"))
 		{
 			OutSnapshot.RightHandIKAlpha = FMath::Max(OutSnapshot.RightHandIKAlpha, TrackAlpha);
@@ -159,7 +180,19 @@ void FLLMNPCMotionSampler::SampleClip(
 			}
 			else if (Track.TrackType == ELLMMotionTrackType::IKReach)
 			{
-				OutSnapshot.RightHandIKTargetCS = BuildReachTargetCS(Track, Mesh, TargetMap);
+				OutSnapshot.RightHandIKTargetCS = BuildReachTargetCS(Track, Mesh, TargetMap, false);
+			}
+		}
+		else if (Control == TEXT("left_hand.ik"))
+		{
+			OutSnapshot.LeftHandIKAlpha = FMath::Max(OutSnapshot.LeftHandIKAlpha, TrackAlpha);
+			if (Track.TrackType == ELLMMotionTrackType::Anchor)
+			{
+				OutSnapshot.LeftHandIKTargetCS = BuildAnchorTargetCS(Track, Manifest, Mesh);
+			}
+			else if (Track.TrackType == ELLMMotionTrackType::IKReach)
+			{
+				OutSnapshot.LeftHandIKTargetCS = BuildReachTargetCS(Track, Mesh, TargetMap, true);
 			}
 		}
 		else if (Control == TEXT("gaze.target"))
@@ -188,12 +221,30 @@ void FLLMNPCMotionSampler::SampleClip(
 				}
 			}
 		}
+		else if (Control == TEXT("left_hand.palm_target"))
+		{
+			if (const TObjectPtr<AActor>* Target = TargetMap.Find(Track.TargetRef))
+			{
+				if (Mesh && IsValid(Target->Get()))
+				{
+					OutSnapshot.LeftHandPalmTargetCS = Mesh->GetComponentTransform().InverseTransformPosition(
+						Target->Get()->GetActorLocation() + FVector(0.0f, 0.0f, 70.0f)
+					);
+					OutSnapshot.LeftHandPalmAlpha = FMath::Max(OutSnapshot.LeftHandPalmAlpha, TrackAlpha);
+				}
+			}
+		}
 	}
 
 	OutSnapshot.RightHandLocalOffsetCS = PendingRightHandLocalOffsetCS;
 	if (OutSnapshot.RightHandIKAlpha > KINDA_SMALL_NUMBER)
 	{
 		OutSnapshot.RightHandIKTargetCS += PendingRightHandLocalOffsetCS;
+	}
+	OutSnapshot.LeftHandLocalOffsetCS = PendingLeftHandLocalOffsetCS;
+	if (OutSnapshot.LeftHandIKAlpha > KINDA_SMALL_NUMBER)
+	{
+		OutSnapshot.LeftHandIKTargetCS += PendingLeftHandLocalOffsetCS;
 	}
 }
 
@@ -291,7 +342,8 @@ FVector FLLMNPCMotionSampler::BuildAnchorTargetCS(
 FVector FLLMNPCMotionSampler::BuildReachTargetCS(
 	const FLLMMotionTrack& Track,
 	USkeletalMeshComponent* Mesh,
-	const TMap<FString, TObjectPtr<AActor>>& TargetMap
+	const TMap<FString, TObjectPtr<AActor>>& TargetMap,
+	bool bLeftHand
 )
 {
 	if (!Mesh)
@@ -309,7 +361,11 @@ FVector FLLMNPCMotionSampler::BuildReachTargetCS(
 		Target->Get()->GetActorLocation() + FVector(0.0f, 0.0f, 60.0f)
 	);
 
-	const FVector ShoulderCS = GetBoneLocationCS(Mesh, TEXT("upperarm_r"), FVector(0.0f, 25.0f, 80.0f));
+	const FVector ShoulderCS = GetBoneLocationCS(
+		Mesh,
+		bLeftHand ? FName(TEXT("upperarm_l")) : FName(TEXT("upperarm_r")),
+		FVector(0.0f, bLeftHand ? -25.0f : 25.0f, 80.0f)
+	);
 	const FVector Direction = (TargetCS - ShoulderCS).GetSafeNormal();
 	const float ReachDistance = FMath::Lerp(35.0f, 90.0f, Track.Reach);
 	return ShoulderCS + Direction * ReachDistance + Track.Offset;

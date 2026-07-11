@@ -12,9 +12,11 @@ player text / story command
   -> emotion / personality / relationship / scene context snapshot
   -> ULLMNPCCandidateRetriever
   -> target / occupied-state / cooldown / repetition filtering
+  -> emotion / personality style resolution + deterministic seed
   -> Mock, Backend Proxy, or editor-only DeepSeek provider
   -> strict llmnpc.model_turn.v1 parser
   -> offered-candidate and contextual modifier policy
+  -> deterministic Published template variant
   -> public_action_id + constrained modifiers
   -> ULLMNPCBehaviorCoordinator
   -> ULLMNPCTemplateLibrarySubsystem
@@ -41,6 +43,8 @@ player text / story command
 - `ULLMNPCSceneContextComponent`
 - `ULLMNPCCandidateRetriever`
 - `ULLMNPCSelectionAnalyticsSubsystem`
+- `ULLMNPCStyleResolver`
+- `FLLMNPCMicroMotionScheduler`
 - `ULLMNPCChatWidget`
 - `ILLMNPCModelProvider`
 - `ULLMNPCControlManifest`
@@ -78,6 +82,13 @@ right_hand.yaw
 right_hand.roll
 right_fingers.open
 right_fingers.point
+left_hand.ik
+left_hand.local_offset.x
+left_hand.local_offset.y
+left_hand.local_offset.z
+left_hand.palm_target
+left_fingers.open
+left_fingers.point
 gaze.target
 ```
 
@@ -90,9 +101,34 @@ gesture.nod.manny.v1
 gesture.wave.right.manny.fk.v1
 gesture.wave.right.manny.procedural.v1
 gesture.point.target.manny.v1
+gesture.wave.right.manny.subtle.v1
 ```
 
 Runtime model selection exposes the skeleton-independent public IDs `gesture.nod`, `gesture.wave.right`, and `gesture.point.target`. The faithful FK wave remains available by exact ID for trusted debug and review workflows, but is hidden from model candidate selection. Target Point is offered only while at least one legal scene target exists.
+
+## Restricted Style And Micro Motion
+
+Phase 5 resolves `neutral`, `friendly`, `subtle`, and `excited` through local
+style presets. Emotion and personality recommend a style and bounded modifiers;
+the provider still chooses only from the values exposed by Template Policy. UE
+generates a deterministic action seed from session/request identity and uses it
+for bounded amplitude, speed, oscillator frequency, and phase variation. The
+seed and curve authority are never sent to the provider.
+
+Multiple Published assets may share one public action ID. Variant resolution is
+stable, weighted, skeleton-specific, style-aware, and reproducible from the
+action seed. The shipped `subtle` Wave variant is selected for shy contexts.
+
+Templates that explicitly allow Mirror are mirrored through semantic controls.
+The procedural Wave can move to the left arm when `right_hand_busy` is active
+and `left_hand_busy` is not. Mirroring never exposes bones or sign rules to the
+model.
+
+`ULLMNPCMotionComponent` also runs a low-amplitude local breathing, head sway,
+occasional nod, and ambient gaze scheduler. It makes no model calls and yields
+whenever formal motion owns the head, chest, or gaze channel. `SetAmbientStyle`
+can change the micro-motion intensity and gaze engagement using the same style
+presets.
 
 ## Main Blueprint API: Motion
 
@@ -132,7 +168,7 @@ Add optional `LLM NPC Emotion`, `LLM NPC Relationship`, and `LLM NPC Scene Conte
 
 `RegisterSceneTarget` registers the same opaque Target Ref with both the motion executor and scene-selection context. `SetSceneStateActive("right_hand_busy", true)` removes templates blocked by that state before the request reaches the model. Template cooldown and short-term repeat suppression also operate before selection; the motion scheduler remains the final execution-time guard.
 
-The request contract is `llmnpc.turn_request.v2`, with prompt version `llmnpc.selection_prompt.v1`. Context-constrained amplitude, speed, duration, style, and Target refs are enforced again after parsing. Selection events are retained in a bounded `ULLMNPCSelectionAnalyticsSubsystem` ring buffer and do not leave the process automatically.
+The request contract is `llmnpc.turn_request.v2`, with prompt version `llmnpc.selection_prompt.v2`. Context-constrained amplitude, speed, duration, style, mirror recommendation, and Target refs are enforced again after parsing. Selection events are retained in a bounded `ULLMNPCSelectionAnalyticsSubsystem` ring buffer and do not leave the process automatically.
 
 ## Model Providers
 

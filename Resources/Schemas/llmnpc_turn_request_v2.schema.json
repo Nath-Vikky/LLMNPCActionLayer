@@ -141,6 +141,10 @@
         "allowed_target_refs",
         "default_target_ref",
         "recommended_amplitude",
+        "recommended_speed_scale",
+        "recommended_duration_scale",
+        "recommended_style",
+        "mirror_recommended",
         "allowed_modifiers"
       ],
       "properties": {
@@ -156,6 +160,10 @@
         },
         "default_target_ref": { "type": "string", "maxLength": 128 },
         "recommended_amplitude": { "type": "number", "exclusiveMinimum": 0 },
+        "recommended_speed_scale": { "type": "number", "exclusiveMinimum": 0 },
+        "recommended_duration_scale": { "type": "number", "exclusiveMinimum": 0 },
+        "recommended_style": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "mirror_recommended": { "type": "boolean" },
         "allowed_modifiers": {
           "type": "object",
           "additionalProperties": false,
