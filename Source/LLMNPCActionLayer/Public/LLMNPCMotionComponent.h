@@ -14,6 +14,7 @@ class ULLMNPCAPIClient;
 class ULLMNPCMotionValidator;
 class ULLMNPCSkeletonProfile;
 class ULLMNPCMotionTemplate;
+class APlayerController;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 enum class ELLMNPCMotionValidationSource : uint8;
@@ -200,11 +201,15 @@ private:
 
 	bool bHasActivePlan = false;
 	bool bOriginalPostProcessDisabled = false;
+	bool bShouldEnableBlueprintInput = false;
+	bool bEnabledBlueprintInput = false;
+	TWeakObjectPtr<APlayerController> BlueprintInputController;
 	FLLMNPCMicroMotionState MicroMotionState;
 
 private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FLLMNPCMotionSchedulerTest;
+	friend class FLLMNPCPhase6BlueprintInputBindingTest;
 #endif
 
 	void StartEligiblePlans();
@@ -229,6 +234,8 @@ private:
 	);
 	bool InstallPostProcessAnimBP();
 	void RestorePostProcessAnimBP();
+	void TryEnableBlueprintInput();
+	static bool HasBlueprintKeyInputBindings(const UClass* ActorClass);
 	UClass* ResolvePostProcessAnimClass() const;
 	USkeletalMeshComponent* GetOwnerMesh() const;
 

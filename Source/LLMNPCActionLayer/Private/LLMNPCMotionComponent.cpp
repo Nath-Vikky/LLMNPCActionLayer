@@ -13,8 +13,11 @@
 #include "Templates/LLMNPCTemplateLibrarySubsystem.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/BlueprintGeneratedClass.h"
+#include "Engine/InputKeyDelegateBinding.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PlayerController.h"
 #include "HAL/PlatformTime.h"
 #include "JsonObjectConverter.h"
 
@@ -39,6 +42,8 @@ void ULLMNPCMotionComponent::BeginPlay()
 		? MicroMotionSeed
 		: static_cast<int32>(GetTypeHash(GetOwner() ? GetOwner()->GetFName() : GetFName()) & 0x7fffffffU);
 	MicroMotionState.Initialize(ResolvedMicroMotionSeed);
+	bShouldEnableBlueprintInput = HasBlueprintKeyInputBindings(GetOwner() ? GetOwner()->GetClass() : nullptr);
+	TryEnableBlueprintInput();
 
 	if (bAutoInstallPostProcessAnimBP && PostProcessInstallMode != ELLMNPCPostProcessInstallMode::Disabled)
 	{
@@ -48,6 +53,16 @@ void ULLMNPCMotionComponent::BeginPlay()
 
 void ULLMNPCMotionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (bEnabledBlueprintInput)
+	{
+		if (AActor* Owner = GetOwner())
+		{
+			Owner->DisableInput(BlueprintInputController.Get());
+		}
+	}
+	bEnabledBlueprintInput = false;
+	BlueprintInputController.Reset();
+
 	if (AnimationAssetPlayer)
 	{
 		AnimationAssetPlayer->Shutdown();
@@ -59,10 +74,55 @@ void ULLMNPCMotionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ULLMNPCMotionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	TryEnableBlueprintInput();
 
 	StartEligiblePlans();
 	UpdateActivePlans(DeltaTime);
 	UpdateMicroMotion(DeltaTime);
+}
+
+bool ULLMNPCMotionComponent::HasBlueprintKeyInputBindings(const UClass* ActorClass)
+{
+	for (const UClass* Class = ActorClass; Class; Class = Class->GetSuperClass())
+	{
+		if (
+			UBlueprintGeneratedClass::GetDynamicBindingObject(
+				Class,
+				UInputKeyDelegateBinding::StaticClass()
+			) != nullptr
+		)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void ULLMNPCMotionComponent::TryEnableBlueprintInput()
+{
+	if (!bShouldEnableBlueprintInput || bEnabledBlueprintInput)
+	{
+		return;
+	}
+
+	AActor* Owner = GetOwner();
+	UWorld* World = GetWorld();
+	APlayerController* PlayerController = World ? World->GetFirstPlayerController() : nullptr;
+	if (!Owner || !PlayerController || !PlayerController->IsLocalController())
+	{
+		return;
+	}
+
+	Owner->EnableInput(PlayerController);
+	BlueprintInputController = PlayerController;
+	bEnabledBlueprintInput = true;
+	UE_LOG(
+		LogLLMNPCActionLayer,
+		Verbose,
+		TEXT("LLMNPCMotion: enabled Blueprint key input for %s."),
+		*Owner->GetName()
+	);
 }
 
 void ULLMNPCMotionComponent::SetAmbientStyle(FName StyleTag)
