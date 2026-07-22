@@ -37,7 +37,7 @@ class LLMNPCACTIONLAYER_API ULLMNPCSceneContextComponent : public UActorComponen
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, Category="LLM NPC|Context|Scene")
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Context|Scene", meta=(AutoCreateRefTerm="SemanticTags"))
 	void RegisterSceneTarget(
 		const FString& TargetRef,
 		AActor* TargetActor,
