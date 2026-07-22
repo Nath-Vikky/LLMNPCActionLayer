@@ -140,6 +140,20 @@ bool FLLMNPCTemplateDraftParserTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("The Draft contains five bounded semantic tracks"), Parsed->ProceduralClip.Tracks.Num(), 5);
 	TestEqual(TEXT("The source sequence is retained"), Info.SourceSequencePath, Summary.SequencePath);
 
+	const FString CompatibleDraft = DraftJson.Replace(
+		TEXT("\"skeleton_profile_id\": \"ue5_manny.v1\","),
+		TEXT("\"skeleton_profile_id\": \"ue5_manny.v1\",\n  \"compatible_skeleton_profile_ids\": [\"custom_humanoid.v1\"],")
+	);
+	ULLMNPCMotionTemplate* CompatibleTemplate = NewObject<ULLMNPCMotionTemplate>();
+	TestTrue(
+		TEXT("A Draft may declare an explicit reviewed Profile compatibility list"),
+		FLLMNPCTemplateDraftImporter::ParseDraftJson(CompatibleDraft, *CompatibleTemplate, Info, Error)
+	);
+	TestTrue(
+		TEXT("The compatibility list reaches template metadata"),
+		CompatibleTemplate->Metadata.CompatibleSkeletonProfileIds.Contains(TEXT("custom_humanoid.v1"))
+	);
+
 	const FString SelfPublished = DraftJson.Replace(
 		TEXT("\"review_state\": \"generated\""),
 		TEXT("\"review_state\": \"published\"")

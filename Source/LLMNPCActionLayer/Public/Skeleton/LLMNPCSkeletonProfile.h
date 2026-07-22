@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "LLMNPCMotionTypes.h"
 #include "LLMNPCSkeletonProfile.generated.h"
 
 class USkeleton;
@@ -63,6 +64,51 @@ struct FLLMNPCFingerPoseProfile
 	TMap<FName, FRotator> SemanticBoneRotations;
 };
 
+USTRUCT(BlueprintType)
+struct FLLMNPCSkeletonProfileQualityReport
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	FName ProfileId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	FString SkeletonPath;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	FString SkeletonSignature;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	int32 MappedBoneCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	float CoreBoneCoverage = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	float FingerBoneCoverage = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	float FingerPoseCoverage = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	float AxisCalibrationCoverage = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	int32 IKChainCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	bool bSignatureCurrent = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	bool bPassed = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	TArray<FString> Errors;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	TArray<FString> Warnings;
+};
+
 UCLASS(BlueprintType)
 class LLMNPCACTIONLAYER_API ULLMNPCSkeletonProfile : public UPrimaryDataAsset
 {
@@ -85,6 +131,9 @@ public:
 	TMap<FName, FLLMNPCBoneAxisBasis> AxisBases;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	bool bApplyAxisCalibrationAtRuntime = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
 	TArray<FLLMNPCIKChainProfile> IKChains;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
@@ -97,10 +146,16 @@ public:
 	FName FindBoneName(FName SemanticBone) const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Skeleton")
+	FLLMNPCPoseBoneBindings BuildPoseBoneBindings() const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Skeleton")
 	bool IsCompatibleSkeleton(const USkeleton* CandidateSkeleton) const;
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Skeleton")
 	bool ValidateProfile(FString& OutError) const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Skeleton")
+	FLLMNPCSkeletonProfileQualityReport BuildQualityReport() const;
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category="LLM NPC|Skeleton")
 	void RefreshSkeletonSignature();

@@ -131,6 +131,23 @@ void ULLMNPCTemplateLibrarySubsystem::RefreshLibrary()
 			));
 			continue;
 		}
+		bool bCompatibleProfilesFound = true;
+		for (const FName CompatibleProfileId : MotionTemplate->Metadata.CompatibleSkeletonProfileIds)
+		{
+			if (!SkeletonProfileIndex.Contains(CompatibleProfileId))
+			{
+				ScanErrors.Add(FString::Printf(
+					TEXT("LLMNPC_TEMPLATE_LIBRARY_COMPATIBLE_PROFILE_NOT_FOUND:%s:%s"),
+					*MotionTemplate->Metadata.TemplateId.ToString(),
+					*CompatibleProfileId.ToString()
+				));
+				bCompatibleProfilesFound = false;
+			}
+		}
+		if (!bCompatibleProfilesFound)
+		{
+			continue;
+		}
 
 		if (TemplateIndex.Contains(MotionTemplate->Metadata.TemplateId))
 		{
@@ -191,42 +208,47 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolvePublishedVa
 		return nullptr;
 	}
 
-	TArray<const ULLMNPCMotionTemplate*> GenericVariants;
-	TArray<const ULLMNPCMotionTemplate*> StyleVariants;
+	TArray<const ULLMNPCMotionTemplate*> ExactGenericVariants;
+	TArray<const ULLMNPCMotionTemplate*> ExactStyleVariants;
+	TArray<const ULLMNPCMotionTemplate*> CompatibleGenericVariants;
+	TArray<const ULLMNPCMotionTemplate*> CompatibleStyleVariants;
 	for (const FName TemplateId : *TemplateIds)
 	{
 		const ULLMNPCMotionTemplate* MotionTemplate = FindPublishedTemplate(TemplateId);
-		if (MotionTemplate && MotionTemplate->Metadata.SkeletonProfileId == SkeletonProfileId)
+		if (MotionTemplate && MotionTemplate->SupportsSkeletonProfile(SkeletonProfileId))
 		{
+			const bool bExactProfile = MotionTemplate->Metadata.SkeletonProfileId == SkeletonProfileId;
 			if (
 				!MotionTemplate->Metadata.VariantStyleTags.IsEmpty() &&
 				MotionTemplate->Metadata.VariantStyleTags.Contains(StyleTag)
 			)
 			{
-				StyleVariants.Add(MotionTemplate);
+				(bExactProfile ? ExactStyleVariants : CompatibleStyleVariants).Add(MotionTemplate);
 			}
 			else if (MotionTemplate->Metadata.VariantStyleTags.IsEmpty())
 			{
-				GenericVariants.Add(MotionTemplate);
+				(bExactProfile ? ExactGenericVariants : CompatibleGenericVariants).Add(MotionTemplate);
 			}
 		}
 	}
-	const TArray<const ULLMNPCMotionTemplate*>& Variants = StyleVariants.IsEmpty()
-		? GenericVariants
-		: StyleVariants;
-	if (Variants.IsEmpty())
+	const TArray<const ULLMNPCMotionTemplate*>* Variants = !ExactStyleVariants.IsEmpty()
+		? &ExactStyleVariants
+		: (!ExactGenericVariants.IsEmpty()
+			? &ExactGenericVariants
+			: (!CompatibleStyleVariants.IsEmpty() ? &CompatibleStyleVariants : &CompatibleGenericVariants));
+	if (Variants->IsEmpty())
 	{
 		return nullptr;
 	}
 
 	float TotalWeight = 0.0f;
-	for (const ULLMNPCMotionTemplate* Variant : Variants)
+	for (const ULLMNPCMotionTemplate* Variant : *Variants)
 	{
 		TotalWeight += Variant->Metadata.VariantWeight;
 	}
 	FRandomStream Stream(RandomSeed);
 	float Choice = RandomSeed == 0 ? 0.0f : Stream.FRandRange(0.0f, TotalWeight);
-	for (const ULLMNPCMotionTemplate* Variant : Variants)
+	for (const ULLMNPCMotionTemplate* Variant : *Variants)
 	{
 		Choice -= Variant->Metadata.VariantWeight;
 		if (Choice <= 0.0f)
@@ -234,7 +256,7 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolvePublishedVa
 			return Variant;
 		}
 	}
-	return Variants.Last();
+	return Variants->Last();
 }
 
 const ULLMNPCSkeletonProfile* ULLMNPCTemplateLibrarySubsystem::FindSkeletonProfile(FName ProfileId) const
@@ -293,7 +315,7 @@ void ULLMNPCTemplateLibrarySubsystem::QueryRuntimeCandidates(
 			for (const FName VariantId : *VariantIds)
 			{
 				const ULLMNPCMotionTemplate* Variant = FindPublishedTemplate(VariantId);
-				if (!Variant || Variant->Metadata.SkeletonProfileId != SkeletonProfileId)
+				if (!Variant || !Variant->SupportsSkeletonProfile(SkeletonProfileId))
 				{
 					continue;
 				}

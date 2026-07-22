@@ -34,6 +34,12 @@ bool ULLMNPCMotionTemplate::IsPublished() const
 	return Metadata.ReviewState == ELLMNPCTemplateReviewState::Published;
 }
 
+bool ULLMNPCMotionTemplate::SupportsSkeletonProfile(FName ProfileId) const
+{
+	return !ProfileId.IsNone() &&
+		(Metadata.SkeletonProfileId == ProfileId || Metadata.CompatibleSkeletonProfileIds.Contains(ProfileId));
+}
+
 bool ULLMNPCMotionTemplate::ValidateTemplate(FString& OutError) const
 {
 	OutError.Reset();
@@ -64,6 +70,18 @@ bool ULLMNPCMotionTemplate::ValidateTemplate(FString& OutError) const
 	{
 		OutError = TEXT("LLMNPC_TEMPLATE_SKELETON_PROFILE_MISSING");
 		return false;
+	}
+	TSet<FName> UniqueCompatibleProfiles;
+	for (const FName CompatibleProfileId : Metadata.CompatibleSkeletonProfileIds)
+	{
+		if (CompatibleProfileId.IsNone() ||
+			CompatibleProfileId == Metadata.SkeletonProfileId ||
+			UniqueCompatibleProfiles.Contains(CompatibleProfileId))
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_COMPATIBLE_SKELETON_PROFILE_INVALID");
+			return false;
+		}
+		UniqueCompatibleProfiles.Add(CompatibleProfileId);
 	}
 
 	if (

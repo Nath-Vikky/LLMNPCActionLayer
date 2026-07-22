@@ -116,7 +116,7 @@ bool FLLMNPCTemplateCompiler::Compile(
 		return false;
 	}
 
-	if (MotionTemplate.Metadata.SkeletonProfileId != SkeletonProfile.ProfileId)
+	if (!MotionTemplate.SupportsSkeletonProfile(SkeletonProfile.ProfileId))
 	{
 		OutError = TEXT("LLMNPC_TEMPLATE_SKELETON_PROFILE_MISMATCH");
 		return false;

@@ -75,9 +75,19 @@ FTransform ApplyLocalRotationDelta(
 FCompactPoseBoneIndex ResolveBoneIndex(
 	const FBoneContainer& BoneContainer,
 	const FBoneReference& Bone,
+	FName BoundBoneName,
 	FName FallbackBoneName
 )
 {
+	if (!BoundBoneName.IsNone())
+	{
+		const int32 BoundMeshPoseIndex = BoneContainer.GetPoseBoneIndexForBoneName(BoundBoneName);
+		if (BoundMeshPoseIndex != INDEX_NONE)
+		{
+			return BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(BoundMeshPoseIndex));
+		}
+	}
+
 	if (Bone.IsValidToEvaluate(BoneContainer))
 	{
 		return Bone.GetCompactPoseIndex(BoneContainer);
@@ -103,20 +113,50 @@ bool IsValidCompactPoseBoneIndex(const FCompactPoseBoneIndex BoneIndex)
 	return BoneIndex.GetInt() != INDEX_NONE;
 }
 
-FCompactPoseBoneIndex ResolveBoneNameIndex(const FBoneContainer& BoneContainer, FName BoneName)
+FName GetSnapshotBinding(bool bUseBindings, const FLLMNPCPoseBoneBindings& Bindings, FName BoneName)
 {
-	if (BoneName.IsNone())
+	return bUseBindings && !Bindings.ProfileId.IsNone() ? BoneName : NAME_None;
+}
+
+FName GetSnapshotFingerBinding(
+	bool bUseBindings,
+	const FLLMNPCPoseBoneBindings& Bindings,
+	const TArray<FName>& FingerBones,
+	int32 Index
+)
+{
+	return bUseBindings && !Bindings.ProfileId.IsNone() && FingerBones.IsValidIndex(Index)
+		? FingerBones[Index]
+		: NAME_None;
+}
+
+FRotator ResolveCalibratedRotation(
+	const FRotator& SemanticRotation,
+	const FLLMNPCResolvedAxisBasis& Basis,
+	bool bApplyCalibration
+)
+{
+	if (!bApplyCalibration)
 	{
-		return FCompactPoseBoneIndex(INDEX_NONE);
+		return SemanticRotation;
 	}
 
-	const int32 MeshPoseIndex = BoneContainer.GetPoseBoneIndexForBoneName(BoneName);
-	if (MeshPoseIndex == INDEX_NONE)
-	{
-		return FCompactPoseBoneIndex(INDEX_NONE);
-	}
-
-	return BoneContainer.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshPoseIndex));
+	const float Pitch = FMath::Clamp(
+		SemanticRotation.Pitch,
+		Basis.MinAdditiveRotation.Pitch,
+		Basis.MaxAdditiveRotation.Pitch);
+	const float Yaw = FMath::Clamp(
+		SemanticRotation.Yaw,
+		Basis.MinAdditiveRotation.Yaw,
+		Basis.MaxAdditiveRotation.Yaw);
+	const float Roll = FMath::Clamp(
+		SemanticRotation.Roll,
+		Basis.MinAdditiveRotation.Roll,
+		Basis.MaxAdditiveRotation.Roll);
+	const FQuat PitchQuat(Basis.PitchAxis.GetSafeNormal(), FMath::DegreesToRadians(Pitch));
+	const FQuat YawQuat(Basis.YawAxis.GetSafeNormal(), FMath::DegreesToRadians(Yaw));
+	const FQuat RollQuat(Basis.RollAxis.GetSafeNormal(), FMath::DegreesToRadians(Roll));
+	return (RollQuat * YawQuat * PitchQuat).GetNormalized().Rotator();
 }
 
 bool RebaseBoneToCurrentParentCS(
@@ -146,6 +186,39 @@ bool RebaseBoneToCurrentParentCS(
 	NewBoneTM.NormalizeRotation();
 	AddOrReplaceBoneTransform(OutBoneTransforms, BoneIndex, NewBoneTM);
 	return true;
+}
+
+void RebaseDescendantsToCurrentHierarchyCS(
+	FComponentSpacePoseContext& Output,
+	TArray<FBoneTransform>& OutBoneTransforms,
+	FCompactPoseBoneIndex RootIndex
+)
+{
+	if (!IsValidCompactPoseBoneIndex(RootIndex))
+	{
+		return;
+	}
+
+	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
+	for (int32 CompactIndex = 0; CompactIndex < BoneContainer.GetCompactPoseNumBones(); ++CompactIndex)
+	{
+		const FCompactPoseBoneIndex CandidateIndex(CompactIndex);
+		if (CandidateIndex == RootIndex)
+		{
+			continue;
+		}
+
+		FCompactPoseBoneIndex ParentIndex = BoneContainer.GetParentBoneIndex(CandidateIndex);
+		while (IsValidCompactPoseBoneIndex(ParentIndex))
+		{
+			if (ParentIndex == RootIndex)
+			{
+				RebaseBoneToCurrentParentCS(Output, OutBoneTransforms, CandidateIndex);
+				break;
+			}
+			ParentIndex = BoneContainer.GetParentBoneIndex(ParentIndex);
+		}
+	}
 }
 }
 
@@ -249,21 +322,23 @@ void FAnimNode_LLMProceduralPose::InitializeBoneReferences(const FBoneContainer&
 
 bool FAnimNode_LLMProceduralPose::IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones)
 {
-	return HeadBone.IsValidToEvaluate(RequiredBones) ||
-		ChestBone.IsValidToEvaluate(RequiredBones) ||
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	return IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, HeadBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.Head), TEXT("head"))) ||
+		IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, ChestBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.Chest), TEXT("spine_03"))) ||
 		HasAnyRightFingerBone(RequiredBones) ||
 		HasAnyLeftFingerBone(RequiredBones) ||
 		(
 			bEnableRightArmIK &&
-			RightUpperArmBone.IsValidToEvaluate(RequiredBones) &&
-			RightLowerArmBone.IsValidToEvaluate(RequiredBones) &&
-			RightHandBone.IsValidToEvaluate(RequiredBones)
+			IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, RightUpperArmBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightUpperArm), TEXT("upperarm_r"))) &&
+			IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, RightLowerArmBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightLowerArm), TEXT("lowerarm_r"))) &&
+			IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, RightHandBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightHand), TEXT("hand_r")))
 		) ||
 		(
 			bEnableLeftArmIK &&
-			LeftUpperArmBone.IsValidToEvaluate(RequiredBones) &&
-			LeftLowerArmBone.IsValidToEvaluate(RequiredBones) &&
-			LeftHandBone.IsValidToEvaluate(RequiredBones)
+			IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, LeftUpperArmBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftUpperArm), TEXT("upperarm_l"))) &&
+			IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, LeftLowerArmBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftLowerArm), TEXT("lowerarm_l"))) &&
+			IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, LeftHandBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftHand), TEXT("hand_l")))
 		);
 }
 
@@ -280,13 +355,24 @@ void FAnimNode_LLMProceduralPose::EvaluateSkeletalControl_AnyThread(
 		return;
 	}
 
-	// Manny's observed nod axis in the current project maps to component-space Z offset.
-	FRotator HeadRotation(0.0f, Snapshot.HeadYaw, Snapshot.HeadPitch);
-	FRotator ChestRotation(Snapshot.ChestPitch, Snapshot.ChestYaw, Snapshot.ChestRoll);
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	const bool bApplyAxisCalibration = bUseBindings && Bindings.bApplyAxisCalibration;
+	// Preserve the calibrated Manny convention until a profile explicitly enables axis remapping.
+	FRotator HeadRotation = bApplyAxisCalibration
+		? ResolveCalibratedRotation(
+			FRotator(Snapshot.HeadPitch, Snapshot.HeadYaw, Snapshot.HeadRoll),
+			Bindings.HeadAxis,
+			true)
+		: FRotator(0.0f, Snapshot.HeadYaw, Snapshot.HeadPitch);
+	FRotator ChestRotation = ResolveCalibratedRotation(
+		FRotator(Snapshot.ChestPitch, Snapshot.ChestYaw, Snapshot.ChestRoll),
+		Bindings.ChestAxis,
+		bApplyAxisCalibration);
 	AddGazeToRotations(Output, HeadRotation, ChestRotation);
 
-	ApplyAdditiveRotationCS(Output, OutBoneTransforms, HeadBone, HeadRotation, NodeAlpha);
-	ApplyAdditiveRotationCS(Output, OutBoneTransforms, ChestBone, ChestRotation, NodeAlpha);
+	ApplyAdditiveRotationCS(Output, OutBoneTransforms, HeadBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.Head), HeadRotation, NodeAlpha);
+	ApplyAdditiveRotationCS(Output, OutBoneTransforms, ChestBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.Chest), ChestRotation, NodeAlpha);
 
 	if (bEnableRightArmIK && Snapshot.RightHandIKAlpha > KINDA_SMALL_NUMBER)
 	{
@@ -311,17 +397,18 @@ void FAnimNode_LLMProceduralPose::ApplyAdditiveRotationCS(
 	FComponentSpacePoseContext& Output,
 	TArray<FBoneTransform>& OutBoneTransforms,
 	const FBoneReference& Bone,
+	FName BoundBoneName,
 	const FRotator& Rotation,
 	float InAlpha
 ) const
 {
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	if (!Bone.IsValidToEvaluate(BoneContainer))
+	const FCompactPoseBoneIndex BoneIndex = ResolveBoneIndex(BoneContainer, Bone, BoundBoneName, NAME_None);
+	if (!IsValidCompactPoseBoneIndex(BoneIndex))
 	{
 		return;
 	}
 
-	const FCompactPoseBoneIndex BoneIndex = Bone.GetCompactPoseIndex(BoneContainer);
 	FTransform NewBoneTM = Output.Pose.GetComponentSpaceTransform(BoneIndex);
 	const FQuat AdditiveQuat = FQuat(Rotation * InAlpha);
 	NewBoneTM.SetRotation(AdditiveQuat * NewBoneTM.GetRotation());
@@ -335,9 +422,20 @@ void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
 ) const
 {
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	if (!RightUpperArmBone.IsValidToEvaluate(BoneContainer) ||
-		!RightLowerArmBone.IsValidToEvaluate(BoneContainer) ||
-		!RightHandBone.IsValidToEvaluate(BoneContainer))
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	const FCompactPoseBoneIndex UpperIndex = ResolveBoneIndex(
+		BoneContainer, RightUpperArmBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightUpperArm), TEXT("upperarm_r"));
+	const FCompactPoseBoneIndex LowerIndex = ResolveBoneIndex(
+		BoneContainer, RightLowerArmBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightLowerArm), TEXT("lowerarm_r"));
+	const FCompactPoseBoneIndex HandIndex = ResolveBoneIndex(
+		BoneContainer, RightHandBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightHand), TEXT("hand_r"));
+	if (!IsValidCompactPoseBoneIndex(UpperIndex) ||
+		!IsValidCompactPoseBoneIndex(LowerIndex) ||
+		!IsValidCompactPoseBoneIndex(HandIndex))
 	{
 		return;
 	}
@@ -347,10 +445,6 @@ void FAnimNode_LLMProceduralPose::ApplySimpleRightArmIK(
 	{
 		return;
 	}
-
-	const FCompactPoseBoneIndex UpperIndex = RightUpperArmBone.GetCompactPoseIndex(BoneContainer);
-	const FCompactPoseBoneIndex LowerIndex = RightLowerArmBone.GetCompactPoseIndex(BoneContainer);
-	const FCompactPoseBoneIndex HandIndex = RightHandBone.GetCompactPoseIndex(BoneContainer);
 
 	FTransform UpperTM = Output.Pose.GetComponentSpaceTransform(UpperIndex);
 	FTransform LowerTM = Output.Pose.GetComponentSpaceTransform(LowerIndex);
@@ -403,9 +497,20 @@ void FAnimNode_LLMProceduralPose::ApplySimpleLeftArmIK(
 ) const
 {
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	if (!LeftUpperArmBone.IsValidToEvaluate(BoneContainer) ||
-		!LeftLowerArmBone.IsValidToEvaluate(BoneContainer) ||
-		!LeftHandBone.IsValidToEvaluate(BoneContainer))
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	const FCompactPoseBoneIndex UpperIndex = ResolveBoneIndex(
+		BoneContainer, LeftUpperArmBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftUpperArm), TEXT("upperarm_l"));
+	const FCompactPoseBoneIndex LowerIndex = ResolveBoneIndex(
+		BoneContainer, LeftLowerArmBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftLowerArm), TEXT("lowerarm_l"));
+	const FCompactPoseBoneIndex HandIndex = ResolveBoneIndex(
+		BoneContainer, LeftHandBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftHand), TEXT("hand_l"));
+	if (!IsValidCompactPoseBoneIndex(UpperIndex) ||
+		!IsValidCompactPoseBoneIndex(LowerIndex) ||
+		!IsValidCompactPoseBoneIndex(HandIndex))
 	{
 		return;
 	}
@@ -416,9 +521,6 @@ void FAnimNode_LLMProceduralPose::ApplySimpleLeftArmIK(
 		return;
 	}
 
-	const FCompactPoseBoneIndex UpperIndex = LeftUpperArmBone.GetCompactPoseIndex(BoneContainer);
-	const FCompactPoseBoneIndex LowerIndex = LeftLowerArmBone.GetCompactPoseIndex(BoneContainer);
-	const FCompactPoseBoneIndex HandIndex = LeftHandBone.GetCompactPoseIndex(BoneContainer);
 	FTransform UpperTM = Output.Pose.GetComponentSpaceTransform(UpperIndex);
 	FTransform LowerTM = Output.Pose.GetComponentSpaceTransform(LowerIndex);
 	FTransform HandTM = Output.Pose.GetComponentSpaceTransform(HandIndex);
@@ -476,16 +578,24 @@ void FAnimNode_LLMProceduralPose::ApplyRightArmAdditiveRotationsLocal(
 	}
 
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	if (!RightUpperArmBone.IsValidToEvaluate(BoneContainer) ||
-		!RightLowerArmBone.IsValidToEvaluate(BoneContainer) ||
-		!RightHandBone.IsValidToEvaluate(BoneContainer))
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	const FCompactPoseBoneIndex UpperIndex = ResolveBoneIndex(
+		BoneContainer, RightUpperArmBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightUpperArm), TEXT("upperarm_r"));
+	const FCompactPoseBoneIndex LowerIndex = ResolveBoneIndex(
+		BoneContainer, RightLowerArmBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightLowerArm), TEXT("lowerarm_r"));
+	const FCompactPoseBoneIndex HandIndex = ResolveBoneIndex(
+		BoneContainer, RightHandBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightHand), TEXT("hand_r"));
+	if (!IsValidCompactPoseBoneIndex(UpperIndex) ||
+		!IsValidCompactPoseBoneIndex(LowerIndex) ||
+		!IsValidCompactPoseBoneIndex(HandIndex))
 	{
 		return;
 	}
 
-	const FCompactPoseBoneIndex UpperIndex = RightUpperArmBone.GetCompactPoseIndex(BoneContainer);
-	const FCompactPoseBoneIndex LowerIndex = RightLowerArmBone.GetCompactPoseIndex(BoneContainer);
-	const FCompactPoseBoneIndex HandIndex = RightHandBone.GetCompactPoseIndex(BoneContainer);
 	const FCompactPoseBoneIndex UpperParentIndex = BoneContainer.GetParentBoneIndex(UpperIndex);
 
 	const FTransform UpperParentTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperParentIndex);
@@ -496,10 +606,17 @@ void FAnimNode_LLMProceduralPose::ApplyRightArmAdditiveRotationsLocal(
 	FTransform UpperLocalTM = OriginalUpperTM.GetRelativeTransform(UpperParentTM);
 	FTransform LowerLocalTM = OriginalLowerTM.GetRelativeTransform(OriginalUpperTM);
 	FTransform HandLocalTM = OriginalHandTM.GetRelativeTransform(OriginalLowerTM);
+	const bool bApplyAxisCalibration = bUseBindings && Bindings.bApplyAxisCalibration;
+	const FRotator UpperRotation = ResolveCalibratedRotation(
+		Snapshot.RightUpperArmAdditiveRotation, Bindings.RightUpperArmAxis, bApplyAxisCalibration);
+	const FRotator LowerRotation = ResolveCalibratedRotation(
+		Snapshot.RightLowerArmAdditiveRotation, Bindings.RightLowerArmAxis, bApplyAxisCalibration);
+	const FRotator HandRotation = ResolveCalibratedRotation(
+		Snapshot.RightHandAdditiveRotation, Bindings.RightHandAxis, bApplyAxisCalibration);
 
-	UpperLocalTM = ApplyLocalRotationDelta(UpperLocalTM, Snapshot.RightUpperArmAdditiveRotation, InAlpha);
-	LowerLocalTM = ApplyLocalRotationDelta(LowerLocalTM, Snapshot.RightLowerArmAdditiveRotation, InAlpha);
-	HandLocalTM = ApplyLocalRotationDelta(HandLocalTM, Snapshot.RightHandAdditiveRotation, InAlpha);
+	UpperLocalTM = ApplyLocalRotationDelta(UpperLocalTM, UpperRotation, InAlpha);
+	LowerLocalTM = ApplyLocalRotationDelta(LowerLocalTM, LowerRotation, InAlpha);
+	HandLocalTM = ApplyLocalRotationDelta(HandLocalTM, HandRotation, InAlpha);
 
 	FTransform UpperTM = UpperLocalTM * UpperParentTM;
 	UpperTM.NormalizeRotation();
@@ -532,33 +649,54 @@ void FAnimNode_LLMProceduralPose::ApplyLeftArmAdditiveRotationsLocal(
 	}
 
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	if (!LeftUpperArmBone.IsValidToEvaluate(BoneContainer) ||
-		!LeftLowerArmBone.IsValidToEvaluate(BoneContainer) ||
-		!LeftHandBone.IsValidToEvaluate(BoneContainer))
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	const FCompactPoseBoneIndex UpperIndex = ResolveBoneIndex(
+		BoneContainer, LeftUpperArmBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftUpperArm), TEXT("upperarm_l"));
+	const FCompactPoseBoneIndex LowerIndex = ResolveBoneIndex(
+		BoneContainer, LeftLowerArmBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftLowerArm), TEXT("lowerarm_l"));
+	const FCompactPoseBoneIndex HandIndex = ResolveBoneIndex(
+		BoneContainer, LeftHandBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftHand), TEXT("hand_l"));
+	if (!IsValidCompactPoseBoneIndex(UpperIndex) ||
+		!IsValidCompactPoseBoneIndex(LowerIndex) ||
+		!IsValidCompactPoseBoneIndex(HandIndex))
 	{
 		return;
 	}
 
-	const FCompactPoseBoneIndex UpperIndex = LeftUpperArmBone.GetCompactPoseIndex(BoneContainer);
-	const FCompactPoseBoneIndex LowerIndex = LeftLowerArmBone.GetCompactPoseIndex(BoneContainer);
-	const FCompactPoseBoneIndex HandIndex = LeftHandBone.GetCompactPoseIndex(BoneContainer);
 	const FCompactPoseBoneIndex UpperParentIndex = BoneContainer.GetParentBoneIndex(UpperIndex);
 
 	const FTransform UpperParentTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperParentIndex);
 	const FTransform OriginalUpperTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, UpperIndex);
 	const FTransform OriginalLowerTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, LowerIndex);
 	const FTransform OriginalHandTM = GetCurrentBoneTransformCS(Output, OutBoneTransforms, HandIndex);
+	const bool bApplyAxisCalibration = bUseBindings && Bindings.bApplyAxisCalibration;
+	const FRotator UpperRotation = ResolveCalibratedRotation(
+		Snapshot.LeftUpperArmAdditiveRotation, Bindings.LeftUpperArmAxis, bApplyAxisCalibration);
+	const FRotator LowerRotation = ResolveCalibratedRotation(
+		Snapshot.LeftLowerArmAdditiveRotation, Bindings.LeftLowerArmAxis, bApplyAxisCalibration);
+	const FRotator HandRotation = ResolveCalibratedRotation(
+		Snapshot.LeftHandAdditiveRotation, Bindings.LeftHandAxis, bApplyAxisCalibration);
 	if (Snapshot.bLeftArmFKMirroredSource)
 	{
-		if (!RightUpperArmBone.IsValidToEvaluate(BoneContainer) ||
-			!RightLowerArmBone.IsValidToEvaluate(BoneContainer) ||
-			!RightHandBone.IsValidToEvaluate(BoneContainer))
+		const FCompactPoseBoneIndex RightUpperIndex = ResolveBoneIndex(
+			BoneContainer, RightUpperArmBone,
+			GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightUpperArm), TEXT("upperarm_r"));
+		const FCompactPoseBoneIndex RightLowerIndex = ResolveBoneIndex(
+			BoneContainer, RightLowerArmBone,
+			GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightLowerArm), TEXT("lowerarm_r"));
+		const FCompactPoseBoneIndex RightHandIndex = ResolveBoneIndex(
+			BoneContainer, RightHandBone,
+			GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightHand), TEXT("hand_r"));
+		if (!IsValidCompactPoseBoneIndex(RightUpperIndex) ||
+			!IsValidCompactPoseBoneIndex(RightLowerIndex) ||
+			!IsValidCompactPoseBoneIndex(RightHandIndex))
 		{
 			return;
 		}
-		const FCompactPoseBoneIndex RightUpperIndex = RightUpperArmBone.GetCompactPoseIndex(BoneContainer);
-		const FCompactPoseBoneIndex RightLowerIndex = RightLowerArmBone.GetCompactPoseIndex(BoneContainer);
-		const FCompactPoseBoneIndex RightHandIndex = RightHandBone.GetCompactPoseIndex(BoneContainer);
 		const FCompactPoseBoneIndex RightParentIndex = BoneContainer.GetParentBoneIndex(RightUpperIndex);
 		const FLLMNPCArmChainTransforms Mirrored = FLLMNPCMotionMirror::MirrorRightArmFKAcrossSkeletonX(
 			GetCurrentBoneTransformCS(Output, OutBoneTransforms, RightParentIndex),
@@ -567,9 +705,9 @@ void FAnimNode_LLMProceduralPose::ApplyLeftArmAdditiveRotationsLocal(
 				GetCurrentBoneTransformCS(Output, OutBoneTransforms, RightLowerIndex),
 				GetCurrentBoneTransformCS(Output, OutBoneTransforms, RightHandIndex)
 			},
-			Snapshot.LeftUpperArmAdditiveRotation,
-			Snapshot.LeftLowerArmAdditiveRotation,
-			Snapshot.LeftHandAdditiveRotation,
+			UpperRotation,
+			LowerRotation,
+			HandRotation,
 			UpperParentTM,
 			{ OriginalUpperTM, OriginalLowerTM, OriginalHandTM },
 			InAlpha
@@ -584,9 +722,9 @@ void FAnimNode_LLMProceduralPose::ApplyLeftArmAdditiveRotationsLocal(
 	FTransform LowerLocalTM = OriginalLowerTM.GetRelativeTransform(OriginalUpperTM);
 	FTransform HandLocalTM = OriginalHandTM.GetRelativeTransform(OriginalLowerTM);
 
-	UpperLocalTM = ApplyLocalRotationDelta(UpperLocalTM, Snapshot.LeftUpperArmAdditiveRotation, InAlpha);
-	LowerLocalTM = ApplyLocalRotationDelta(LowerLocalTM, Snapshot.LeftLowerArmAdditiveRotation, InAlpha);
-	HandLocalTM = ApplyLocalRotationDelta(HandLocalTM, Snapshot.LeftHandAdditiveRotation, InAlpha);
+	UpperLocalTM = ApplyLocalRotationDelta(UpperLocalTM, UpperRotation, InAlpha);
+	LowerLocalTM = ApplyLocalRotationDelta(LowerLocalTM, LowerRotation, InAlpha);
+	HandLocalTM = ApplyLocalRotationDelta(HandLocalTM, HandRotation, InAlpha);
 
 	FTransform UpperTM = UpperLocalTM * UpperParentTM;
 	UpperTM.NormalizeRotation();
@@ -606,46 +744,20 @@ void FAnimNode_LLMProceduralPose::PropagateRightHandChildrenCS(
 ) const
 {
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	const FCompactPoseBoneIndex HandIndex = ResolveBoneIndex(BoneContainer, RightHandBone, TEXT("hand_r"));
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	const FCompactPoseBoneIndex HandIndex = ResolveBoneIndex(
+		BoneContainer,
+		RightHandBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightHand),
+		TEXT("hand_r")
+	);
 	if (!IsValidCompactPoseBoneIndex(HandIndex) || !HasBoneTransform(OutBoneTransforms, HandIndex))
 	{
 		return;
 	}
 
-	const FName RightHandChildren[] = {
-		TEXT("wrist_inner_r"),
-		TEXT("wrist_outer_r"),
-		TEXT("weapon_r"),
-
-		TEXT("thumb_01_r"),
-		TEXT("thumb_02_r"),
-		TEXT("thumb_03_r"),
-
-		TEXT("index_metacarpal_r"),
-		TEXT("index_01_r"),
-		TEXT("index_02_r"),
-		TEXT("index_03_r"),
-
-		TEXT("middle_metacarpal_r"),
-		TEXT("middle_01_r"),
-		TEXT("middle_02_r"),
-		TEXT("middle_03_r"),
-
-		TEXT("ring_metacarpal_r"),
-		TEXT("ring_01_r"),
-		TEXT("ring_02_r"),
-		TEXT("ring_03_r"),
-
-		TEXT("pinky_metacarpal_r"),
-		TEXT("pinky_01_r"),
-		TEXT("pinky_02_r"),
-		TEXT("pinky_03_r")
-	};
-
-	for (const FName BoneName : RightHandChildren)
-	{
-		RebaseBoneToCurrentParentCS(Output, OutBoneTransforms, ResolveBoneNameIndex(BoneContainer, BoneName));
-	}
+	RebaseDescendantsToCurrentHierarchyCS(Output, OutBoneTransforms, HandIndex);
 }
 
 void FAnimNode_LLMProceduralPose::PropagateLeftHandChildrenCS(
@@ -654,24 +766,20 @@ void FAnimNode_LLMProceduralPose::PropagateLeftHandChildrenCS(
 ) const
 {
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	const FCompactPoseBoneIndex HandIndex = ResolveBoneIndex(BoneContainer, LeftHandBone, TEXT("hand_l"));
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	const FCompactPoseBoneIndex HandIndex = ResolveBoneIndex(
+		BoneContainer,
+		LeftHandBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftHand),
+		TEXT("hand_l")
+	);
 	if (!IsValidCompactPoseBoneIndex(HandIndex) || !HasBoneTransform(OutBoneTransforms, HandIndex))
 	{
 		return;
 	}
 
-	const FName LeftHandChildren[] = {
-		TEXT("wrist_inner_l"), TEXT("wrist_outer_l"), TEXT("weapon_l"),
-		TEXT("thumb_01_l"), TEXT("thumb_02_l"), TEXT("thumb_03_l"),
-		TEXT("index_metacarpal_l"), TEXT("index_01_l"), TEXT("index_02_l"), TEXT("index_03_l"),
-		TEXT("middle_metacarpal_l"), TEXT("middle_01_l"), TEXT("middle_02_l"), TEXT("middle_03_l"),
-		TEXT("ring_metacarpal_l"), TEXT("ring_01_l"), TEXT("ring_02_l"), TEXT("ring_03_l"),
-		TEXT("pinky_metacarpal_l"), TEXT("pinky_01_l"), TEXT("pinky_02_l"), TEXT("pinky_03_l")
-	};
-	for (const FName BoneName : LeftHandChildren)
-	{
-		RebaseBoneToCurrentParentCS(Output, OutBoneTransforms, ResolveBoneNameIndex(BoneContainer, BoneName));
-	}
+	RebaseDescendantsToCurrentHierarchyCS(Output, OutBoneTransforms, HandIndex);
 }
 
 bool FAnimNode_LLMProceduralPose::HasAnyRightFingerBone(const FBoneContainer& RequiredBones) const
@@ -700,12 +808,20 @@ bool FAnimNode_LLMProceduralPose::HasAnyRightFingerBone(const FBoneContainer& Re
 		{RightPinky03Bone, TEXT("pinky_03_r")}
 	};
 
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	int32 BindingIndex = 0;
 	for (const FFingerBoneBinding& FingerBone : FingerBones)
 	{
-		if (IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, FingerBone.Bone, FingerBone.FallbackBoneName)))
+		if (IsValidCompactPoseBoneIndex(ResolveBoneIndex(
+			RequiredBones,
+			FingerBone.Bone,
+			GetSnapshotFingerBinding(bUseBindings, Bindings, Bindings.LeftFingerBones, BindingIndex),
+			FingerBone.FallbackBoneName)))
 		{
 			return true;
 		}
+		++BindingIndex;
 	}
 
 	return false;
@@ -725,12 +841,20 @@ bool FAnimNode_LLMProceduralPose::HasAnyLeftFingerBone(const FBoneContainer& Req
 		{LeftRing01Bone, TEXT("ring_01_l")}, {LeftRing02Bone, TEXT("ring_02_l")}, {LeftRing03Bone, TEXT("ring_03_l")},
 		{LeftPinky01Bone, TEXT("pinky_01_l")}, {LeftPinky02Bone, TEXT("pinky_02_l")}, {LeftPinky03Bone, TEXT("pinky_03_l")}
 	};
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	int32 BindingIndex = 0;
 	for (const FFingerBoneBinding& FingerBone : FingerBones)
 	{
-		if (IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, FingerBone.Bone, FingerBone.FallbackBoneName)))
+		if (IsValidCompactPoseBoneIndex(ResolveBoneIndex(
+			RequiredBones,
+			FingerBone.Bone,
+			GetSnapshotFingerBinding(bUseBindings, Bindings, Bindings.RightFingerBones, BindingIndex),
+			FingerBone.FallbackBoneName)))
 		{
 			return true;
 		}
+		++BindingIndex;
 	}
 	return false;
 }
@@ -739,6 +863,7 @@ void FAnimNode_LLMProceduralPose::ApplyFingerRotationLocal(
 	FComponentSpacePoseContext& Output,
 	TArray<FBoneTransform>& OutBoneTransforms,
 	const FBoneReference& Bone,
+	FName BoundBoneName,
 	FName FallbackBoneName,
 	const FRotator& Rotation,
 	float InAlpha
@@ -750,7 +875,12 @@ void FAnimNode_LLMProceduralPose::ApplyFingerRotationLocal(
 	}
 
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	const FCompactPoseBoneIndex BoneIndex = ResolveBoneIndex(BoneContainer, Bone, FallbackBoneName);
+	const FCompactPoseBoneIndex BoneIndex = ResolveBoneIndex(
+		BoneContainer,
+		Bone,
+		BoundBoneName,
+		FallbackBoneName
+	);
 	if (!IsValidCompactPoseBoneIndex(BoneIndex))
 	{
 		return;
@@ -787,50 +917,51 @@ void FAnimNode_LLMProceduralPose::ApplyRightFingerPoseLocal(
 		return;
 	}
 
-	if (OpenAlpha > KINDA_SMALL_NUMBER)
+	struct FFingerPoseBinding
 	{
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb01Bone, TEXT("thumb_01_r"), FRotator(-5.0f, 2.0f, 6.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb02Bone, TEXT("thumb_02_r"), FRotator(-2.0f, 2.0f, 2.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb03Bone, TEXT("thumb_03_r"), FRotator(0.0f, 1.0f, 0.0f), OpenAlpha);
-
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex01Bone, TEXT("index_01_r"), FRotator(0.0f, 7.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex02Bone, TEXT("index_02_r"), FRotator(0.0f, 5.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex03Bone, TEXT("index_03_r"), FRotator(0.0f, 2.0f, 0.0f), OpenAlpha);
-
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle01Bone, TEXT("middle_01_r"), FRotator(0.0f, 6.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle02Bone, TEXT("middle_02_r"), FRotator(0.0f, 5.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle03Bone, TEXT("middle_03_r"), FRotator(0.0f, 2.0f, 0.0f), OpenAlpha);
-
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing01Bone, TEXT("ring_01_r"), FRotator(0.0f, 6.0f, 1.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing02Bone, TEXT("ring_02_r"), FRotator(0.0f, 5.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing03Bone, TEXT("ring_03_r"), FRotator(0.0f, 2.0f, 0.0f), OpenAlpha);
-
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky01Bone, TEXT("pinky_01_r"), FRotator(0.0f, 6.0f, 2.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky02Bone, TEXT("pinky_02_r"), FRotator(0.0f, 5.0f, 0.0f), OpenAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky03Bone, TEXT("pinky_03_r"), FRotator(0.0f, 2.0f, 0.0f), OpenAlpha);
-	}
-
-	if (PointAlpha > KINDA_SMALL_NUMBER)
+		const FBoneReference* Bone;
+		FName BoneName;
+		FRotator OpenRotation;
+		FRotator PointRotation;
+	};
+	const FFingerPoseBinding FingerBindings[] = {
+		{&RightThumb01Bone, TEXT("thumb_01_r"), FRotator(-5.0f, 2.0f, 6.0f), FRotator(12.0f, -18.0f, -8.0f)},
+		{&RightThumb02Bone, TEXT("thumb_02_r"), FRotator(-2.0f, 2.0f, 2.0f), FRotator(8.0f, -16.0f, -4.0f)},
+		{&RightThumb03Bone, TEXT("thumb_03_r"), FRotator(0.0f, 1.0f, 0.0f), FRotator(2.0f, -8.0f, 0.0f)},
+		{&RightIndex01Bone, TEXT("index_01_r"), FRotator(0.0f, 7.0f, 0.0f), FRotator(0.0f, -3.0f, 0.0f)},
+		{&RightIndex02Bone, TEXT("index_02_r"), FRotator(0.0f, 5.0f, 0.0f), FRotator(0.0f, -2.0f, 0.0f)},
+		{&RightIndex03Bone, TEXT("index_03_r"), FRotator(0.0f, 2.0f, 0.0f), FRotator(0.0f, -1.0f, 0.0f)},
+		{&RightMiddle01Bone, TEXT("middle_01_r"), FRotator(0.0f, 6.0f, 0.0f), FRotator(0.0f, -44.0f, 0.0f)},
+		{&RightMiddle02Bone, TEXT("middle_02_r"), FRotator(0.0f, 5.0f, 0.0f), FRotator(0.0f, -54.0f, 0.0f)},
+		{&RightMiddle03Bone, TEXT("middle_03_r"), FRotator(0.0f, 2.0f, 0.0f), FRotator(0.0f, -28.0f, 0.0f)},
+		{&RightRing01Bone, TEXT("ring_01_r"), FRotator(0.0f, 6.0f, 1.0f), FRotator(0.0f, -46.0f, 2.0f)},
+		{&RightRing02Bone, TEXT("ring_02_r"), FRotator(0.0f, 5.0f, 0.0f), FRotator(0.0f, -56.0f, 0.0f)},
+		{&RightRing03Bone, TEXT("ring_03_r"), FRotator(0.0f, 2.0f, 0.0f), FRotator(0.0f, -30.0f, 0.0f)},
+		{&RightPinky01Bone, TEXT("pinky_01_r"), FRotator(0.0f, 6.0f, 2.0f), FRotator(2.0f, -48.0f, 4.0f)},
+		{&RightPinky02Bone, TEXT("pinky_02_r"), FRotator(0.0f, 5.0f, 0.0f), FRotator(2.0f, -58.0f, 0.0f)},
+		{&RightPinky03Bone, TEXT("pinky_03_r"), FRotator(0.0f, 2.0f, 0.0f), FRotator(0.0f, -32.0f, 0.0f)}
+	};
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(FingerBindings); ++Index)
 	{
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb01Bone, TEXT("thumb_01_r"), FRotator(12.0f, -18.0f, -8.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb02Bone, TEXT("thumb_02_r"), FRotator(8.0f, -16.0f, -4.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightThumb03Bone, TEXT("thumb_03_r"), FRotator(2.0f, -8.0f, 0.0f), PointAlpha);
-
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex01Bone, TEXT("index_01_r"), FRotator(0.0f, -3.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex02Bone, TEXT("index_02_r"), FRotator(0.0f, -2.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightIndex03Bone, TEXT("index_03_r"), FRotator(0.0f, -1.0f, 0.0f), PointAlpha);
-
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle01Bone, TEXT("middle_01_r"), FRotator(0.0f, -44.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle02Bone, TEXT("middle_02_r"), FRotator(0.0f, -54.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightMiddle03Bone, TEXT("middle_03_r"), FRotator(0.0f, -28.0f, 0.0f), PointAlpha);
-
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing01Bone, TEXT("ring_01_r"), FRotator(0.0f, -46.0f, 2.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing02Bone, TEXT("ring_02_r"), FRotator(0.0f, -56.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightRing03Bone, TEXT("ring_03_r"), FRotator(0.0f, -30.0f, 0.0f), PointAlpha);
-
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky01Bone, TEXT("pinky_01_r"), FRotator(2.0f, -48.0f, 4.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky02Bone, TEXT("pinky_02_r"), FRotator(2.0f, -58.0f, 0.0f), PointAlpha);
-		ApplyFingerRotationLocal(Output, OutBoneTransforms, RightPinky03Bone, TEXT("pinky_03_r"), FRotator(0.0f, -32.0f, 0.0f), PointAlpha);
+		const FFingerPoseBinding& Binding = FingerBindings[Index];
+		const FName BoundBoneName = GetSnapshotFingerBinding(
+			bUseBindings, Bindings, Bindings.RightFingerBones, Index);
+		const FRotator OpenRotation = Bindings.RightFingerOpenRotations.IsValidIndex(Index)
+			? Bindings.RightFingerOpenRotations[Index]
+			: Binding.OpenRotation;
+		const FRotator PointRotation = Bindings.RightFingerPointRotations.IsValidIndex(Index)
+			? Bindings.RightFingerPointRotations[Index]
+			: Binding.PointRotation;
+		if (OpenAlpha > KINDA_SMALL_NUMBER)
+		{
+			ApplyFingerRotationLocal(Output, OutBoneTransforms, *Binding.Bone, BoundBoneName, Binding.BoneName, OpenRotation, OpenAlpha);
+		}
+		if (PointAlpha > KINDA_SMALL_NUMBER)
+		{
+			ApplyFingerRotationLocal(Output, OutBoneTransforms, *Binding.Bone, BoundBoneName, Binding.BoneName, PointRotation, PointAlpha);
+		}
 	}
 }
 
@@ -854,7 +985,7 @@ void FAnimNode_LLMProceduralPose::ApplyLeftFingerPoseLocal(
 		FRotator OpenRotation;
 		FRotator PointRotation;
 	};
-	const FFingerPoseBinding Bindings[] = {
+	const FFingerPoseBinding FingerBindings[] = {
 		{&LeftThumb01Bone, TEXT("thumb_01_l"), FRotator(-5.0f, -2.0f, -6.0f), FRotator(12.0f, 18.0f, 8.0f)},
 		{&LeftThumb02Bone, TEXT("thumb_02_l"), FRotator(-2.0f, -2.0f, -2.0f), FRotator(8.0f, 16.0f, 4.0f)},
 		{&LeftThumb03Bone, TEXT("thumb_03_l"), FRotator(0.0f, -1.0f, 0.0f), FRotator(2.0f, 8.0f, 0.0f)},
@@ -871,16 +1002,28 @@ void FAnimNode_LLMProceduralPose::ApplyLeftFingerPoseLocal(
 		{&LeftPinky02Bone, TEXT("pinky_02_l"), FRotator(0.0f, -5.0f, 0.0f), FRotator(2.0f, 58.0f, 0.0f)},
 		{&LeftPinky03Bone, TEXT("pinky_03_l"), FRotator(0.0f, -2.0f, 0.0f), FRotator(0.0f, 32.0f, 0.0f)}
 	};
-	for (const FFingerPoseBinding& Binding : Bindings)
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(FingerBindings); ++Index)
 	{
+		const FFingerPoseBinding& Binding = FingerBindings[Index];
+		const FName BoundBoneName = GetSnapshotFingerBinding(
+			bUseBindings, Bindings, Bindings.LeftFingerBones, Index);
+		const FRotator OpenRotation = Bindings.LeftFingerOpenRotations.IsValidIndex(Index)
+			? Bindings.LeftFingerOpenRotations[Index]
+			: Binding.OpenRotation;
+		const FRotator PointRotation = Bindings.LeftFingerPointRotations.IsValidIndex(Index)
+			? Bindings.LeftFingerPointRotations[Index]
+			: Binding.PointRotation;
 		if (OpenAlpha > KINDA_SMALL_NUMBER)
 		{
 			ApplyFingerRotationLocal(
 				Output,
 				OutBoneTransforms,
 				*Binding.Bone,
+				BoundBoneName,
 				Binding.BoneName,
-				Binding.OpenRotation,
+				OpenRotation,
 				OpenAlpha
 			);
 		}
@@ -890,8 +1033,9 @@ void FAnimNode_LLMProceduralPose::ApplyLeftFingerPoseLocal(
 				Output,
 				OutBoneTransforms,
 				*Binding.Bone,
+				BoundBoneName,
 				Binding.BoneName,
-				Binding.PointRotation,
+				PointRotation,
 				PointAlpha
 			);
 		}
@@ -911,12 +1055,19 @@ void FAnimNode_LLMProceduralPose::AddGazeToRotations(
 	}
 
 	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
-	if (!HeadBone.IsValidToEvaluate(BoneContainer))
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	const FCompactPoseBoneIndex HeadIndex = ResolveBoneIndex(
+		BoneContainer,
+		HeadBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.Head),
+		TEXT("head")
+	);
+	if (!IsValidCompactPoseBoneIndex(HeadIndex))
 	{
 		return;
 	}
 
-	const FCompactPoseBoneIndex HeadIndex = HeadBone.GetCompactPoseIndex(BoneContainer);
 	const FVector HeadLocation = Output.Pose.GetComponentSpaceTransform(HeadIndex).GetLocation();
 	const FVector Direction = (Snapshot.GazeTargetCS - HeadLocation).GetSafeNormal();
 	if (Direction.IsNearlyZero())

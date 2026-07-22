@@ -201,6 +201,7 @@ private:
 	bool bHasActivePlan = false;
 	bool bOriginalPostProcessDisabled = false;
 	FLLMNPCMicroMotionState MicroMotionState;
+	FLLMNPCPoseBoneBindings CachedPoseBoneBindings;
 
 private:
 #if WITH_DEV_AUTOMATION_TESTS
@@ -219,6 +220,7 @@ private:
 		const FLLMNPCTemplateModifiers& Modifiers
 	);
 	void UpdateActivePlans(float DeltaTime);
+	void RefreshPoseBoneBindings();
 	void UpdateMicroMotion(float DeltaTime);
 	bool IsChannelActive(FName Channel) const;
 	static TArray<FName> DeriveMotionChannels(const FLLMMotionPlan& Plan);

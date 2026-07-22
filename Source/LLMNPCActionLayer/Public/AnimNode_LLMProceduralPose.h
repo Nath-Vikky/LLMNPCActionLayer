@@ -20,6 +20,9 @@ struct LLMNPCACTIONLAYER_API FAnimNode_LLMProceduralPose : public FAnimNode_Skel
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(PinShownByDefault))
 	bool bEnableLeftArmIK = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Skeleton")
+	bool bUseSnapshotBoneBindings = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	FRotator RightHandPalmRotationOffset = FRotator::ZeroRotator;
 
@@ -155,6 +158,7 @@ private:
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms,
 		const FBoneReference& Bone,
+		FName BoundBoneName,
 		const FRotator& Rotation,
 		float Alpha
 	) const;
@@ -198,6 +202,7 @@ private:
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms,
 		const FBoneReference& Bone,
+		FName BoundBoneName,
 		FName FallbackBoneName,
 		const FRotator& Rotation,
 		float InAlpha

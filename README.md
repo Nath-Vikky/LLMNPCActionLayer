@@ -55,6 +55,7 @@ player text / story command
 - `ULLMNPCTemplateLibrarySubsystem`
 - `ULLMNPCMotionTemplate`
 - `ULLMNPCSkeletonProfile`
+- `ULLMNPCSkeletonProfileAuthoringSubsystem` (Editor only)
 - `FLLMNPCMotionSampler`
 - `ULLMNPCPostProcessAnimInstance`
 - `FAnimNode_LLMProceduralPose`
@@ -192,6 +193,40 @@ The coordinator rejects self-targets, unavailable targets, player-controlled
 owners, missing path following, partial-path failure, timeouts, and a second
 plan while one is active. `GetBehaviorDebugState` exposes the current step and
 stable failure code for Blueprint, PIE automation, and debugging.
+
+## Multi-Skeleton Profiles
+
+Phase 7 removes Manny bone names from the active procedural execution path.
+`ULLMNPCMotionComponent` resolves the selected `ULLMNPCSkeletonProfile` into an
+animation-thread-safe binding snapshot containing the head, chest, both arm
+chains, finger chains, optional axis bases, and calibrated open/point finger
+poses. `FAnimNode_LLMProceduralPose` consumes those bindings and propagates hand
+motion through the actual descendant hierarchy instead of a Manny-only list.
+
+Templates retain one primary `SkeletonProfileId` and may list explicitly
+reviewed `CompatibleSkeletonProfileIds`. Exact-profile variants win over
+compatible variants. This matrix never means that arbitrary skeletons are
+accepted: the target Profile must exist, validate, match the active mesh
+Skeleton signature, and be named by the template.
+
+Manny and Quinn use the same UE5 Mannequin Skeleton in the demo project, so
+both correctly reuse `ue5_manny.v1`; a duplicate Quinn Profile would add no
+runtime distinction. Skeletons with different bone names or reference poses
+need their own Profile.
+
+The editor-only `ULLMNPCSkeletonProfileAuthoringSubsystem` can generate a
+Profile from common UE or Mixamo humanoid naming, refresh generated mappings,
+set an orthonormal per-bone axis calibration, and write a quality report to:
+
+```text
+Saved/LLMNPCActionLayer/Reports/SkeletonProfiles
+```
+
+Runtime axis remapping is opt-in per Profile so the already approved Manny
+axis convention remains unchanged. Generated Profiles include default finger
+pose calibration, arm IK chains, a Skeleton signature, and coverage metrics;
+they still require preview and human approval before templates declare them
+compatible.
 
 ## Model Providers
 

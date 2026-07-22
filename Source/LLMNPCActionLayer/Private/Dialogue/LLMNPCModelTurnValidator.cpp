@@ -370,7 +370,7 @@ bool FLLMNPCModelTurnValidator::ValidateAndResolve(
 	if (
 		!OutTemplate ||
 		!OutTemplate->Metadata.bAllowRuntimeModelSelection ||
-		OutTemplate->Metadata.SkeletonProfileId != SkeletonProfileId
+		!OutTemplate->SupportsSkeletonProfile(SkeletonProfileId)
 	)
 	{
 		OutTemplate = TemplateLibrary.ResolvePublishedVariant(

@@ -39,6 +39,7 @@ void ULLMNPCMotionComponent::BeginPlay()
 		? MicroMotionSeed
 		: static_cast<int32>(GetTypeHash(GetOwner() ? GetOwner()->GetFName() : GetFName()) & 0x7fffffffU);
 	MicroMotionState.Initialize(ResolvedMicroMotionSeed);
+	RefreshPoseBoneBindings();
 
 	if (bAutoInstallPostProcessAnimBP && PostProcessInstallMode != ELLMNPCPostProcessInstallMode::Disabled)
 	{
@@ -112,6 +113,13 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 		LastValidationError = TEXT("LLMNPC_SKELETON_PROFILE_NOT_FOUND");
 		return false;
 	}
+	FString ProfileValidationError;
+	if (!ResolvedProfile->ValidateProfile(ProfileValidationError))
+	{
+		LastValidationError = ProfileValidationError;
+		return false;
+	}
+	CachedPoseBoneBindings = ResolvedProfile->BuildPoseBoneBindings();
 
 	USkeletalMeshComponent* Mesh = GetOwnerMesh();
 	USkeletalMesh* MeshAsset = Mesh ? Mesh->GetSkeletalMeshAsset() : nullptr;
@@ -565,6 +573,7 @@ bool ULLMNPCMotionComponent::ValidateTargetRefs(const FLLMMotionPlan& Plan, FStr
 void ULLMNPCMotionComponent::UpdateActivePlans(float DeltaTime)
 {
 	CurrentSnapshot = FLLMProceduralPoseSnapshot();
+	CurrentSnapshot.BoneBindings = CachedPoseBoneBindings;
 	USkeletalMeshComponent* Mesh = GetOwnerMesh();
 
 	for (int32 ActiveIndex = ActiveMotions.Num() - 1; ActiveIndex >= 0; --ActiveIndex)
@@ -599,6 +608,15 @@ void ULLMNPCMotionComponent::UpdateActivePlans(float DeltaTime)
 	{
 		ActiveTime = 0.0f;
 		ActiveClipId.Reset();
+	}
+}
+
+void ULLMNPCMotionComponent::RefreshPoseBoneBindings()
+{
+	CachedPoseBoneBindings = FLLMNPCPoseBoneBindings();
+	if (const ULLMNPCSkeletonProfile* ResolvedProfile = SkeletonProfile.LoadSynchronous())
+	{
+		CachedPoseBoneBindings = ResolvedProfile->BuildPoseBoneBindings();
 	}
 }
 

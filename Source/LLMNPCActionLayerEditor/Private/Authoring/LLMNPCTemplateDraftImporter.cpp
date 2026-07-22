@@ -538,7 +538,8 @@ bool FLLMNPCTemplateDraftImporter::ParseDraftJson(
 		TEXT("public_action_id"), TEXT("semantic_version"), TEXT("kind"),
 		TEXT("variant_id"), TEXT("variant_weight"), TEXT("variant_style_tags"),
 		TEXT("review_state"), TEXT("display_name"), TEXT("description"),
-		TEXT("skeleton_profile_id"), TEXT("metadata"), TEXT("modifier_policy"),
+		TEXT("skeleton_profile_id"), TEXT("compatible_skeleton_profile_ids"),
+		TEXT("metadata"), TEXT("modifier_policy"),
 		TEXT("clip"), TEXT("provenance")
 	};
 	if (!ValidateFields(Root, RootFields, TEXT("LLMNPC_DRAFT_ROOT"), OutError))
@@ -663,6 +664,15 @@ bool FLLMNPCTemplateDraftImporter::ParseDraftJson(
 		return false;
 	}
 	OutTemplate.Metadata.SkeletonProfileId = FName(*Value);
+	if (Root->HasField(TEXT("compatible_skeleton_profile_ids")) && !GetNameArray(
+		Root,
+		TEXT("compatible_skeleton_profile_ids"),
+		OutTemplate.Metadata.CompatibleSkeletonProfileIds,
+		OutError
+	))
+	{
+		return false;
+	}
 
 	const TSharedPtr<FJsonObject>* Metadata = nullptr;
 	if (!Root->TryGetObjectField(TEXT("metadata"), Metadata) || !Metadata || !Metadata->IsValid())

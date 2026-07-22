@@ -140,6 +140,9 @@ struct FLLMNPCTemplateMetadata
 	FName SkeletonProfileId = NAME_None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
+	TArray<FName> CompatibleSkeletonProfileIds;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
 	bool bRequiresTarget = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
@@ -187,6 +190,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template")
 	bool IsPublished() const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Template")
+	bool SupportsSkeletonProfile(FName ProfileId) const;
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Template")
 	bool ValidateTemplate(FString& OutError) const;
