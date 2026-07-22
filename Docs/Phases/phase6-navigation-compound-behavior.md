@@ -98,9 +98,14 @@ PIE visual quality remains human-reviewed. Objective verification uses
 `GetBehaviorDebugState`, motion debug state, final actor distance, final facing
 error, and the output log.
 
+The `LLMNPCDemo` integration now provides the first real movement loop:
+
+- `BP_LLMNPC_Manny` registers the possessed player as `player.main` once at runtime;
+- `ThirdPersonMap` contains a covering `NavMeshBoundsVolume` and generated Recast navigation data;
+- objective PIE verification confirms target registration and AI-controller possession.
+
 ## Remaining Phase 6 work
 
-- create the demo Blueprint/NavMesh wiring for the first real movement loop;
 - add interaction-channel arbitration between locomotion and external combat;
 - wait for authored animation completion when a later behavior step depends on
   it;
