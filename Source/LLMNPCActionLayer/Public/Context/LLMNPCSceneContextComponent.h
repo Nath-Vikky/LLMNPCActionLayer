@@ -61,6 +61,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Context|Scene")
 	bool IsTargetAvailable(const FString& TargetRef) const;
 
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Context|Scene")
+	AActor* ResolveSceneTarget(const FString& TargetRef) const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC|Context|Scene")
 	TArray<FName> ActiveStates;
 

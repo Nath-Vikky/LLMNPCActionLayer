@@ -56,7 +56,7 @@ public:
 	FString DeepSeekSystemPrompt;
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection")
-	FString SelectionPromptVersion = TEXT("llmnpc.selection_prompt.v2");
+	FString SelectionPromptVersion = TEXT("llmnpc.selection_prompt.v3");
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection", meta=(ClampMin="1", ClampMax="32"))
 	int32 MaxContextCandidates = 8;
@@ -66,6 +66,39 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection", meta=(ClampMin="8", ClampMax="2048"))
 	int32 MaxSelectionAnalyticsEvents = 128;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior")
+	bool bEnableNavigationIntents = true;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior")
+	bool bSpawnDefaultAIController = true;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior", meta=(ClampMin="50.0", ClampMax="500.0"))
+	float NavigationDefaultAcceptanceRadiusCm = 150.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior", meta=(ClampMin="25.0", ClampMax="250.0"))
+	float NavigationMinAcceptanceRadiusCm = 50.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior", meta=(ClampMin="100.0", ClampMax="1000.0"))
+	float NavigationMaxAcceptanceRadiusCm = 500.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior", meta=(ClampMin="1.0", ClampMax="120.0"))
+	float BehaviorPlanTimeoutSeconds = 20.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior", meta=(ClampMin="1.0", ClampMax="120.0"))
+	float NavigationMoveTimeoutSeconds = 15.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior", meta=(ClampMin="0.1", ClampMax="10.0"))
+	float TargetFacingTimeoutSeconds = 2.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior", meta=(ClampMin="30.0", ClampMax="1080.0"))
+	float TargetFacingTurnRateDegreesPerSecond = 360.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior", meta=(ClampMin="1.0", ClampMax="45.0"))
+	float TargetFacingToleranceDegrees = 5.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior", meta=(ClampMin="0.01", ClampMax="0.25"))
+	float BehaviorTickIntervalSeconds = 0.05f;
 
 	UPROPERTY(Config, EditAnywhere, Category="Runtime|Post Process")
 	TSoftClassPtr<UAnimInstance> DefaultPostProcessAnimClass;

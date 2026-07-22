@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Behavior/LLMNPCBehaviorTypes.h"
 #include "Components/ActorComponent.h"
 #include "Context/LLMNPCContextTypes.h"
 #include "Dialogue/LLMNPCDialogueTypes.h"
@@ -54,6 +55,9 @@ public:
 	void CancelActiveRequest();
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue")
+	void CancelActiveBehavior();
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue")
 	void ResetConversation();
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue")
@@ -91,6 +95,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Dialogue|Debug")
 	FLLMNPCDialogueDebugState GetDebugState() const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Dialogue|Debug")
+	FLLMNPCBehaviorDebugState GetBehaviorDebugState() const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Dialogue|Context")
 	FLLMNPCSelectionContextSnapshot GetSelectionContextSnapshot() const;

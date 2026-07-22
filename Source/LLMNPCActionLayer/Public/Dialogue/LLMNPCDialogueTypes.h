@@ -142,6 +142,12 @@ struct FLLMNPCDialogueTurnResult
 	bool bActionExecuted = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	bool bBehaviorStarted = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	FGuid BehaviorPlanId;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
 	bool bUsedLocalFallback = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")

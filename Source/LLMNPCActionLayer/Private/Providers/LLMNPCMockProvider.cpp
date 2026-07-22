@@ -20,6 +20,7 @@ struct FMockContext
 {
 	bool bHasCandidateList = false;
 	TMap<FName, FMockCandidate> Candidates;
+	TArray<FString> SceneTargetRefs;
 };
 
 FMockContext ParseMockContext(const FLLMNPCModelTurnRequest& Request)
@@ -33,42 +34,63 @@ FMockContext ParseMockContext(const FLLMNPCModelTurnRequest& Request)
 	}
 
 	const TArray<TSharedPtr<FJsonValue>>* Candidates = nullptr;
-	if (!Root->TryGetArrayField(TEXT("candidate_templates"), Candidates) || !Candidates)
+	if (Root->TryGetArrayField(TEXT("candidate_templates"), Candidates) && Candidates)
 	{
-		return Context;
+		Context.bHasCandidateList = true;
+		for (const TSharedPtr<FJsonValue>& Value : *Candidates)
+		{
+			const TSharedPtr<FJsonObject> CandidateObject = Value->AsObject();
+			FString SelectionId;
+			if (!CandidateObject.IsValid() || !CandidateObject->TryGetStringField(TEXT("template_id"), SelectionId))
+			{
+				continue;
+			}
+			FMockCandidate Candidate;
+			CandidateObject->TryGetStringField(TEXT("default_target_ref"), Candidate.DefaultTargetRef);
+			double RecommendedAmplitude = 1.0;
+			if (CandidateObject->TryGetNumberField(TEXT("recommended_amplitude"), RecommendedAmplitude))
+			{
+				Candidate.RecommendedAmplitude = static_cast<float>(RecommendedAmplitude);
+			}
+			double RecommendedSpeedScale = 1.0;
+			if (CandidateObject->TryGetNumberField(TEXT("recommended_speed_scale"), RecommendedSpeedScale))
+			{
+				Candidate.RecommendedSpeedScale = static_cast<float>(RecommendedSpeedScale);
+			}
+			double RecommendedDurationScale = 1.0;
+			if (CandidateObject->TryGetNumberField(TEXT("recommended_duration_scale"), RecommendedDurationScale))
+			{
+				Candidate.RecommendedDurationScale = static_cast<float>(RecommendedDurationScale);
+			}
+			FString RecommendedStyle;
+			if (CandidateObject->TryGetStringField(TEXT("recommended_style"), RecommendedStyle))
+			{
+				Candidate.RecommendedStyle = FName(*RecommendedStyle);
+			}
+			Context.Candidates.Add(FName(*SelectionId), Candidate);
+		}
 	}
-	Context.bHasCandidateList = true;
-	for (const TSharedPtr<FJsonValue>& Value : *Candidates)
+
+	const TSharedPtr<FJsonObject>* SelectionContext = nullptr;
+	if (Root->TryGetObjectField(TEXT("selection_context"), SelectionContext) && SelectionContext && SelectionContext->IsValid())
 	{
-		const TSharedPtr<FJsonObject> CandidateObject = Value->AsObject();
-		FString SelectionId;
-		if (!CandidateObject.IsValid() || !CandidateObject->TryGetStringField(TEXT("template_id"), SelectionId))
+		const TArray<TSharedPtr<FJsonValue>>* SceneTargets = nullptr;
+		if ((*SelectionContext)->TryGetArrayField(TEXT("scene_targets"), SceneTargets) && SceneTargets)
 		{
-			continue;
+			for (const TSharedPtr<FJsonValue>& Value : *SceneTargets)
+			{
+				const TSharedPtr<FJsonObject> TargetObject = Value->AsObject();
+				FString TargetRef;
+				if (
+					TargetObject.IsValid() &&
+					TargetObject->TryGetStringField(TEXT("target_ref"), TargetRef) &&
+					!TargetRef.TrimStartAndEnd().IsEmpty()
+				)
+				{
+					Context.SceneTargetRefs.AddUnique(TargetRef.TrimStartAndEnd());
+				}
+			}
 		}
-		FMockCandidate Candidate;
-		CandidateObject->TryGetStringField(TEXT("default_target_ref"), Candidate.DefaultTargetRef);
-		double RecommendedAmplitude = 1.0;
-		if (CandidateObject->TryGetNumberField(TEXT("recommended_amplitude"), RecommendedAmplitude))
-		{
-			Candidate.RecommendedAmplitude = static_cast<float>(RecommendedAmplitude);
-		}
-		double RecommendedSpeedScale = 1.0;
-		if (CandidateObject->TryGetNumberField(TEXT("recommended_speed_scale"), RecommendedSpeedScale))
-		{
-			Candidate.RecommendedSpeedScale = static_cast<float>(RecommendedSpeedScale);
-		}
-		double RecommendedDurationScale = 1.0;
-		if (CandidateObject->TryGetNumberField(TEXT("recommended_duration_scale"), RecommendedDurationScale))
-		{
-			Candidate.RecommendedDurationScale = static_cast<float>(RecommendedDurationScale);
-		}
-		FString RecommendedStyle;
-		if (CandidateObject->TryGetStringField(TEXT("recommended_style"), RecommendedStyle))
-		{
-			Candidate.RecommendedStyle = FName(*RecommendedStyle);
-		}
-		Context.Candidates.Add(FName(*SelectionId), Candidate);
 	}
 	return Context;
 }
@@ -145,11 +167,20 @@ FString BuildMockResponse(const FLLMNPCModelTurnRequest& Request)
 		Normalized.Contains(TEXT("\u5728\u54ea")) ||
 		Normalized.Contains(TEXT("\u54ea\u91cc")) ||
 		Normalized.Contains(TEXT("\u95e8"));
+	const bool bWantsMove =
+		Normalized.Contains(TEXT("come here")) ||
+		Normalized.Contains(TEXT("come to")) ||
+		Normalized.Contains(TEXT("move to")) ||
+		Normalized.Contains(TEXT("walk to")) ||
+		Normalized.Contains(TEXT("\u8fc7\u6765")) ||
+		Normalized.Contains(TEXT("\u8d70\u5230")) ||
+		Normalized.Contains(TEXT("\u9760\u8fd1"));
 
 	FName SelectedAction = NAME_None;
 	FName Style(TEXT("neutral"));
 	FName ReasonTag(TEXT("no_body_action_needed"));
 	FString TargetRef;
+	FString LocomotionTargetRef;
 	float Amplitude = 1.0f;
 	float SpeedScale = 1.0f;
 	float DurationScale = 1.0f;
@@ -189,6 +220,10 @@ FString BuildMockResponse(const FLLMNPCModelTurnRequest& Request)
 			Style = Candidate->RecommendedStyle;
 		}
 	}
+	if (bWantsMove && !Context.SceneTargetRefs.IsEmpty())
+	{
+		LocomotionTargetRef = Context.SceneTargetRefs[0];
+	}
 
 	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
 	Root->SetStringField(TEXT("schema_version"), TEXT("llmnpc.model_turn.v1"));
@@ -203,6 +238,17 @@ FString BuildMockResponse(const FLLMNPCModelTurnRequest& Request)
 		Action->SetStringField(TEXT("template_id"), SelectedAction.ToString());
 		Action->SetStringField(TEXT("style"), Style.ToString());
 		Action->SetStringField(TEXT("reason_tag"), ReasonTag.ToString());
+	}
+	else if (!LocomotionTargetRef.IsEmpty())
+	{
+		Root->SetStringField(
+			TEXT("assistant_text"),
+			bFallback ? TEXT("The service is offline, so I used a safe local movement request.") : TEXT("I am on my way.")
+		);
+		Action->SetStringField(TEXT("decision"), TEXT("none"));
+		Action->SetStringField(TEXT("template_id"), TEXT(""));
+		Action->SetStringField(TEXT("style"), TEXT("neutral"));
+		Action->SetStringField(TEXT("reason_tag"), TEXT("locomotion_request"));
 	}
 	else
 	{
@@ -223,9 +269,15 @@ FString BuildMockResponse(const FLLMNPCModelTurnRequest& Request)
 	Root->SetObjectField(TEXT("action"), Action);
 
 	TSharedRef<FJsonObject> Locomotion = MakeShared<FJsonObject>();
-	Locomotion->SetStringField(TEXT("decision"), TEXT("none"));
-	Locomotion->SetStringField(TEXT("target_ref"), TEXT(""));
-	Locomotion->SetNumberField(TEXT("acceptance_radius_cm"), 0.0);
+	Locomotion->SetStringField(
+		TEXT("decision"),
+		LocomotionTargetRef.IsEmpty() ? TEXT("none") : TEXT("move_to")
+	);
+	Locomotion->SetStringField(TEXT("target_ref"), LocomotionTargetRef);
+	Locomotion->SetNumberField(
+		TEXT("acceptance_radius_cm"),
+		LocomotionTargetRef.IsEmpty() ? 0.0 : 150.0
+	);
 	Root->SetObjectField(TEXT("locomotion"), Locomotion);
 
 	FString JsonString;

@@ -1,6 +1,7 @@
 #include "Dialogue/LLMNPCModelTurnValidator.h"
 
 #include "Dom/JsonObject.h"
+#include "LLMNPCSettings.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Templates/LLMNPCMotionTemplate.h"
@@ -9,8 +10,9 @@
 namespace
 {
 const FString ModelTurnSchemaVersion(TEXT("llmnpc.model_turn.v1"));
-const FName DecisionNone(TEXT("none"));
-const FName DecisionExecuteTemplate(TEXT("execute_template"));
+const FName ModelDecisionNone(TEXT("none"));
+const FName ModelDecisionExecuteTemplate(TEXT("execute_template"));
+const FName ModelDecisionMoveTo(TEXT("move_to"));
 
 bool ValidateFields(
 	const TSharedPtr<FJsonObject>& Object,
@@ -298,13 +300,51 @@ bool FLLMNPCModelTurnValidator::ValidateAndResolve(
 	OutModifiers = FLLMNPCTemplateModifiers();
 	OutError.Reset();
 
-	if (InOutDecision.Locomotion.Decision != DecisionNone)
+	if (InOutDecision.Locomotion.Decision == ModelDecisionNone)
 	{
-		OutError = TEXT("LLMNPC_MODEL_LOCOMOTION_UNSUPPORTED");
-		return false;
+		if (
+			!InOutDecision.Locomotion.TargetRef.TrimStartAndEnd().IsEmpty() ||
+			!FMath::IsNearlyZero(InOutDecision.Locomotion.AcceptanceRadiusCm)
+		)
+		{
+			OutError = TEXT("LLMNPC_MODEL_LOCOMOTION_NONE_HAS_PARAMETERS");
+			return false;
+		}
+	}
+	else
+	{
+		const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+		if (InOutDecision.Locomotion.Decision != ModelDecisionMoveTo)
+		{
+			OutError = TEXT("LLMNPC_MODEL_LOCOMOTION_DECISION_UNSUPPORTED");
+			return false;
+		}
+		if (!Settings || !Settings->bEnableNavigationIntents)
+		{
+			OutError = TEXT("LLMNPC_MODEL_LOCOMOTION_DISABLED");
+			return false;
+		}
+		InOutDecision.Locomotion.TargetRef = InOutDecision.Locomotion.TargetRef.TrimStartAndEnd();
+		if (InOutDecision.Locomotion.TargetRef.IsEmpty())
+		{
+			OutError = TEXT("LLMNPC_MODEL_LOCOMOTION_TARGET_REQUIRED");
+			return false;
+		}
+
+		const float MinRadius = FMath::Max(1.0f, Settings->NavigationMinAcceptanceRadiusCm);
+		const float MaxRadius = FMath::Max(MinRadius, Settings->NavigationMaxAcceptanceRadiusCm);
+		const float DefaultRadius = FMath::Clamp(
+			Settings->NavigationDefaultAcceptanceRadiusCm,
+			MinRadius,
+			MaxRadius
+		);
+		InOutDecision.Locomotion.AcceptanceRadiusCm =
+			InOutDecision.Locomotion.AcceptanceRadiusCm <= 0.0f
+				? DefaultRadius
+				: FMath::Clamp(InOutDecision.Locomotion.AcceptanceRadiusCm, MinRadius, MaxRadius);
 	}
 
-	if (InOutDecision.Action.Decision == DecisionNone)
+	if (InOutDecision.Action.Decision == ModelDecisionNone)
 	{
 		if (!InOutDecision.Action.TemplateId.IsNone())
 		{
@@ -314,7 +354,7 @@ bool FLLMNPCModelTurnValidator::ValidateAndResolve(
 		return true;
 	}
 
-	if (InOutDecision.Action.Decision != DecisionExecuteTemplate)
+	if (InOutDecision.Action.Decision != ModelDecisionExecuteTemplate)
 	{
 		OutError = TEXT("LLMNPC_MODEL_ACTION_DECISION_UNSUPPORTED");
 		return false;

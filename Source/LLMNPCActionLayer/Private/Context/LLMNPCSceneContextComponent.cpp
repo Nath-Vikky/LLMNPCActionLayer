@@ -122,6 +122,11 @@ FLLMNPCSelectionContextSnapshot ULLMNPCSceneContextComponent::AppendToSnapshot(
 
 bool ULLMNPCSceneContextComponent::IsTargetAvailable(const FString& TargetRef) const
 {
+	return IsValid(ResolveSceneTarget(TargetRef));
+}
+
+AActor* ULLMNPCSceneContextComponent::ResolveSceneTarget(const FString& TargetRef) const
+{
 	const FString CleanRef = TargetRef.TrimStartAndEnd();
 	const FLLMNPCSceneTargetRegistration* Registration = RegisteredTargets.FindByPredicate(
 		[&CleanRef](const FLLMNPCSceneTargetRegistration& Candidate)
@@ -129,5 +134,7 @@ bool ULLMNPCSceneContextComponent::IsTargetAvailable(const FString& TargetRef) c
 			return Candidate.TargetRef == CleanRef;
 		}
 	);
-	return Registration && Registration->bAvailable && IsValid(Registration->TargetActor);
+	return Registration && Registration->bAvailable && IsValid(Registration->TargetActor)
+		? Registration->TargetActor.Get()
+		: nullptr;
 }

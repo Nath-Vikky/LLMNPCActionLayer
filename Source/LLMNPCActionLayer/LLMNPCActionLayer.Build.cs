@@ -24,6 +24,7 @@ public class LLMNPCActionLayer : ModuleRules
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
+				"AIModule",
 				"HTTP",
 				"Json",
 				"JsonUtilities",

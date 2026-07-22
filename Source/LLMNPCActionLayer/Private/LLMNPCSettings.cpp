@@ -14,7 +14,8 @@ ULLMNPCSettings::ULLMNPCSettings()
 		TEXT("Use the supplied emotion, personality, relationship, scene, and action history context. ")
 		TEXT("Never output bones, controls, transforms, animation tracks, asset paths, or code. ")
 		TEXT("Use action decision none when no candidate is appropriate. ")
-		TEXT("Use locomotion decision none. Output JSON only.");
+		TEXT("Use locomotion decision move_to only for an explicit movement request, and only with a target_ref from selection_context.scene_targets. ")
+		TEXT("Never output a path or world-space destination. Use locomotion decision none otherwise. Output JSON only.");
 	MotionTemplateScanPaths.Add(TEXT("/LLMNPCActionLayer/LLMNPC/MotionTemplates"));
 	MotionTemplateScanPaths.Add(TEXT("/Game/LLMNPCActionLayer/MotionTemplates"));
 	SkeletonProfileScanPaths.Add(TEXT("/LLMNPCActionLayer/LLMNPC/SkeletonProfiles"));

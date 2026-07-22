@@ -19,6 +19,8 @@ player text / story command
   -> deterministic Published template variant
   -> public_action_id + constrained modifiers
   -> ULLMNPCBehaviorCoordinator
+  -> restricted FLLMNPCBehaviorPlan
+  -> registered scene target + AI MoveTo + target facing
   -> ULLMNPCTemplateLibrarySubsystem
   -> published ULLMNPCMotionTemplate
   -> FLLMNPCTemplateCompiler
@@ -37,6 +39,7 @@ player text / story command
 - `ULLMNPCDialogueComponent`
 - `ULLMNPCConversationSession`
 - `ULLMNPCBehaviorCoordinator`
+- `FLLMNPCBehaviorPlanValidator`
 - `ULLMNPCEmotionComponent`
 - `ULLMNPCPersonalityProfile`
 - `ULLMNPCRelationshipComponent`
@@ -149,6 +152,7 @@ presets.
 
 - `SendPlayerMessage`
 - `CancelActiveRequest`
+- `CancelActiveBehavior`
 - `ResetConversation`
 - `SetProviderKind`
 - `SetMotionComponent`
@@ -157,12 +161,13 @@ presets.
 - `SetSceneStateActive`
 - `CreateChatWidget`
 - `GetDebugState`
+- `GetBehaviorDebugState`
 - `GetSelectionContextSnapshot`
 - `GetLastOfferedCandidates`
 
 Add `LLM NPC Motion Component` and `LLM NPC Dialogue Component` to the NPC actor. Set the Dialogue provider to `Mock` for a fully local first test. Enable `Auto Create Chat Widget`, or call `CreateChatWidget` from the player-facing gameplay layer. The shipped `WBP_LLMNPCChat` derives from the native widget and needs no Blueprint graph.
 
-The local Mock recognizes English and Chinese greeting, agreement, and direction intents. It reads the same filtered candidate list as a remote model: a friendly greeting selects Wave, an agreement question selects Nod, and a direction question selects Gaze + Point only when a legal Target is available. A busy right hand removes right-arm actions and falls back to Nod. Multi-turn history is bounded and only public Published candidates are sent to a provider.
+The local Mock recognizes English and Chinese greeting, agreement, direction, and explicit movement intents. It reads the same filtered candidate and scene-target lists as a remote model: a friendly greeting selects Wave, an agreement question selects Nod, a direction question selects Gaze + Point only when a legal Target is available, and an explicit movement request may select `move_to` only for a registered scene target. A busy right hand removes right-arm actions and falls back to Nod. Multi-turn history is bounded and only public Published candidates and opaque Target Refs are sent to a provider.
 
 ## Contextual Selection
 
@@ -170,7 +175,23 @@ Add optional `LLM NPC Emotion`, `LLM NPC Relationship`, and `LLM NPC Scene Conte
 
 `RegisterSceneTarget` registers the same opaque Target Ref with both the motion executor and scene-selection context. `SetSceneStateActive("right_hand_busy", true)` removes templates blocked by that state before the request reaches the model. Template cooldown and short-term repeat suppression also operate before selection; the motion scheduler remains the final execution-time guard.
 
-The request contract is `llmnpc.turn_request.v2`, with prompt version `llmnpc.selection_prompt.v2`. Context-constrained amplitude, speed, duration, style, mirror recommendation, and Target refs are enforced again after parsing. Selection events are retained in a bounded `ULLMNPCSelectionAnalyticsSubsystem` ring buffer and do not leave the process automatically.
+The request contract is `llmnpc.turn_request.v2`, with prompt version `llmnpc.selection_prompt.v3`. Context-constrained amplitude, speed, duration, style, mirror recommendation, and Target refs are enforced again after parsing. Selection events are retained in a bounded `ULLMNPCSelectionAnalyticsSubsystem` ring buffer and do not leave the process automatically.
+
+## Restricted Compound Behavior
+
+Phase 6 accepts one locomotion decision, `move_to`, in addition to the existing
+Published template decision. UE converts the validated model turn into a small
+immutable plan made only from `MoveToTarget`, `FaceTarget`, `PlayTemplate`, and
+internal `Wait` steps. Runtime models cannot provide paths, coordinates,
+rotations, controller classes, or animation assets.
+
+The locomotion target must resolve through `ULLMNPCSceneContextComponent`.
+Acceptance radius, movement timeout, total timeout, facing speed, facing
+tolerance, and optional default AI-controller spawning are project settings.
+The coordinator rejects self-targets, unavailable targets, player-controlled
+owners, missing path following, partial-path failure, timeouts, and a second
+plan while one is active. `GetBehaviorDebugState` exposes the current step and
+stable failure code for Blueprint, PIE automation, and debugging.
 
 ## Model Providers
 

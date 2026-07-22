@@ -41,6 +41,10 @@ void ULLMNPCDialogueComponent::BeginPlay()
 void ULLMNPCDialogueComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	CancelActiveRequest();
+	if (BehaviorCoordinator)
+	{
+		BehaviorCoordinator->Shutdown();
+	}
 	ModelProvider.Reset();
 	ChatWidget = nullptr;
 	Super::EndPlay(EndPlayReason);
@@ -201,9 +205,18 @@ void ULLMNPCDialogueComponent::CancelActiveRequest()
 	OnTurnCompleted.Broadcast(LastTurnResult);
 }
 
+void ULLMNPCDialogueComponent::CancelActiveBehavior()
+{
+	if (BehaviorCoordinator)
+	{
+		BehaviorCoordinator->CancelBehavior();
+	}
+}
+
 void ULLMNPCDialogueComponent::ResetConversation()
 {
 	CancelActiveRequest();
+	CancelActiveBehavior();
 	EnsureRuntimeObjects();
 	if (ConversationSession)
 	{
@@ -230,7 +243,7 @@ void ULLMNPCDialogueComponent::SetMotionComponent(ULLMNPCMotionComponent* InMoti
 	EnsureRuntimeObjects();
 	if (BehaviorCoordinator)
 	{
-		BehaviorCoordinator->Initialize(MotionComponent);
+		BehaviorCoordinator->Initialize(MotionComponent, SceneContextComponent);
 	}
 }
 
@@ -329,6 +342,13 @@ FLLMNPCDialogueDebugState ULLMNPCDialogueComponent::GetDebugState() const
 	return Debug;
 }
 
+FLLMNPCBehaviorDebugState ULLMNPCDialogueComponent::GetBehaviorDebugState() const
+{
+	return BehaviorCoordinator
+		? BehaviorCoordinator->GetDebugState()
+		: FLLMNPCBehaviorDebugState();
+}
+
 FLLMNPCSelectionContextSnapshot ULLMNPCDialogueComponent::GetSelectionContextSnapshot() const
 {
 	FLLMNPCSelectionContextSnapshot Snapshot;
@@ -388,7 +408,7 @@ void ULLMNPCDialogueComponent::EnsureRuntimeObjects()
 	{
 		BehaviorCoordinator = NewObject<ULLMNPCBehaviorCoordinator>(this);
 	}
-	BehaviorCoordinator->Initialize(MotionComponent);
+	BehaviorCoordinator->Initialize(MotionComponent, SceneContextComponent);
 
 	if (!ModelProvider)
 	{
@@ -568,8 +588,14 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 		? BehaviorCoordinator->ExecuteModelDecision(Decision)
 		: FLLMNPCBehaviorExecutionResult();
 	LastTurnResult.bActionExecuted = BehaviorResult.bActionExecuted;
+	LastTurnResult.bBehaviorStarted = BehaviorResult.bBehaviorStarted;
+	LastTurnResult.BehaviorPlanId = BehaviorResult.BehaviorPlanId;
 	LastTurnResult.ResolvedTemplateId = BehaviorResult.ResolvedTemplateId;
-	if (BehaviorResult.bActionExecuted && ConversationSession)
+	if (
+		(BehaviorResult.bActionExecuted || BehaviorResult.bBehaviorStarted) &&
+		!Decision.Action.TemplateId.IsNone() &&
+		ConversationSession
+	)
 	{
 		ConversationSession->AddActionHistory(
 			Decision.Action.TemplateId,
@@ -591,7 +617,7 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 	}
 
 	CompleteAnalytics(
-		BehaviorResult.bActionExecuted
+		(BehaviorResult.bActionExecuted || BehaviorResult.bBehaviorStarted)
 			? FName(TEXT("executed"))
 			: (BehaviorResult.bAccepted ? FName(TEXT("no_action")) : FName(TEXT("execution_rejected"))),
 		LastTurnResult.ErrorCode,
