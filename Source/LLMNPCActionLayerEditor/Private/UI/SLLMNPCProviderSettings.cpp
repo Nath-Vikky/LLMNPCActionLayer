@@ -389,6 +389,7 @@ FReply SLLMNPCProviderSettings::HandleApplyToSelectedNPCs()
 		}
 		Dialogue->Modify();
 		Dialogue->ProviderKind = SelectedProvider->Kind;
+		Dialogue->ProviderIdOverride = NAME_None;
 		Dialogue->MarkPackageDirty();
 		++UpdatedCount;
 	}
@@ -491,6 +492,7 @@ bool SLLMNPCProviderSettings::ApplySettings(bool bSaveConfig)
 
 	ULLMNPCSettings* Settings = GetMutableDefault<ULLMNPCSettings>();
 	Settings->DefaultModelProvider = SelectedProvider->Kind;
+	Settings->DefaultProviderId = NAME_None;
 	Settings->BackendProxyEndpoint = BackendEndpoint;
 	Settings->DeepSeekBaseUrl = DeepSeekBaseUrl;
 	Settings->DeepSeekModel = DeepSeekModel;

@@ -6,6 +6,11 @@
 #include "Modules/ModuleManager.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogLLMNPCActionLayer, Log, All);
+DECLARE_STATS_GROUP(
+	TEXT("LLM NPC Action Layer"),
+	STATGROUP_LLMNPCActionLayer,
+	STATCAT_Advanced
+);
 
 class FLLMNPCActionLayerModule : public IModuleInterface
 {

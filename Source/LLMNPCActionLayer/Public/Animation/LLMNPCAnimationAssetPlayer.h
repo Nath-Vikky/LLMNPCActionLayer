@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/TimerHandle.h"
 #include "Templates/LLMNPCTemplateCompiler.h"
 #include "UObject/Object.h"
 #include "LLMNPCAnimationAssetPlayer.generated.h"
@@ -56,7 +57,8 @@ public:
 	bool Play(
 		const ULLMNPCMotionTemplate& MotionTemplate,
 		const FLLMNPCTemplateModifiers& Modifiers,
-		FString& OutError
+		FString& OutError,
+		float ElapsedPlaybackSeconds = 0.0f
 	);
 
 	void Stop(bool bInterrupted = true);

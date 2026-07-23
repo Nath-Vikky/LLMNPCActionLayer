@@ -13,14 +13,31 @@
 #include "Templates/LLMNPCTemplateLibrarySubsystem.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/PlayerController.h"
 #include "HAL/PlatformTime.h"
 #include "JsonObjectConverter.h"
+#include "Net/UnrealNetwork.h"
+
+DECLARE_CYCLE_STAT(
+	TEXT("Motion Component Tick"),
+	STAT_LLMNPCMotionComponentTick,
+	STATGROUP_LLMNPCActionLayer
+);
+DECLARE_CYCLE_STAT(
+	TEXT("Motion Sampling"),
+	STAT_LLMNPCMotionSampling,
+	STATGROUP_LLMNPCActionLayer
+);
 
 ULLMNPCMotionComponent::ULLMNPCMotionComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	SetIsReplicatedByDefault(true);
 	SkeletonProfile = TSoftObjectPtr<ULLMNPCSkeletonProfile>(FSoftObjectPath(
 		TEXT("/LLMNPCActionLayer/LLMNPC/SkeletonProfiles/SP_UE5_Manny_v1.SP_UE5_Manny_v1")
 	));
@@ -33,15 +50,25 @@ void ULLMNPCMotionComponent::BeginPlay()
 	Validator = NewObject<ULLMNPCMotionValidator>(this);
 	Validator->Manifest = ControlManifest;
 	APIClient = NewObject<ULLMNPCAPIClient>(this);
-	AnimationAssetPlayer = NewObject<ULLMNPCAnimationAssetPlayer>(this);
-	AnimationAssetPlayer->Initialize(GetOwner());
+	const bool bHasVisualRuntime =
+		!GetWorld() ||
+		GetWorld()->GetNetMode() != NM_DedicatedServer;
+	if (bHasVisualRuntime)
+	{
+		AnimationAssetPlayer = NewObject<ULLMNPCAnimationAssetPlayer>(this);
+		AnimationAssetPlayer->Initialize(GetOwner());
+	}
 	const int32 ResolvedMicroMotionSeed = MicroMotionSeed != 0
 		? MicroMotionSeed
 		: static_cast<int32>(GetTypeHash(GetOwner() ? GetOwner()->GetFName() : GetFName()) & 0x7fffffffU);
 	MicroMotionState.Initialize(ResolvedMicroMotionSeed);
 	RefreshPoseBoneBindings();
 
-	if (bAutoInstallPostProcessAnimBP && PostProcessInstallMode != ELLMNPCPostProcessInstallMode::Disabled)
+	if (
+		bHasVisualRuntime &&
+		bAutoInstallPostProcessAnimBP &&
+		PostProcessInstallMode != ELLMNPCPostProcessInstallMode::Disabled
+	)
 	{
 		InstallPostProcessAnimBP();
 	}
@@ -59,11 +86,29 @@ void ULLMNPCMotionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ULLMNPCMotionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
+	SCOPE_CYCLE_COUNTER(STAT_LLMNPCMotionComponentTick);
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	float UpdateDeltaSeconds = 0.0f;
+	if (!ShouldRunMotionUpdate(DeltaTime, UpdateDeltaSeconds))
+	{
+		return;
+	}
+
 	StartEligiblePlans();
-	UpdateActivePlans(DeltaTime);
-	UpdateMicroMotion(DeltaTime);
+	UpdateActivePlans(UpdateDeltaSeconds);
+	if (CurrentMotionLOD != ELLMNPCMotionLODLevel::Minimal)
+	{
+		UpdateMicroMotion(UpdateDeltaSeconds);
+	}
+}
+
+void ULLMNPCMotionComponent::GetLifetimeReplicatedProps(
+	TArray<FLifetimeProperty>& OutLifetimeProps
+) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(ULLMNPCMotionComponent, ReplicatedMotionCommand);
 }
 
 void ULLMNPCMotionComponent::SetAmbientStyle(FName StyleTag)
@@ -107,6 +152,12 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 	FLLMNPCTemplateModifiers Modifiers
 )
 {
+	if (!CanSubmitLocally())
+	{
+		LastValidationError = TEXT("LLMNPC_MOTION_AUTHORITY_REQUIRED");
+		return false;
+	}
+
 	ULLMNPCSkeletonProfile* ResolvedProfile = SkeletonProfile.LoadSynchronous();
 	if (!ResolvedProfile)
 	{
@@ -188,16 +239,24 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 	return SubmitMotionPlanWithSource(
 		MoveTemp(CompiledPlan),
 		ELLMNPCMotionValidationSource::PublishedTemplate,
-		MotionTemplate
+		MotionTemplate,
+		PendingReplicatedStartOffsetSeconds
 	);
 }
 
 bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
 	FLLMMotionPlan Plan,
 	ELLMNPCMotionValidationSource Source,
-	const ULLMNPCMotionTemplate* SourceTemplate
+	const ULLMNPCMotionTemplate* SourceTemplate,
+	float InitialTimeSeconds
 )
 {
+	if (!CanSubmitLocally())
+	{
+		LastValidationError = TEXT("LLMNPC_MOTION_AUTHORITY_REQUIRED");
+		return false;
+	}
+
 	if (!Validator)
 	{
 		Validator = NewObject<ULLMNPCMotionValidator>(this);
@@ -229,8 +288,20 @@ bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
 
 	FLLMNPCQueuedMotionPlan Request;
 	Request.Plan = MoveTemp(Plan);
+	Request.InitialTimeSeconds = FMath::Max(InitialTimeSeconds, 0.0f);
+	if (Request.InitialTimeSeconds >= Request.Plan.Clip.Duration)
+	{
+		LastValidationError = TEXT("LLMNPC_REPLICATED_MOTION_STALE");
+		return false;
+	}
 	Request.Channels = DeriveMotionChannels(Request.Plan);
 	Request.QueuedAtSeconds = FPlatformTime::Seconds();
+	Request.bReplicateOnStart =
+		bReplicateMotionCommands &&
+		!bApplyingReplicatedCommand &&
+		GetOwner() &&
+		GetOwner()->GetIsReplicated() &&
+		GetOwner()->HasAuthority();
 	if (SourceTemplate)
 	{
 		Request.SourceTemplateId = SourceTemplate->Metadata.TemplateId;
@@ -439,6 +510,18 @@ FLLMNPCMotionDebugState ULLMNPCMotionComponent::GetDebugState() const
 		State.ActiveAnimationPlayRate = AnimationState.PlayRate;
 		State.LastAnimationError = AnimationState.ErrorCode;
 	}
+	State.MotionLODLevel = StaticEnum<ELLMNPCMotionLODLevel>()->GetNameStringByValue(
+		static_cast<int64>(CurrentMotionLOD)
+	);
+	State.MotionLODUpdateIntervalSeconds =
+		CurrentMotionLOD == ELLMNPCMotionLODLevel::Reduced
+			? ReducedUpdateIntervalSeconds
+			: (
+				CurrentMotionLOD == ELLMNPCMotionLODLevel::Minimal
+					? MinimalUpdateIntervalSeconds
+					: 0.0f
+			);
+	State.ReplicatedMotionSequence = ReplicatedMotionCommand.Sequence;
 	State.Snapshot = CurrentSnapshot;
 	return State;
 }
@@ -516,13 +599,17 @@ void ULLMNPCMotionComponent::StartEligiblePlans()
 
 		FLLMNPCActiveMotionPlan NewActive;
 		NewActive.Request = MoveTemp(Queue[QueueIndex]);
-		NewActive.Time = 0.0f;
+		NewActive.Time = NewActive.Request.InitialTimeSeconds;
 		if (!NewActive.Request.SourceTemplateId.IsNone())
 		{
 			LastTemplateStartTimes.Add(NewActive.Request.SourceTemplateId, NowSeconds);
 		}
 
 		ActiveMotions.Add(MoveTemp(NewActive));
+		if (ActiveMotions.Last().Request.bReplicateOnStart)
+		{
+			PublishReplicatedPlan(ActiveMotions.Last().Request.Plan);
+		}
 		Queue.RemoveAt(QueueIndex);
 	}
 
@@ -572,9 +659,13 @@ bool ULLMNPCMotionComponent::ValidateTargetRefs(const FLLMMotionPlan& Plan, FStr
 
 void ULLMNPCMotionComponent::UpdateActivePlans(float DeltaTime)
 {
+	SCOPE_CYCLE_COUNTER(STAT_LLMNPCMotionSampling);
 	CurrentSnapshot = FLLMProceduralPoseSnapshot();
 	CurrentSnapshot.BoneBindings = CachedPoseBoneBindings;
 	USkeletalMeshComponent* Mesh = GetOwnerMesh();
+	const bool bEvaluatePose =
+		!GetWorld() ||
+		GetWorld()->GetNetMode() != NM_DedicatedServer;
 
 	for (int32 ActiveIndex = ActiveMotions.Num() - 1; ActiveIndex >= 0; --ActiveIndex)
 	{
@@ -586,16 +677,19 @@ void ULLMNPCMotionComponent::UpdateActivePlans(float DeltaTime)
 			continue;
 		}
 
-		FLLMProceduralPoseSnapshot SampledSnapshot;
-		FLLMNPCMotionSampler::SampleClip(
-			Active.Request.Plan.Clip,
-			ControlManifest,
-			Mesh,
-			TargetMap,
-			Active.Time,
-			SampledSnapshot
-		);
-		MergeSnapshot(CurrentSnapshot, SampledSnapshot);
+		if (bEvaluatePose)
+		{
+			FLLMProceduralPoseSnapshot SampledSnapshot;
+			FLLMNPCMotionSampler::SampleClip(
+				Active.Request.Plan.Clip,
+				ControlManifest,
+				Mesh,
+				TargetMap,
+				Active.Time,
+				SampledSnapshot
+			);
+			MergeSnapshot(CurrentSnapshot, SampledSnapshot);
+		}
 	}
 
 	bHasActivePlan = !ActiveMotions.IsEmpty();
@@ -618,6 +712,262 @@ void ULLMNPCMotionComponent::RefreshPoseBoneBindings()
 	{
 		CachedPoseBoneBindings = ResolvedProfile->BuildPoseBoneBindings();
 	}
+}
+
+ELLMNPCMotionLODLevel ULLMNPCMotionComponent::ResolveLODLevelForDistance(
+	float DistanceCm,
+	float InFullQualityDistanceCm,
+	float InReducedQualityDistanceCm
+)
+{
+	const float FullDistance = FMath::Max(InFullQualityDistanceCm, 0.0f);
+	const float ReducedDistance = FMath::Max(InReducedQualityDistanceCm, FullDistance);
+	if (DistanceCm <= FullDistance)
+	{
+		return ELLMNPCMotionLODLevel::Full;
+	}
+	if (DistanceCm <= ReducedDistance)
+	{
+		return ELLMNPCMotionLODLevel::Reduced;
+	}
+	return ELLMNPCMotionLODLevel::Minimal;
+}
+
+bool ULLMNPCMotionComponent::ShouldRunMotionUpdate(
+	float DeltaTime,
+	float& OutUpdateDeltaSeconds
+)
+{
+	UpdateMotionLOD();
+	LODAccumulatedDeltaSeconds += FMath::Max(DeltaTime, 0.0f);
+
+	float RequiredInterval = 0.0f;
+	switch (CurrentMotionLOD)
+	{
+	case ELLMNPCMotionLODLevel::Reduced:
+		RequiredInterval = FMath::Max(ReducedUpdateIntervalSeconds, 0.016f);
+		break;
+	case ELLMNPCMotionLODLevel::Minimal:
+		RequiredInterval = FMath::Max(MinimalUpdateIntervalSeconds, 0.05f);
+		break;
+	case ELLMNPCMotionLODLevel::Full:
+	default:
+		break;
+	}
+
+	if (RequiredInterval > 0.0f && LODAccumulatedDeltaSeconds < RequiredInterval)
+	{
+		return false;
+	}
+
+	OutUpdateDeltaSeconds = LODAccumulatedDeltaSeconds;
+	LODAccumulatedDeltaSeconds = 0.0f;
+	return true;
+}
+
+void ULLMNPCMotionComponent::UpdateMotionLOD()
+{
+	if (!bEnableAutomaticMotionLOD || !GetWorld())
+	{
+		CurrentMotionLOD = ELLMNPCMotionLODLevel::Full;
+		return;
+	}
+	if (GetWorld()->GetNetMode() == NM_DedicatedServer)
+	{
+		CurrentMotionLOD = ELLMNPCMotionLODLevel::Minimal;
+		return;
+	}
+
+	CurrentMotionLOD = ResolveLODLevelForDistance(
+		ResolveNearestViewerDistanceCm(),
+		FullQualityDistanceCm,
+		ReducedQualityDistanceCm
+	);
+}
+
+float ULLMNPCMotionComponent::ResolveNearestViewerDistanceCm() const
+{
+	const UWorld* World = GetWorld();
+	const AActor* Owner = GetOwner();
+	if (!World || !Owner)
+	{
+		return 0.0f;
+	}
+
+	float NearestDistanceSquared = TNumericLimits<float>::Max();
+	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+	{
+		const APlayerController* PlayerController = It->Get();
+		if (!PlayerController || !PlayerController->IsLocalController())
+		{
+			continue;
+		}
+		const AActor* ViewTarget = PlayerController->GetViewTarget();
+		if (!ViewTarget)
+		{
+			continue;
+		}
+		NearestDistanceSquared = FMath::Min(
+			NearestDistanceSquared,
+			FVector::DistSquared(Owner->GetActorLocation(), ViewTarget->GetActorLocation())
+		);
+	}
+
+	return NearestDistanceSquared == TNumericLimits<float>::Max()
+		? 0.0f
+		: FMath::Sqrt(NearestDistanceSquared);
+}
+
+bool ULLMNPCMotionComponent::CanSubmitLocally() const
+{
+	if (bApplyingReplicatedCommand || !bReplicateMotionCommands || !bRequireAuthorityForReplicatedSubmission)
+	{
+		return true;
+	}
+
+	const AActor* Owner = GetOwner();
+	return !Owner || !Owner->GetIsReplicated() || Owner->HasAuthority();
+}
+
+void ULLMNPCMotionComponent::PublishReplicatedPlan(const FLLMMotionPlan& Plan)
+{
+	if (!GetOwner() || !GetOwner()->GetIsReplicated() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	const int32 NextSequence = ReplicatedMotionCommand.Sequence == MAX_int32
+		? 1
+		: ReplicatedMotionCommand.Sequence + 1;
+	ReplicatedMotionCommand = FLLMNPCReplicatedMotionCommand();
+	ReplicatedMotionCommand.Sequence = NextSequence;
+	ReplicatedMotionCommand.Kind = ELLMNPCReplicatedMotionCommandKind::ProceduralPlan;
+	ReplicatedMotionCommand.ProceduralPlan = Plan;
+	ReplicatedMotionCommand.ServerStartTimeSeconds = GetSynchronizedServerTimeSeconds();
+	PopulateReplicatedTargets(Plan, ReplicatedMotionCommand.Targets);
+	GetOwner()->ForceNetUpdate();
+}
+
+void ULLMNPCMotionComponent::PublishReplicatedAnimationTemplate(
+	FName TemplateId,
+	const FLLMNPCTemplateModifiers& Modifiers
+)
+{
+	if (!GetOwner() || !GetOwner()->GetIsReplicated() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	const int32 NextSequence = ReplicatedMotionCommand.Sequence == MAX_int32
+		? 1
+		: ReplicatedMotionCommand.Sequence + 1;
+	ReplicatedMotionCommand = FLLMNPCReplicatedMotionCommand();
+	ReplicatedMotionCommand.Sequence = NextSequence;
+	ReplicatedMotionCommand.Kind = ELLMNPCReplicatedMotionCommandKind::AnimationTemplate;
+	ReplicatedMotionCommand.TemplateId = TemplateId;
+	ReplicatedMotionCommand.TemplateModifiers = Modifiers;
+	ReplicatedMotionCommand.ServerStartTimeSeconds = GetSynchronizedServerTimeSeconds();
+	if (!Modifiers.TargetRef.IsEmpty())
+	{
+		if (const TObjectPtr<AActor>* TargetActor = TargetMap.Find(Modifiers.TargetRef))
+		{
+			FLLMNPCReplicatedTarget& Target = ReplicatedMotionCommand.Targets.AddDefaulted_GetRef();
+			Target.TargetRef = Modifiers.TargetRef;
+			Target.TargetActor = TargetActor->Get();
+		}
+	}
+	GetOwner()->ForceNetUpdate();
+}
+
+void ULLMNPCMotionComponent::PopulateReplicatedTargets(
+	const FLLMMotionPlan& Plan,
+	TArray<FLLMNPCReplicatedTarget>& OutTargets
+) const
+{
+	OutTargets.Reset();
+	TSet<FString> AddedTargetRefs;
+	for (const FLLMMotionTrack& Track : Plan.Clip.Tracks)
+	{
+		if (Track.TargetRef.IsEmpty() || AddedTargetRefs.Contains(Track.TargetRef))
+		{
+			continue;
+		}
+		const TObjectPtr<AActor>* TargetActor = TargetMap.Find(Track.TargetRef);
+		if (!TargetActor || !IsValid(TargetActor->Get()))
+		{
+			continue;
+		}
+
+		FLLMNPCReplicatedTarget& Target = OutTargets.AddDefaulted_GetRef();
+		Target.TargetRef = Track.TargetRef;
+		Target.TargetActor = TargetActor->Get();
+		AddedTargetRefs.Add(Track.TargetRef);
+	}
+}
+
+double ULLMNPCMotionComponent::GetSynchronizedServerTimeSeconds() const
+{
+	if (const UWorld* World = GetWorld())
+	{
+		if (const AGameStateBase* GameState = World->GetGameState())
+		{
+			return GameState->GetServerWorldTimeSeconds();
+		}
+		return World->GetTimeSeconds();
+	}
+	return 0.0;
+}
+
+void ULLMNPCMotionComponent::OnRep_ReplicatedMotionCommand()
+{
+	if (
+		ReplicatedMotionCommand.ProtocolVersion != 1 ||
+		ReplicatedMotionCommand.Sequence <= 0 ||
+		ReplicatedMotionCommand.Sequence == LastAppliedReplicationSequence
+	)
+	{
+		if (ReplicatedMotionCommand.ProtocolVersion != 1)
+		{
+			LastValidationError = TEXT("LLMNPC_REPLICATION_PROTOCOL_UNSUPPORTED");
+		}
+		return;
+	}
+	LastAppliedReplicationSequence = ReplicatedMotionCommand.Sequence;
+
+	for (const FLLMNPCReplicatedTarget& Target : ReplicatedMotionCommand.Targets)
+	{
+		RegisterTarget(Target.TargetRef, Target.TargetActor);
+	}
+
+	PendingReplicatedStartOffsetSeconds = FMath::Max(
+		static_cast<float>(
+			GetSynchronizedServerTimeSeconds() - ReplicatedMotionCommand.ServerStartTimeSeconds
+		),
+		0.0f
+	);
+	bApplyingReplicatedCommand = true;
+	switch (ReplicatedMotionCommand.Kind)
+	{
+	case ELLMNPCReplicatedMotionCommandKind::ProceduralPlan:
+		SubmitMotionPlanWithSource(
+			ReplicatedMotionCommand.ProceduralPlan,
+			ELLMNPCMotionValidationSource::ReplicatedAuthority,
+			nullptr,
+			PendingReplicatedStartOffsetSeconds
+		);
+		break;
+	case ELLMNPCReplicatedMotionCommandKind::AnimationTemplate:
+		SubmitPublishedTemplate(
+			ReplicatedMotionCommand.TemplateId,
+			ReplicatedMotionCommand.TemplateModifiers
+		);
+		break;
+	case ELLMNPCReplicatedMotionCommandKind::None:
+	default:
+		break;
+	}
+	bApplyingReplicatedCommand = false;
+	PendingReplicatedStartOffsetSeconds = 0.0f;
 }
 
 void ULLMNPCMotionComponent::UpdateMicroMotion(float DeltaTime)
@@ -700,6 +1050,45 @@ bool ULLMNPCMotionComponent::SubmitAnimationAssetTemplate(
 		}
 	}
 
+	const double NowSeconds = FPlatformTime::Seconds();
+	if (const double* LastStart = LastTemplateStartTimes.Find(MotionTemplate.Metadata.TemplateId))
+	{
+		if (NowSeconds - *LastStart < MotionTemplate.Metadata.CooldownSeconds)
+		{
+			LastValidationError = TEXT("LLMNPC_TEMPLATE_COOLDOWN_ACTIVE");
+			return false;
+		}
+	}
+
+	if (GetWorld() && GetWorld()->GetNetMode() == NM_DedicatedServer)
+	{
+		UAnimationAsset* AnimationAsset = nullptr;
+		float PlayRate = 1.0f;
+		FString ValidationError;
+		if (!ULLMNPCAnimationAssetPlayer::ValidatePlaybackRequest(
+			MotionTemplate,
+			Modifiers,
+			AnimationAsset,
+			PlayRate,
+			ValidationError
+		))
+		{
+			LastValidationError = ValidationError;
+			return false;
+		}
+		LastTemplateStartTimes.Add(MotionTemplate.Metadata.TemplateId, NowSeconds);
+		LastAcceptedMotionJson = FString::Printf(
+			TEXT("{\"kind\":\"animation_asset\",\"template_id\":\"%s\"}"),
+			*MotionTemplate.Metadata.TemplateId.ToString()
+		);
+		LastValidationError.Reset();
+		if (bReplicateMotionCommands && !bApplyingReplicatedCommand)
+		{
+			PublishReplicatedAnimationTemplate(MotionTemplate.Metadata.TemplateId, Modifiers);
+		}
+		return true;
+	}
+
 	if (!AnimationAssetPlayer)
 	{
 		AnimationAssetPlayer = NewObject<ULLMNPCAnimationAssetPlayer>(this);
@@ -715,18 +1104,13 @@ bool ULLMNPCMotionComponent::SubmitAnimationAssetTemplate(
 		AnimationAssetPlayer->Stop(true);
 	}
 
-	const double NowSeconds = FPlatformTime::Seconds();
-	if (const double* LastStart = LastTemplateStartTimes.Find(MotionTemplate.Metadata.TemplateId))
-	{
-		if (NowSeconds - *LastStart < MotionTemplate.Metadata.CooldownSeconds)
-		{
-			LastValidationError = TEXT("LLMNPC_TEMPLATE_COOLDOWN_ACTIVE");
-			return false;
-		}
-	}
-
 	FString PlaybackError;
-	if (!AnimationAssetPlayer->Play(MotionTemplate, Modifiers, PlaybackError))
+	if (!AnimationAssetPlayer->Play(
+		MotionTemplate,
+		Modifiers,
+		PlaybackError,
+		PendingReplicatedStartOffsetSeconds
+	))
 	{
 		LastValidationError = PlaybackError;
 		return false;
@@ -738,6 +1122,16 @@ bool ULLMNPCMotionComponent::SubmitAnimationAssetTemplate(
 		*MotionTemplate.Metadata.TemplateId.ToString()
 	);
 	LastValidationError.Reset();
+	if (
+		bReplicateMotionCommands &&
+		!bApplyingReplicatedCommand &&
+		GetOwner() &&
+		GetOwner()->GetIsReplicated() &&
+		GetOwner()->HasAuthority()
+	)
+	{
+		PublishReplicatedAnimationTemplate(MotionTemplate.Metadata.TemplateId, Modifiers);
+	}
 	return true;
 }
 

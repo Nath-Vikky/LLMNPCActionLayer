@@ -451,5 +451,14 @@ struct FLLMNPCMotionDebugState
 	FString LastAnimationError;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString MotionLODLevel;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float MotionLODUpdateIntervalSeconds = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	int32 ReplicatedMotionSequence = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FLLMProceduralPoseSnapshot Snapshot;
 };

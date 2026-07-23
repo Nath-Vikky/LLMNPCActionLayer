@@ -242,6 +242,35 @@ Default dialogue backend endpoint:
 http://localhost:8787/v1/npc/turn
 ```
 
+External runtime modules can register additional factories through
+`FLLMNPCModelProviderRegistry` and select them with `ProviderIdOverride`,
+`SetProviderId`, or project-level `DefaultProviderId`. Unknown provider IDs fail
+closed. A request watchdog recovers providers that never invoke their callback,
+and the local fallback is attempted at most once.
+
+## Product Runtime
+
+When the owning Actor replicates, `ULLMNPCMotionComponent` replicates only a
+validated high-level motion plan or Published animation template command.
+Target refs resolve to replicated Actors and synchronized server time is used
+to compensate late delivery. Bone transforms, evaluated pose snapshots,
+prompts, and credentials never cross the network. Replicated NPC submissions
+are authority-only by default.
+
+Automatic Motion LOD samples nearby NPCs every tick, mid-distance NPCs at about
+15 Hz, and distant NPCs at 4 Hz without micro motion. Dedicated servers retain
+the scheduler and command replication but skip post-process animation and pose
+evaluation. Use `STATGROUP_LLMNPCActionLayer` in Unreal Insights or stat tools
+to inspect component and sampling cost.
+
+Protocol versions are centralized in `FLLMNPCProtocolCompatibility`. Known
+MotionPlan 1.x spellings migrate to `1.0`; unknown Prompt, response Schema, and
+MotionPlan versions fail closed. Selection telemetry is local and opt-in.
+
+The plugin is validated with isolated Win64 `BuildPlugin` Development and
+Shipping targets. See `Docs/Phases/phase8-productization.md` for networking,
+Provider extension, LOD, recovery, privacy, and packaging details.
+
 ## Legacy Motion-Plan Endpoint
 
 ```text

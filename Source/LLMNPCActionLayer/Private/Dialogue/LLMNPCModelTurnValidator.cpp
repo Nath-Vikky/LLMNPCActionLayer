@@ -1,6 +1,7 @@
 #include "Dialogue/LLMNPCModelTurnValidator.h"
 
 #include "Dom/JsonObject.h"
+#include "Protocol/LLMNPCProtocolCompatibility.h"
 #include "LLMNPCSettings.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -9,7 +10,6 @@
 
 namespace
 {
-const FString ModelTurnSchemaVersion(TEXT("llmnpc.model_turn.v1"));
 const FName ModelDecisionNone(TEXT("none"));
 const FName ModelDecisionExecuteTemplate(TEXT("execute_template"));
 const FName ModelDecisionMoveTo(TEXT("move_to"));
@@ -118,7 +118,7 @@ bool FLLMNPCModelTurnParser::Parse(
 
 	if (
 		!GetRequiredString(Root, TEXT("schema_version"), OutDecision.SchemaVersion, OutError) ||
-		OutDecision.SchemaVersion != ModelTurnSchemaVersion
+		!FLLMNPCProtocolCompatibility::IsSupportedModelTurnSchema(OutDecision.SchemaVersion)
 	)
 	{
 		if (OutError.IsEmpty())

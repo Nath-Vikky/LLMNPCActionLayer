@@ -1,5 +1,7 @@
 #include "LLMNPCMotionValidator.h"
 
+#include "Protocol/LLMNPCProtocolCompatibility.h"
+
 namespace
 {
 bool IsFiniteVector(const FVector& Value)
@@ -19,6 +21,13 @@ FLLMMotionValidationResult ULLMNPCMotionValidator::ValidateAndClamp(
 ) const
 {
 	FLLMMotionValidationResult Result;
+	if (!FLLMNPCProtocolCompatibility::NormalizeMotionPlanVersion(
+		InOutPlan.Version,
+		Result.ErrorMessage
+	))
+	{
+		return Result;
+	}
 	FLLMMotionClip& Clip = InOutPlan.Clip;
 
 	if (
@@ -99,7 +108,10 @@ bool ULLMNPCMotionValidator::ValidateTrack(
 	}
 
 	if (
-		Source == ELLMNPCMotionValidationSource::PublishedTemplate &&
+		(
+			Source == ELLMNPCMotionValidationSource::PublishedTemplate ||
+			Source == ELLMNPCMotionValidationSource::ReplicatedAuthority
+		) &&
 		!Def->bAllowTemplateAuthoring
 	)
 	{

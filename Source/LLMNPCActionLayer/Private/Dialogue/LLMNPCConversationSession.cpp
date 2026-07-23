@@ -1,5 +1,6 @@
 #include "Dialogue/LLMNPCConversationSession.h"
 
+#include "Protocol/LLMNPCProtocolCompatibility.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -124,7 +125,10 @@ FString ULLMNPCConversationSession::BuildContextualRequestJson(
 ) const
 {
 	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
-	Root->SetStringField(TEXT("schema_version"), TEXT("llmnpc.turn_request.v2"));
+	Root->SetStringField(
+		TEXT("schema_version"),
+		FLLMNPCProtocolCompatibility::CurrentTurnRequestSchema()
+	);
 	Root->SetStringField(TEXT("prompt_version"), PromptVersion);
 	Root->SetStringField(TEXT("request_id"), RequestId.ToString(EGuidFormats::DigitsWithHyphensLower));
 	Root->SetStringField(TEXT("session_id"), SessionId.ToString(EGuidFormats::DigitsWithHyphensLower));

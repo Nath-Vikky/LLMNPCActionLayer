@@ -9,6 +9,7 @@
 #include "LLMNPCMotionComponent.generated.h"
 
 class UAnimInstance;
+class AActor;
 class ULLMNPCAnimationAssetPlayer;
 class ULLMNPCAPIClient;
 class ULLMNPCMotionValidator;
@@ -17,6 +18,64 @@ class ULLMNPCMotionTemplate;
 class USkeletalMesh;
 class USkeletalMeshComponent;
 enum class ELLMNPCMotionValidationSource : uint8;
+
+UENUM(BlueprintType)
+enum class ELLMNPCMotionLODLevel : uint8
+{
+	Full,
+	Reduced,
+	Minimal
+};
+
+UENUM()
+enum class ELLMNPCReplicatedMotionCommandKind : uint8
+{
+	None,
+	ProceduralPlan,
+	AnimationTemplate
+};
+
+USTRUCT()
+struct FLLMNPCReplicatedTarget
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FString TargetRef;
+
+	UPROPERTY()
+	TObjectPtr<AActor> TargetActor;
+};
+
+USTRUCT()
+struct FLLMNPCReplicatedMotionCommand
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 ProtocolVersion = 1;
+
+	UPROPERTY()
+	int32 Sequence = 0;
+
+	UPROPERTY()
+	ELLMNPCReplicatedMotionCommandKind Kind = ELLMNPCReplicatedMotionCommandKind::None;
+
+	UPROPERTY()
+	FLLMMotionPlan ProceduralPlan;
+
+	UPROPERTY()
+	FName TemplateId = NAME_None;
+
+	UPROPERTY()
+	FLLMNPCTemplateModifiers TemplateModifiers;
+
+	UPROPERTY()
+	TArray<FLLMNPCReplicatedTarget> Targets;
+
+	UPROPERTY()
+	double ServerStartTimeSeconds = 0.0;
+};
 
 UENUM(BlueprintType)
 enum class ELLMNPCPostProcessInstallMode : uint8
@@ -33,6 +92,8 @@ struct FLLMNPCQueuedMotionPlan
 	FName SourceTemplateId = NAME_None;
 	float CooldownSeconds = 0.0f;
 	double QueuedAtSeconds = 0.0;
+	float InitialTimeSeconds = 0.0f;
+	bool bReplicateOnStart = false;
 };
 
 struct FLLMNPCActiveMotionPlan
@@ -52,6 +113,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion")
 	bool SubmitMotionPlanJson(const FString& JsonString);
@@ -100,6 +162,15 @@ public:
 	UFUNCTION(BlueprintPure, Category="LLM NPC Motion")
 	int32 GetQueueCount() const { return Queue.Num(); }
 
+	UFUNCTION(BlueprintPure, Category="LLM NPC Motion|LOD")
+	ELLMNPCMotionLODLevel GetCurrentMotionLOD() const { return CurrentMotionLOD; }
+
+	static ELLMNPCMotionLODLevel ResolveLODLevelForDistance(
+		float DistanceCm,
+		float FullQualityDistanceCm,
+		float ReducedQualityDistanceCm
+	);
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
 	TObjectPtr<ULLMNPCControlManifest> ControlManifest;
 
@@ -142,6 +213,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Gaze Scheduler")
 	FVector2D GazeSwitchInterval = FVector2D(2.5f, 5.0f);
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Networking")
+	bool bReplicateMotionCommands = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Networking")
+	bool bRequireAuthorityForReplicatedSubmission = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|LOD")
+	bool bEnableAutomaticMotionLOD = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|LOD", meta=(ClampMin="0.0"))
+	float FullQualityDistanceCm = 2000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|LOD", meta=(ClampMin="0.0"))
+	float ReducedQualityDistanceCm = 6000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|LOD", meta=(ClampMin="0.016", ClampMax="0.5"))
+	float ReducedUpdateIntervalSeconds = 0.0667f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|LOD", meta=(ClampMin="0.05", ClampMax="1.0"))
+	float MinimalUpdateIntervalSeconds = 0.25f;
+
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Micro Motion")
 	FName AmbientStyle = TEXT("neutral");
 
@@ -173,6 +265,9 @@ public:
 	FLLMProceduralPoseSnapshot CurrentSnapshot;
 
 private:
+	UPROPERTY(ReplicatedUsing=OnRep_ReplicatedMotionCommand)
+	FLLMNPCReplicatedMotionCommand ReplicatedMotionCommand;
+
 	UPROPERTY()
 	TObjectPtr<ULLMNPCMotionValidator> Validator;
 
@@ -202,6 +297,11 @@ private:
 	bool bOriginalPostProcessDisabled = false;
 	FLLMNPCMicroMotionState MicroMotionState;
 	FLLMNPCPoseBoneBindings CachedPoseBoneBindings;
+	ELLMNPCMotionLODLevel CurrentMotionLOD = ELLMNPCMotionLODLevel::Full;
+	float LODAccumulatedDeltaSeconds = 0.0f;
+	float PendingReplicatedStartOffsetSeconds = 0.0f;
+	int32 LastAppliedReplicationSequence = 0;
+	bool bApplyingReplicatedCommand = false;
 
 private:
 #if WITH_DEV_AUTOMATION_TESTS
@@ -212,7 +312,8 @@ private:
 	bool SubmitMotionPlanWithSource(
 		FLLMMotionPlan Plan,
 		ELLMNPCMotionValidationSource Source,
-		const ULLMNPCMotionTemplate* SourceTemplate = nullptr
+		const ULLMNPCMotionTemplate* SourceTemplate = nullptr,
+		float InitialTimeSeconds = 0.0f
 	);
 	bool ValidateTargetRefs(const FLLMMotionPlan& Plan, FString& OutError) const;
 	bool SubmitAnimationAssetTemplate(
@@ -222,6 +323,24 @@ private:
 	void UpdateActivePlans(float DeltaTime);
 	void RefreshPoseBoneBindings();
 	void UpdateMicroMotion(float DeltaTime);
+	bool ShouldRunMotionUpdate(float DeltaTime, float& OutUpdateDeltaSeconds);
+	void UpdateMotionLOD();
+	float ResolveNearestViewerDistanceCm() const;
+	bool CanSubmitLocally() const;
+	void PublishReplicatedPlan(const FLLMMotionPlan& Plan);
+	void PublishReplicatedAnimationTemplate(
+		FName TemplateId,
+		const FLLMNPCTemplateModifiers& Modifiers
+	);
+	void PopulateReplicatedTargets(
+		const FLLMMotionPlan& Plan,
+		TArray<FLLMNPCReplicatedTarget>& OutTargets
+	) const;
+	double GetSynchronizedServerTimeSeconds() const;
+
+	UFUNCTION()
+	void OnRep_ReplicatedMotionCommand();
+
 	bool IsChannelActive(FName Channel) const;
 	static TArray<FName> DeriveMotionChannels(const FLLMMotionPlan& Plan);
 	static bool ChannelsConflict(const TArray<FName>& A, const TArray<FName>& B);

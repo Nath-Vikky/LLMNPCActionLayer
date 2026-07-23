@@ -70,7 +70,8 @@ void ULLMNPCAnimationAssetPlayer::Shutdown()
 bool ULLMNPCAnimationAssetPlayer::Play(
 	const ULLMNPCMotionTemplate& MotionTemplate,
 	const FLLMNPCTemplateModifiers& Modifiers,
-	FString& OutError
+	FString& OutError,
+	float ElapsedPlaybackSeconds
 )
 {
 	OutError.Reset();
@@ -78,6 +79,32 @@ bool ULLMNPCAnimationAssetPlayer::Play(
 	float PlayRate = 1.0f;
 	if (!ValidatePlaybackRequest(MotionTemplate, Modifiers, AnimationAsset, PlayRate, OutError))
 	{
+		State = ELLMNPCAnimationPlaybackState::Failed;
+		LastErrorCode = OutError;
+		return false;
+	}
+	ElapsedPlaybackSeconds = FMath::Max(ElapsedPlaybackSeconds, 0.0f);
+	if (ElapsedPlaybackSeconds >= MotionTemplate.AnimationPlayback.MaxDurationSeconds)
+	{
+		OutError = TEXT("LLMNPC_ANIMATION_REPLICATION_STALE");
+		State = ELLMNPCAnimationPlaybackState::Failed;
+		LastErrorCode = OutError;
+		return false;
+	}
+	const float BaseStartPosition = MotionTemplate.AnimationPlayback.StartPositionSeconds;
+	float EffectiveStartPosition = BaseStartPosition + ElapsedPlaybackSeconds * PlayRate;
+	const float AnimationLength = AnimationAsset->GetPlayLength();
+	if (MotionTemplate.AnimationPlayback.bLoop)
+	{
+		const float RemainingLength = FMath::Max(AnimationLength - BaseStartPosition, KINDA_SMALL_NUMBER);
+		EffectiveStartPosition = BaseStartPosition + FMath::Fmod(
+			ElapsedPlaybackSeconds * PlayRate,
+			RemainingLength
+		);
+	}
+	else if (EffectiveStartPosition >= AnimationLength)
+	{
+		OutError = TEXT("LLMNPC_ANIMATION_REPLICATION_STALE");
 		State = ELLMNPCAnimationPlaybackState::Failed;
 		LastErrorCode = OutError;
 		return false;
@@ -133,7 +160,7 @@ bool ULLMNPCAnimationAssetPlayer::Play(
 			FAlphaBlendArgs(MotionTemplate.AnimationPlayback.BlendInSeconds),
 			PlayRate,
 			EMontagePlayReturnType::MontageLength,
-			MotionTemplate.AnimationPlayback.StartPositionSeconds,
+			EffectiveStartPosition,
 			MotionTemplate.AnimationPlayback.bStopOtherMontages
 		);
 		if (PlayedLength > 0.0f)
@@ -151,7 +178,7 @@ bool ULLMNPCAnimationAssetPlayer::Play(
 			return false;
 		}
 		const float RemainingLength = FMath::Max(
-			Sequence->GetPlayLength() - MotionTemplate.AnimationPlayback.StartPositionSeconds,
+			Sequence->GetPlayLength() - EffectiveStartPosition,
 			KINDA_SMALL_NUMBER
 		);
 		const int32 LoopCount = MotionTemplate.AnimationPlayback.bLoop
@@ -169,7 +196,7 @@ bool ULLMNPCAnimationAssetPlayer::Play(
 			PlayRate,
 			LoopCount,
 			-1.0f,
-			MotionTemplate.AnimationPlayback.StartPositionSeconds
+			EffectiveStartPosition
 		);
 	}
 
@@ -201,7 +228,10 @@ bool ULLMNPCAnimationAssetPlayer::Play(
 			TimeoutHandle,
 			this,
 			&ULLMNPCAnimationAssetPlayer::HandleTimeout,
-			MotionTemplate.AnimationPlayback.MaxDurationSeconds,
+			FMath::Max(
+				MotionTemplate.AnimationPlayback.MaxDurationSeconds - ElapsedPlaybackSeconds,
+				0.01f
+			),
 			false
 		);
 	}

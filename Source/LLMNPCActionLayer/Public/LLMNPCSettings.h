@@ -23,6 +23,9 @@ public:
 	ELLMNPCModelProviderKind DefaultModelProvider = ELLMNPCModelProviderKind::Mock;
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider")
+	FName DefaultProviderId = NAME_None;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider")
 	FString BackendProxyEndpoint = TEXT("http://localhost:8787/v1/npc/turn");
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider")
@@ -39,6 +42,9 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category="Runtime", meta=(ClampMin="1.0", ClampMax="60.0"))
 	float RequestTimeoutSeconds = 8.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider", meta=(ClampMin="2.0", ClampMax="300.0"))
+	float DialogueRequestWatchdogSeconds = 30.0f;
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Provider", meta=(ClampMin="0", ClampMax="5"))
 	int32 MaxProviderRetries = 2;
@@ -66,6 +72,9 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection", meta=(ClampMin="8", ClampMax="2048"))
 	int32 MaxSelectionAnalyticsEvents = 128;
+
+	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection")
+	bool bEnableLocalSelectionTelemetry = false;
 
 	UPROPERTY(Config, EditAnywhere, Category="Runtime|Behavior")
 	bool bEnableNavigationIntents = true;

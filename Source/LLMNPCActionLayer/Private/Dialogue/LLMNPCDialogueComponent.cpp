@@ -12,15 +12,15 @@
 #include "GameFramework/PlayerController.h"
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCSettings.h"
-#include "Providers/LLMNPCBackendProxyProvider.h"
-#include "Providers/LLMNPCDeepSeekProvider.h"
-#include "Providers/LLMNPCMockProvider.h"
+#include "Protocol/LLMNPCProtocolCompatibility.h"
+#include "Providers/LLMNPCModelProviderRegistry.h"
 #include "Selection/LLMNPCCandidateRetriever.h"
 #include "Selection/LLMNPCSelectionAnalyticsSubsystem.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
 #include "Style/LLMNPCStyleResolver.h"
 #include "Templates/LLMNPCTemplateCandidate.h"
 #include "Templates/LLMNPCTemplateLibrarySubsystem.h"
+#include "TimerManager.h"
 #include "UI/LLMNPCChatWidget.h"
 
 ULLMNPCDialogueComponent::ULLMNPCDialogueComponent()
@@ -41,10 +41,12 @@ void ULLMNPCDialogueComponent::BeginPlay()
 void ULLMNPCDialogueComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	CancelActiveRequest();
+	ClearRequestWatchdog();
 	if (BehaviorCoordinator)
 	{
 		BehaviorCoordinator->Shutdown();
 	}
+	FallbackModelProvider.Reset();
 	ModelProvider.Reset();
 	ChatWidget = nullptr;
 	Super::EndPlay(EndPlayReason);
@@ -65,6 +67,19 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	}
 
 	EnsureRuntimeObjects();
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	const FString PromptVersion = Settings
+		? Settings->SelectionPromptVersion
+		: FLLMNPCProtocolCompatibility::CurrentSelectionPrompt();
+	if (!FLLMNPCProtocolCompatibility::IsSupportedSelectionPrompt(PromptVersion))
+	{
+		CompleteFailure(
+			TEXT("LLMNPC_SELECTION_PROMPT_VERSION_UNSUPPORTED"),
+			PromptVersion,
+			false
+		);
+		return false;
+	}
 	if (!ConversationSession || !ModelProvider)
 	{
 		CompleteFailure(
@@ -91,7 +106,6 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 		}
 	}
 
-	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
 	FLLMNPCCandidateRetrievalRequest RetrievalRequest;
 	RetrievalRequest.UserMessage = CleanMessage;
 	RetrievalRequest.SourceCandidates = MoveTemp(SourceCandidates);
@@ -117,9 +131,6 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	ActiveRequest.SessionId = ConversationSession->GetSessionId();
 	ActiveRequest.NPCId = NPCId;
 	ActiveRequest.UserMessage = CleanMessage;
-	const FString PromptVersion = Settings
-		? Settings->SelectionPromptVersion
-		: FString(TEXT("llmnpc.selection_prompt.v1"));
 	ActiveRequest.ContextJson = ConversationSession->BuildContextualRequestJson(
 		ActiveRequest.RequestId,
 		ActiveOfferedCandidates,
@@ -130,7 +141,7 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	{
 		SelectionAnalytics = GetWorld()->GetGameInstance()->GetSubsystem<ULLMNPCSelectionAnalyticsSubsystem>();
 	}
-	if (SelectionAnalytics)
+	if (SelectionAnalytics && Settings && Settings->bEnableLocalSelectionTelemetry)
 	{
 		TArray<FName> OfferedIds;
 		for (const FLLMNPCTemplateCandidate& Candidate : ActiveOfferedCandidates)
@@ -151,6 +162,7 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	LastTurnResult = FLLMNPCDialogueTurnResult();
 	LastTurnResult.RequestId = ActiveRequest.RequestId;
 	SetState(ELLMNPCDialogueState::Sending);
+	ArmRequestWatchdog();
 
 	const TWeakObjectPtr<ULLMNPCDialogueComponent> WeakThis(this);
 	ModelProvider->SendTurn(
@@ -191,9 +203,15 @@ void ULLMNPCDialogueComponent::CancelActiveRequest()
 
 	const FGuid CancelledRequestId = ActiveRequest.RequestId;
 	bRequestInFlight = false;
+	ClearRequestWatchdog();
 	if (ModelProvider)
 	{
 		ModelProvider->CancelRequest(CancelledRequestId);
+	}
+	if (FallbackModelProvider)
+	{
+		FallbackModelProvider->CancelRequest(CancelledRequestId);
+		FallbackModelProvider.Reset();
 	}
 	LastTurnResult = FLLMNPCDialogueTurnResult();
 	LastTurnResult.RequestId = CancelledRequestId;
@@ -228,12 +246,24 @@ void ULLMNPCDialogueComponent::ResetConversation()
 
 void ULLMNPCDialogueComponent::SetProviderKind(ELLMNPCModelProviderKind NewProviderKind)
 {
-	if (ProviderKind == NewProviderKind)
+	if (ProviderKind == NewProviderKind && ProviderIdOverride.IsNone())
 	{
 		return;
 	}
 	CancelActiveRequest();
 	ProviderKind = NewProviderKind;
+	ProviderIdOverride = NAME_None;
+	RecreateProvider();
+}
+
+void ULLMNPCDialogueComponent::SetProviderId(FName NewProviderId)
+{
+	if (ProviderIdOverride == NewProviderId)
+	{
+		return;
+	}
+	CancelActiveRequest();
+	ProviderIdOverride = NewProviderId;
 	RecreateProvider();
 }
 
@@ -418,21 +448,9 @@ void ULLMNPCDialogueComponent::EnsureRuntimeObjects()
 
 void ULLMNPCDialogueComponent::RecreateProvider()
 {
+	FallbackModelProvider.Reset();
 	ModelProvider.Reset();
-	switch (ResolveProviderKind())
-	{
-	case ELLMNPCModelProviderKind::BackendProxy:
-		ModelProvider = MakeShared<FLLMNPCBackendProxyProvider>();
-		break;
-	case ELLMNPCModelProviderKind::DeepSeekDirectEditorOnly:
-		ModelProvider = MakeShared<FLLMNPCDeepSeekProvider>();
-		break;
-	case ELLMNPCModelProviderKind::Mock:
-	case ELLMNPCModelProviderKind::UseProjectSettings:
-	default:
-		ModelProvider = MakeShared<FLLMNPCMockProvider>();
-		break;
-	}
+	ModelProvider = FLLMNPCModelProviderRegistry::Get().CreateProvider(ResolveProviderId());
 	LastProviderId = ModelProvider ? ModelProvider->GetProviderId() : NAME_None;
 }
 
@@ -445,6 +463,93 @@ ELLMNPCModelProviderKind ULLMNPCDialogueComponent::ResolveProviderKind() const
 
 	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
 	return Settings ? Settings->DefaultModelProvider : ELLMNPCModelProviderKind::Mock;
+}
+
+FName ULLMNPCDialogueComponent::ResolveProviderId() const
+{
+	if (!ProviderIdOverride.IsNone())
+	{
+		return ProviderIdOverride;
+	}
+
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	if (
+		ProviderKind == ELLMNPCModelProviderKind::UseProjectSettings &&
+		Settings &&
+		!Settings->DefaultProviderId.IsNone()
+	)
+	{
+		return Settings->DefaultProviderId;
+	}
+
+	switch (ResolveProviderKind())
+	{
+	case ELLMNPCModelProviderKind::BackendProxy:
+		return TEXT("backend_proxy");
+	case ELLMNPCModelProviderKind::DeepSeekDirectEditorOnly:
+		return TEXT("deepseek_direct_editor");
+	case ELLMNPCModelProviderKind::Mock:
+	case ELLMNPCModelProviderKind::UseProjectSettings:
+	default:
+		return TEXT("mock");
+	}
+}
+
+void ULLMNPCDialogueComponent::ArmRequestWatchdog()
+{
+	ClearRequestWatchdog();
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	const float TimeoutSeconds = Settings
+		? Settings->DialogueRequestWatchdogSeconds
+		: 30.0f;
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			RequestWatchdogHandle,
+			this,
+			&ULLMNPCDialogueComponent::HandleRequestWatchdog,
+			FMath::Max(TimeoutSeconds, 2.0f),
+			false
+		);
+	}
+}
+
+void ULLMNPCDialogueComponent::ClearRequestWatchdog()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RequestWatchdogHandle);
+	}
+	RequestWatchdogHandle.Invalidate();
+}
+
+void ULLMNPCDialogueComponent::HandleRequestWatchdog()
+{
+	if (!bRequestInFlight)
+	{
+		return;
+	}
+
+	const FGuid TimedOutRequestId = ActiveRequest.RequestId;
+	const bool bFallbackTimedOut = FallbackModelProvider.IsValid();
+	bRequestInFlight = false;
+	if (ModelProvider)
+	{
+		ModelProvider->CancelRequest(TimedOutRequestId);
+	}
+	if (FallbackModelProvider)
+	{
+		FallbackModelProvider->CancelRequest(TimedOutRequestId);
+		FallbackModelProvider.Reset();
+	}
+	bRequestInFlight = true;
+
+	FLLMNPCModelTurnResult TimeoutResult;
+	TimeoutResult.RequestId = TimedOutRequestId;
+	TimeoutResult.ProviderId = LastProviderId;
+	TimeoutResult.ErrorCode = TEXT("LLMNPC_PROVIDER_WATCHDOG_TIMEOUT");
+	TimeoutResult.ErrorMessage = TEXT("The model provider did not complete before the dialogue watchdog expired.");
+	HandleProviderFailure(TimeoutResult, bFallbackTimedOut);
 }
 
 void ULLMNPCDialogueComponent::SetState(ELLMNPCDialogueState NewState)
@@ -467,12 +572,20 @@ void ULLMNPCDialogueComponent::HandleProviderResult(
 	{
 		return;
 	}
+	if (
+		(bUsedFallback && !FallbackModelProvider.IsValid()) ||
+		(!bUsedFallback && FallbackModelProvider.IsValid())
+	)
+	{
+		return;
+	}
 
+	ClearRequestWatchdog();
 	LastProviderId = ProviderResult.ProviderId;
 	SetState(ELLMNPCDialogueState::Receiving);
 	if (!ProviderResult.bSuccess)
 	{
-		HandleProviderFailure(ProviderResult);
+		HandleProviderFailure(ProviderResult, bUsedFallback);
 		return;
 	}
 
@@ -494,16 +607,31 @@ void ULLMNPCDialogueComponent::HandleProviderResult(
 }
 
 void ULLMNPCDialogueComponent::HandleProviderFailure(
-	const FLLMNPCModelTurnResult& ProviderResult
+	const FLLMNPCModelTurnResult& ProviderResult,
+	bool bFallbackAlreadyUsed
 )
 {
-	if (bEnableLocalCommandFallback && ResolveProviderKind() != ELLMNPCModelProviderKind::Mock)
+	if (
+		!bFallbackAlreadyUsed &&
+		bEnableLocalCommandFallback &&
+		ResolveProviderId() != FName(TEXT("mock"))
+	)
 	{
 		FLLMNPCModelTurnRequest FallbackRequest = ActiveRequest;
 		FallbackRequest.bFallbackRequest = true;
 		const TWeakObjectPtr<ULLMNPCDialogueComponent> WeakThis(this);
-		FLLMNPCMockProvider FallbackProvider;
-		FallbackProvider.SendTurn(
+		FallbackModelProvider = FLLMNPCModelProviderRegistry::Get().CreateProvider(TEXT("mock"));
+		if (!FallbackModelProvider)
+		{
+			CompleteFailure(
+				TEXT("LLMNPC_FALLBACK_PROVIDER_UNAVAILABLE"),
+				TEXT("The local fallback provider is not registered."),
+				true
+			);
+			return;
+		}
+		ArmRequestWatchdog();
+		FallbackModelProvider->SendTurn(
 			FallbackRequest,
 			[WeakThis, ProviderError = ProviderResult.ErrorCode](const FLLMNPCModelTurnResult& Result)
 			{
@@ -551,6 +679,8 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 		LastTurnResult.ErrorMessage = ParseError;
 		CompleteAnalytics(TEXT("parse_rejected"), LastTurnResult.ErrorCode, bUsedFallback);
 		bRequestInFlight = false;
+		ClearRequestWatchdog();
+		FallbackModelProvider.Reset();
 		ActiveRequest = FLLMNPCModelTurnRequest();
 		ResetActiveSelection();
 		SetState(ELLMNPCDialogueState::Failed);
@@ -576,6 +706,8 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 		LastTurnResult.ErrorMessage = SelectionError;
 		CompleteAnalytics(TEXT("selection_rejected"), LastTurnResult.ErrorCode, bUsedFallback);
 		bRequestInFlight = false;
+		ClearRequestWatchdog();
+		FallbackModelProvider.Reset();
 		ActiveRequest = FLLMNPCModelTurnRequest();
 		ResetActiveSelection();
 		SetState(ELLMNPCDialogueState::Failed);
@@ -624,6 +756,8 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 		bUsedFallback
 	);
 	bRequestInFlight = false;
+	ClearRequestWatchdog();
+	FallbackModelProvider.Reset();
 	ActiveRequest = FLLMNPCModelTurnRequest();
 	ResetActiveSelection();
 	SetState(BehaviorResult.bAccepted ? ELLMNPCDialogueState::Idle : ELLMNPCDialogueState::Failed);
@@ -653,6 +787,8 @@ void ULLMNPCDialogueComponent::CompleteFailure(
 		LastTurnResult.AssistantText = FallbackText;
 	}
 	bRequestInFlight = false;
+	ClearRequestWatchdog();
+	FallbackModelProvider.Reset();
 	ActiveRequest = FLLMNPCModelTurnRequest();
 	ResetActiveSelection();
 	SetState(ELLMNPCDialogueState::Failed);
