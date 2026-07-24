@@ -78,6 +78,33 @@ bool FLLMNPCMannySkeletonProfileTest::RunTest(const FString& Parameters)
 		FName(TEXT("hand_r"))
 	);
 	TestTrue(TEXT("The profile contains both arm IK chains"), Profile->IKChains.Num() == 2);
+	const FLLMNPCPoseBoneBindings Bindings = Profile->BuildPoseBoneBindings();
+	TestTrue(
+		TEXT("The Manny right-arm pole direction reaches the animation thread"),
+		Bindings.RightArmIKPoleDirectionCS.Equals(FVector::BackwardVector)
+	);
+	TestTrue(
+		TEXT("The Manny left-arm pole direction reaches the animation thread"),
+		Bindings.LeftArmIKPoleDirectionCS.Equals(FVector::ForwardVector)
+	);
+	TestTrue(
+		TEXT("The Manny component-space forward direction reaches the animation thread"),
+		Bindings.ComponentForwardDirectionCS.Equals(FVector::RightVector)
+	);
+	TestTrue(
+		TEXT("The Manny component-space up direction reaches the animation thread"),
+		Bindings.ComponentUpDirectionCS.Equals(FVector::UpVector)
+	);
+	TestEqual(
+		TEXT("The Manny right-arm reach limit reaches the animation thread"),
+		Bindings.RightArmIKMaxReachScale,
+		0.98f
+	);
+	TestEqual(
+		TEXT("The Manny left-arm reach limit reaches the animation thread"),
+		Bindings.LeftArmIKMaxReachScale,
+		0.98f
+	);
 	TestTrue(TEXT("The profile contains approved finger poses"), Profile->FingerPoses.Num() >= 2);
 	return true;
 }

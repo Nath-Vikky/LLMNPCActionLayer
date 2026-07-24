@@ -28,6 +28,8 @@ private:
 	TSharedPtr<SEditableTextBox> ApiKeyTextBox;
 	TSharedPtr<FLLMNPCDeepSeekProvider> ActiveTestProvider;
 	FGuid ActiveTestRequestId;
+	FString ActiveTestConfigHash;
+	FString ActiveTestExpectedModel;
 
 	FString BackendEndpoint;
 	FString DeepSeekBaseUrl;
@@ -48,10 +50,18 @@ private:
 	TSharedRef<SWidget> GenerateProviderOption(TSharedPtr<FLLMNPCProviderOption> Option) const;
 	FText GetSelectedProviderText() const;
 	FText GetCredentialSourceText() const;
+	FText GetOnlineConfigStatusText() const;
+	FText GetOnlineConfigModelText() const;
+	FText GetOnlineConfigEndpointText() const;
+	FText GetOnlineConfigHashText() const;
+	FText GetOnlineConnectionText() const;
 	FSlateColor GetStatusColor() const;
+	FSlateColor GetOnlineConfigStatusColor() const;
 	bool CanTestDeepSeek() const;
 
 	void HandleProviderChanged(TSharedPtr<FLLMNPCProviderOption> Option, ESelectInfo::Type SelectInfo);
+	FReply HandleReloadLocalConfig();
+	FReply HandleClearOnlineSession();
 	FReply HandleApplySettings();
 	FReply HandleApplyToSelectedNPCs();
 	FReply HandleClearSessionKey();

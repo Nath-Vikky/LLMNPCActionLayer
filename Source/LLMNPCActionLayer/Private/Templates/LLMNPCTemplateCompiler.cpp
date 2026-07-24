@@ -91,11 +91,16 @@ bool FLLMNPCTemplateCompiler::Compile(
 	const FLLMNPCTemplateModifiers& Modifiers,
 	const ULLMNPCSkeletonProfile& SkeletonProfile,
 	FLLMMotionPlan& OutPlan,
-	FString& OutError
+	FString& OutError,
+	FLLMNPCTemplateResolvedModifiers* OutResolvedModifiers
 )
 {
 	OutPlan = FLLMMotionPlan();
 	OutError.Reset();
+	if (OutResolvedModifiers)
+	{
+		*OutResolvedModifiers = FLLMNPCTemplateResolvedModifiers();
+	}
 
 	FString TemplateError;
 	if (!MotionTemplate.ValidateTemplate(TemplateError))
@@ -272,5 +277,15 @@ bool FLLMNPCTemplateCompiler::Compile(
 		}
 	}
 
+	if (OutResolvedModifiers)
+	{
+		OutResolvedModifiers->TargetRef = TargetRef;
+		OutResolvedModifiers->Amplitude = Amplitude;
+		OutResolvedModifiers->SpeedScale = SpeedScale;
+		OutResolvedModifiers->DurationScale = DurationScale;
+		OutResolvedModifiers->Style = StylePreset.StyleTag;
+		OutResolvedModifiers->bMirror = Modifiers.bMirror;
+		OutResolvedModifiers->RandomSeed = Modifiers.RandomSeed;
+	}
 	return true;
 }

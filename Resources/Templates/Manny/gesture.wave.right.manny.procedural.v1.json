@@ -48,18 +48,18 @@
         "value_type": "vector",
         "start_time": 0.0,
         "end_time": 1.7,
-        "anchor": "head_right",
-        "offset": [15.0, 8.0, 5.0],
+        "anchor": "right_wave",
+        "offset": [0.0, 0.0, 0.0],
         "envelope": "none",
         "strength": 1.0
       },
       {
-        "control_id": "right_hand.local_offset.y",
+        "control_id": "right_hand.local_offset.x",
         "track_type": "oscillator",
         "value_type": "float",
         "start_time": 0.35,
         "end_time": 1.35,
-        "amplitude": 16.0,
+        "amplitude": 17.0,
         "frequency": 3.0,
         "phase": 0.0,
         "envelope": "smooth",
@@ -78,6 +78,36 @@
         "strength": 1.0
       },
       {
+        "control_id": "right_hand.pitch",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 1.7,
+        "envelope": "none",
+        "strength": 1.0,
+        "keys": [[0.0, 0.0], [0.22, -5.6], [0.43, -0.2], [0.67, 43.1], [0.88, -10.0], [1.1, 28.9], [1.32, -9.9], [1.53, -6.3], [1.7, 0.0]]
+      },
+      {
+        "control_id": "right_hand.yaw",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 1.7,
+        "envelope": "none",
+        "strength": 1.0,
+        "keys": [[0.0, 0.0], [0.22, 4.0], [0.43, 20.0], [0.67, 16.9], [0.88, 16.4], [1.1, 15.0], [1.32, 7.4], [1.53, 6.7], [1.7, 0.0]]
+      },
+      {
+        "control_id": "right_hand.roll",
+        "track_type": "keyframes",
+        "value_type": "float",
+        "start_time": 0.0,
+        "end_time": 1.7,
+        "envelope": "none",
+        "strength": 1.0,
+        "keys": [[0.0, 0.0], [0.22, -9.2], [0.43, 56.3], [0.67, 42.3], [0.88, 57.5], [1.1, 30.9], [1.32, 32.1], [1.53, 6.5], [1.7, 0.0]]
+      },
+      {
         "control_id": "right_fingers.open",
         "track_type": "keyframes",
         "value_type": "float",
@@ -92,13 +122,13 @@
   "provenance": {
     "source_type": "semantic_procedural_authoring",
     "source_repository": "LLMNPCActionLayer",
-    "source_revision": "phase1",
+    "source_revision": "forward-n0-manny-wave-calibration",
     "source_license": "project_owned",
     "redistribution_allowed": true
   },
   "validation_report": {
     "schema_version": "llmnpc.template_validation.v1",
     "status": "pass",
-    "manual_review": "requires_comparison_with_faithful_fk"
+    "manual_review": "pending_forward_n0_visual_recheck"
   }
 }

@@ -5,6 +5,8 @@
 #include "Providers/LLMNPCDeepSeekProvider.h"
 #include "Providers/LLMNPCMockProvider.h"
 #include "Providers/LLMNPCModelProviderRegistry.h"
+#include "Providers/LLMNPCProviderCredentials.h"
+#include "Providers/LLMNPCProviderSession.h"
 
 #define LOCTEXT_NAMESPACE "FLLMNPCActionLayerModule"
 
@@ -51,6 +53,8 @@ void FLLMNPCActionLayerModule::ShutdownModule()
 	Registry.UnregisterProvider(TEXT("mock"));
 	Registry.UnregisterProvider(TEXT("backend_proxy"));
 	Registry.UnregisterProvider(TEXT("deepseek_direct_editor"));
+	FLLMNPCProviderCredentials::ClearAllSessionSecrets();
+	FLLMNPCProviderSession::ClearAllSessionOverrides();
 }
 
 #undef LOCTEXT_NAMESPACE

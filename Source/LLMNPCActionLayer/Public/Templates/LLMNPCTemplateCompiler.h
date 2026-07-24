@@ -38,6 +38,33 @@ struct FLLMNPCTemplateModifiers
 	FVector2D ContextDurationRange = FVector2D::ZeroVector;
 };
 
+USTRUCT(BlueprintType)
+struct FLLMNPCTemplateResolvedModifiers
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template")
+	FString TargetRef;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template")
+	float Amplitude = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template")
+	float SpeedScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template")
+	float DurationScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template")
+	FName Style = TEXT("neutral");
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template")
+	bool bMirror = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template")
+	int32 RandomSeed = 0;
+};
+
 class LLMNPCACTIONLAYER_API FLLMNPCTemplateCompiler
 {
 public:
@@ -46,6 +73,7 @@ public:
 		const FLLMNPCTemplateModifiers& Modifiers,
 		const ULLMNPCSkeletonProfile& SkeletonProfile,
 		FLLMMotionPlan& OutPlan,
-		FString& OutError
+		FString& OutError,
+		FLLMNPCTemplateResolvedModifiers* OutResolvedModifiers = nullptr
 	);
 };

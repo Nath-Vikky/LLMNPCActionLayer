@@ -65,6 +65,10 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 		LastTurnResult.ErrorMessage = TEXT("A dialogue request is already in flight.");
 		return false;
 	}
+	LastProviderResult = FLLMNPCModelTurnResult();
+	LastSourceCandidateCount = 0;
+	LastOfferedCandidateCount = 0;
+	LastExcludedCandidateCount = 0;
 
 	EnsureRuntimeObjects();
 	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
@@ -105,6 +109,7 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 			Library->QueryRuntimeCandidates(ResolveSkeletonProfileId(), SourceCandidates);
 		}
 	}
+	LastSourceCandidateCount = SourceCandidates.Num();
 
 	FLLMNPCCandidateRetrievalRequest RetrievalRequest;
 	RetrievalRequest.UserMessage = CleanMessage;
@@ -122,6 +127,8 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	RetrievalRequest.MaxCandidates = Settings ? Settings->MaxContextCandidates : 8;
 	RetrievalRequest.RepeatSuppressionSeconds = Settings ? Settings->RepeatSuppressionSeconds : 2.0f;
 	FLLMNPCCandidateRetrievalResult Retrieval = ULLMNPCCandidateRetriever::Retrieve(RetrievalRequest);
+	LastOfferedCandidateCount = Retrieval.Candidates.Num();
+	LastExcludedCandidateCount = Retrieval.Exclusions.Num();
 	ActiveOfferedCandidates = MoveTemp(Retrieval.Candidates);
 	ActiveCandidateExclusions = MoveTemp(Retrieval.Exclusions);
 	LastOfferedCandidates = ActiveOfferedCandidates;
@@ -241,6 +248,10 @@ void ULLMNPCDialogueComponent::ResetConversation()
 		ConversationSession->ResetSession();
 	}
 	LastTurnResult = FLLMNPCDialogueTurnResult();
+	LastProviderResult = FLLMNPCModelTurnResult();
+	LastSourceCandidateCount = 0;
+	LastOfferedCandidateCount = 0;
+	LastExcludedCandidateCount = 0;
 	SetState(ELLMNPCDialogueState::Idle);
 }
 
@@ -363,12 +374,30 @@ FLLMNPCDialogueDebugState ULLMNPCDialogueComponent::GetDebugState() const
 	FLLMNPCDialogueDebugState Debug;
 	Debug.State = State;
 	Debug.ActiveRequestId = bRequestInFlight ? ActiveRequest.RequestId : FGuid();
-	Debug.ProviderId = LastProviderId;
+	Debug.LastRequestId = LastTurnResult.RequestId;
+	Debug.ProviderId =
+		!bRequestInFlight && !LastTurnResult.ProviderId.IsNone()
+			? LastTurnResult.ProviderId
+			: LastProviderId;
+	Debug.ProviderModelId = LastTurnResult.ProviderModelId;
 	Debug.LastSelectedActionId = LastTurnResult.SelectedActionId;
 	Debug.LastResolvedTemplateId = LastTurnResult.ResolvedTemplateId;
 	Debug.LastErrorCode = LastTurnResult.ErrorCode;
 	Debug.LastErrorMessage = LastTurnResult.ErrorMessage;
 	Debug.MessageCount = ConversationSession ? ConversationSession->GetMessages().Num() : 0;
+	Debug.SourceCandidateCount = LastSourceCandidateCount;
+	Debug.OfferedCandidateCount = LastOfferedCandidateCount;
+	Debug.ExcludedCandidateCount = LastExcludedCandidateCount;
+	Debug.bUsedLocalFallback = LastTurnResult.bUsedLocalFallback;
+	const FLLMNPCSelectionContextSnapshot Context = GetSelectionContextSnapshot();
+	Debug.ContextSummary = FString::Printf(
+		TEXT("emotion=%s:%.2f personality=%s targets=%d states=%d"),
+		*Context.Emotion.PrimaryEmotion.ToString(),
+		Context.Emotion.Intensity,
+		*Context.Personality.ProfileId.ToString(),
+		Context.AvailableTargets.Num(),
+		Context.ActiveStates.Num()
+	);
 	return Debug;
 }
 
@@ -580,6 +609,7 @@ void ULLMNPCDialogueComponent::HandleProviderResult(
 		return;
 	}
 
+	LastProviderResult = ProviderResult;
 	ClearRequestWatchdog();
 	LastProviderId = ProviderResult.ProviderId;
 	SetState(ELLMNPCDialogueState::Receiving);
@@ -611,6 +641,7 @@ void ULLMNPCDialogueComponent::HandleProviderFailure(
 	bool bFallbackAlreadyUsed
 )
 {
+	LastProviderResult = ProviderResult;
 	if (
 		!bFallbackAlreadyUsed &&
 		bEnableLocalCommandFallback &&
@@ -662,6 +693,14 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 	LastTurnResult = FLLMNPCDialogueTurnResult();
 	LastTurnResult.RequestId = ActiveRequest.RequestId;
 	LastTurnResult.bUsedLocalFallback = bUsedFallback;
+	LastTurnResult.ProviderId = LastProviderResult.ProviderId;
+	LastTurnResult.ProviderModelId = LastProviderResult.ProviderModelId;
+	LastTurnResult.HttpStatus = LastProviderResult.HttpStatus;
+	LastTurnResult.AttemptCount = LastProviderResult.AttemptCount;
+	LastTurnResult.TotalLatencySeconds = LastProviderResult.TotalLatencySeconds;
+	LastTurnResult.PromptTokens = LastProviderResult.PromptTokens;
+	LastTurnResult.CompletionTokens = LastProviderResult.CompletionTokens;
+	LastTurnResult.TotalTokens = LastProviderResult.TotalTokens;
 	if (!Decision.AssistantText.IsEmpty())
 	{
 		const FLLMNPCConversationMessage AssistantMessage = ConversationSession->AddMessage(
@@ -772,6 +811,14 @@ void ULLMNPCDialogueComponent::CompleteFailure(
 {
 	LastTurnResult = FLLMNPCDialogueTurnResult();
 	LastTurnResult.RequestId = ActiveRequest.RequestId;
+	LastTurnResult.ProviderId = LastProviderResult.ProviderId;
+	LastTurnResult.ProviderModelId = LastProviderResult.ProviderModelId;
+	LastTurnResult.HttpStatus = LastProviderResult.HttpStatus;
+	LastTurnResult.AttemptCount = LastProviderResult.AttemptCount;
+	LastTurnResult.TotalLatencySeconds = LastProviderResult.TotalLatencySeconds;
+	LastTurnResult.PromptTokens = LastProviderResult.PromptTokens;
+	LastTurnResult.CompletionTokens = LastProviderResult.CompletionTokens;
+	LastTurnResult.TotalTokens = LastProviderResult.TotalTokens;
 	LastTurnResult.ErrorCode = ErrorCode;
 	LastTurnResult.ErrorMessage = ErrorMessage;
 	CompleteAnalytics(TEXT("provider_failed"), ErrorCode, false);

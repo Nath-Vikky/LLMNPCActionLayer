@@ -134,6 +134,12 @@ public:
 	bool bApplyAxisCalibrationAtRuntime = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FVector ComponentForwardDirectionCS = FVector::RightVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
+	FVector ComponentUpDirectionCS = FVector::UpVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
 	TArray<FLLMNPCIKChainProfile> IKChains;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")

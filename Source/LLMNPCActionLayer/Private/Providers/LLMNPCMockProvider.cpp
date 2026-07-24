@@ -296,7 +296,9 @@ void FLLMNPCMockProvider::SendTurn(
 	Result.RequestId = Request.RequestId;
 	Result.bSuccess = true;
 	Result.ProviderId = GetProviderId();
+	Result.ProviderModelId = TEXT("deterministic_mock");
 	Result.AttemptCount = 1;
+	Result.TotalLatencySeconds = 0.0f;
 	Result.ResponseJson = BuildMockResponse(Request);
 
 	if (Callback)

@@ -151,6 +151,30 @@ struct FLLMNPCDialogueTurnResult
 	bool bUsedLocalFallback = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	FName ProviderId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	FString ProviderModelId;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	int32 HttpStatus = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	int32 AttemptCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	float TotalLatencySeconds = -1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	int32 PromptTokens = INDEX_NONE;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	int32 CompletionTokens = INDEX_NONE;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	int32 TotalTokens = INDEX_NONE;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
 	FString AssistantText;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
@@ -178,7 +202,13 @@ struct FLLMNPCDialogueDebugState
 	FGuid ActiveRequestId;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
+	FGuid LastRequestId;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
 	FName ProviderId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
+	FString ProviderModelId;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
 	FName LastSelectedActionId = NAME_None;
@@ -194,4 +224,19 @@ struct FLLMNPCDialogueDebugState
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
 	int32 MessageCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
+	int32 SourceCandidateCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
+	int32 OfferedCandidateCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
+	int32 ExcludedCandidateCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
+	bool bUsedLocalFallback = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
+	FString ContextSummary;
 };

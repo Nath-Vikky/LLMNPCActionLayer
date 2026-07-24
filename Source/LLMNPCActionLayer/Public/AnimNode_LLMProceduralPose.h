@@ -185,6 +185,11 @@ private:
 		float Alpha
 	) const;
 
+	void ApplyRightOpenPalmIKOrientation(
+		FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& OutBoneTransforms
+	) const;
+
 	void PropagateRightHandChildrenCS(
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms

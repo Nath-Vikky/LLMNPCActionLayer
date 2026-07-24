@@ -1,12 +1,15 @@
 #include "Providers/LLMNPCDeepSeekProvider.h"
 
 #include "Containers/Ticker.h"
+#include "Dialogue/LLMNPCModelTurnContract.h"
 #include "Dom/JsonObject.h"
+#include "HAL/PlatformTime.h"
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
 #include "LLMNPCSettings.h"
 #include "Providers/LLMNPCProviderCredentials.h"
+#include "Providers/LLMNPCProviderSession.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -17,6 +20,7 @@ struct FLLMNPCDeepSeekProvider::FPendingRequest
 	FLLMNPCModelTurnCallback Callback;
 	TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> HttpRequest;
 	int32 Attempt = 0;
+	double StartedAtSeconds = 0.0;
 };
 
 namespace
@@ -79,6 +83,7 @@ void FLLMNPCDeepSeekProvider::SendTurn(
 	TSharedPtr<FPendingRequest> Pending = MakeShared<FPendingRequest>();
 	Pending->Request = Request;
 	Pending->Callback = MoveTemp(Callback);
+	Pending->StartedAtSeconds = FPlatformTime::Seconds();
 	PendingRequests.Add(Request.RequestId, Pending);
 	StartHttpRequest(Request.RequestId);
 #endif
@@ -138,6 +143,16 @@ void FLLMNPCDeepSeekProvider::StartHttpRequest(const FGuid& RequestId)
 	++Pending->Attempt;
 	Pending->HttpRequest = FHttpModule::Get().CreateRequest();
 	FString BaseUrl = Settings->DeepSeekBaseUrl.TrimStartAndEnd();
+	FString Model = Settings->DeepSeekModel.TrimStartAndEnd();
+	FLLMNPCProviderSessionOverrides SessionOverrides;
+	if (FLLMNPCProviderSession::GetSessionOverrides(
+		FLLMNPCProviderCredentials::DeepSeekProviderId(),
+		SessionOverrides
+	))
+	{
+		BaseUrl = SessionOverrides.BaseUrl;
+		Model = SessionOverrides.Model;
+	}
 	while (BaseUrl.EndsWith(TEXT("/")))
 	{
 		BaseUrl.LeftChopInline(1);
@@ -150,7 +165,7 @@ void FLLMNPCDeepSeekProvider::StartHttpRequest(const FGuid& RequestId)
 	Pending->HttpRequest->SetTimeout(Settings->RequestTimeoutSeconds);
 
 	TSharedRef<FJsonObject> Body = MakeShared<FJsonObject>();
-	Body->SetStringField(TEXT("model"), Settings->DeepSeekModel);
+	Body->SetStringField(TEXT("model"), Model);
 	Body->SetBoolField(TEXT("stream"), false);
 	Body->SetNumberField(TEXT("temperature"), Settings->DeepSeekTemperature);
 	Body->SetNumberField(TEXT("max_tokens"), Settings->DeepSeekMaxTokens);
@@ -163,8 +178,14 @@ void FLLMNPCDeepSeekProvider::StartHttpRequest(const FGuid& RequestId)
 
 	TArray<TSharedPtr<FJsonValue>> Messages;
 	TSharedRef<FJsonObject> SystemMessage = MakeShared<FJsonObject>();
+	FString SystemPrompt = Settings->DeepSeekSystemPrompt.TrimStartAndEnd();
+	if (!SystemPrompt.IsEmpty())
+	{
+		SystemPrompt += TEXT("\n\n");
+	}
+	SystemPrompt += FLLMNPCModelTurnContract::GetResponseInstruction();
 	SystemMessage->SetStringField(TEXT("role"), TEXT("system"));
-	SystemMessage->SetStringField(TEXT("content"), Settings->DeepSeekSystemPrompt);
+	SystemMessage->SetStringField(TEXT("content"), SystemPrompt);
 	Messages.Add(MakeShared<FJsonValueObject>(SystemMessage));
 	TSharedRef<FJsonObject> UserMessage = MakeShared<FJsonObject>();
 	UserMessage->SetStringField(TEXT("role"), TEXT("user"));
@@ -245,6 +266,9 @@ void FLLMNPCDeepSeekProvider::HandleHttpResponse(
 	Result.ProviderId = GetProviderId();
 	Result.HttpStatus = HttpStatus;
 	Result.AttemptCount = Pending->Attempt;
+	Result.TotalLatencySeconds = static_cast<float>(
+		FMath::Max(FPlatformTime::Seconds() - Pending->StartedAtSeconds, 0.0)
+	);
 	if (!bWasSuccessful || !Response.IsValid())
 	{
 		Result.ErrorCode = TEXT("LLMNPC_DEEPSEEK_NETWORK_ERROR");
@@ -258,7 +282,15 @@ void FLLMNPCDeepSeekProvider::HandleHttpResponse(
 		return;
 	}
 
-	if (!ExtractDecisionJson(Response->GetContentAsString(), Result.ResponseJson, Result.ErrorMessage))
+	if (!ExtractDecisionJson(
+		Response->GetContentAsString(),
+		Result.ResponseJson,
+		Result.ErrorMessage,
+		&Result.ProviderModelId,
+		&Result.PromptTokens,
+		&Result.CompletionTokens,
+		&Result.TotalTokens
+	))
 	{
 		Result.ErrorCode = TEXT("LLMNPC_DEEPSEEK_RESPONSE_INVALID");
 		Complete(RequestId, MoveTemp(Result));
@@ -289,17 +321,62 @@ void FLLMNPCDeepSeekProvider::Complete(
 bool FLLMNPCDeepSeekProvider::ExtractDecisionJson(
 	const FString& ResponseBody,
 	FString& OutDecisionJson,
-	FString& OutError
+	FString& OutError,
+	FString* OutModelId,
+	int32* OutPromptTokens,
+	int32* OutCompletionTokens,
+	int32* OutTotalTokens
 )
 {
 	OutDecisionJson.Reset();
 	OutError.Reset();
+	if (OutModelId)
+	{
+		OutModelId->Reset();
+	}
+	if (OutPromptTokens)
+	{
+		*OutPromptTokens = INDEX_NONE;
+	}
+	if (OutCompletionTokens)
+	{
+		*OutCompletionTokens = INDEX_NONE;
+	}
+	if (OutTotalTokens)
+	{
+		*OutTotalTokens = INDEX_NONE;
+	}
+
 	TSharedPtr<FJsonObject> Root;
 	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
 	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
 	{
 		OutError = TEXT("LLMNPC_DEEPSEEK_JSON_INVALID");
 		return false;
+	}
+
+	if (OutModelId)
+	{
+		Root->TryGetStringField(TEXT("model"), *OutModelId);
+	}
+	const TSharedPtr<FJsonObject>* Usage = nullptr;
+	if (Root->TryGetObjectField(TEXT("usage"), Usage) && Usage && Usage->IsValid())
+	{
+		auto ReadTokenCount = [Usage](const TCHAR* Field, int32* Output)
+		{
+			if (!Output)
+			{
+				return;
+			}
+			double Value = 0.0;
+			if ((*Usage)->TryGetNumberField(Field, Value) && Value >= 0.0)
+			{
+				*Output = FMath::RoundToInt(Value);
+			}
+		};
+		ReadTokenCount(TEXT("prompt_tokens"), OutPromptTokens);
+		ReadTokenCount(TEXT("completion_tokens"), OutCompletionTokens);
+		ReadTokenCount(TEXT("total_tokens"), OutTotalTokens);
 	}
 
 	const TArray<TSharedPtr<FJsonValue>>* Choices = nullptr;

@@ -15,6 +15,16 @@ namespace
 constexpr uint32 Phase1TemplateTestFlags =
 	EAutomationTestFlags::EditorContext |
 	EAutomationTestFlags::EngineFilter;
+
+const FLLMMotionTrack* FindTrack(const FLLMMotionClip& Clip, FName ControlId)
+{
+	return Clip.Tracks.FindByPredicate(
+		[ControlId](const FLLMMotionTrack& Track)
+		{
+			return Track.ControlId == ControlId;
+		}
+	);
+}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -85,10 +95,15 @@ bool FLLMNPCTemplateCompilerBaselineTest::RunTest(const FString& Parameters)
 		nullptr,
 		TEXT("/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Wave_Right_Manny_FK_v1.MT_Wave_Right_Manny_FK_v1")
 	);
+	const ULLMNPCMotionTemplate* ProceduralWaveTemplate = LoadObject<ULLMNPCMotionTemplate>(
+		nullptr,
+		TEXT("/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Wave_Right_Manny_Procedural_v1.MT_Wave_Right_Manny_Procedural_v1")
+	);
 	TestNotNull(TEXT("The compiler has a Manny profile"), Profile);
 	TestNotNull(TEXT("The compiler has a nod template"), NodTemplate);
 	TestNotNull(TEXT("The compiler has a faithful wave template"), WaveTemplate);
-	if (!Profile || !NodTemplate || !WaveTemplate)
+	TestNotNull(TEXT("The compiler has a procedural wave template"), ProceduralWaveTemplate);
+	if (!Profile || !NodTemplate || !WaveTemplate || !ProceduralWaveTemplate)
 	{
 		return false;
 	}
@@ -169,6 +184,70 @@ bool FLLMNPCTemplateCompilerBaselineTest::RunTest(const FString& Parameters)
 		)
 	);
 	TestEqual(TEXT("The wave template preserves the open hand baseline"), WaveSnapshot.RightFingersOpen, 1.0f);
+
+	const FLLMMotionTrack* ProceduralAnchor = FindTrack(
+		ProceduralWaveTemplate->ProceduralClip,
+		TEXT("right_hand.ik")
+	);
+	TestNotNull(TEXT("The procedural wave retains its right-hand IK anchor"), ProceduralAnchor);
+	if (ProceduralAnchor)
+	{
+		TestEqual(
+			TEXT("The procedural wave uses the Waving-calibrated semantic anchor"),
+			ProceduralAnchor->Anchor,
+			FName(TEXT("right_wave"))
+		);
+		TestTrue(
+			TEXT("The procedural wave does not stack an uncalibrated anchor offset"),
+			ProceduralAnchor->Offset.IsNearlyZero()
+		);
+	}
+	TestNotNull(
+		TEXT("The procedural wave oscillates along Manny's lateral axis"),
+		FindTrack(ProceduralWaveTemplate->ProceduralClip, TEXT("right_hand.local_offset.x"))
+	);
+	TestNull(
+		TEXT("The procedural wave no longer oscillates along Manny's forward axis"),
+		FindTrack(ProceduralWaveTemplate->ProceduralClip, TEXT("right_hand.local_offset.y"))
+	);
+
+	FLLMMotionPlan ProceduralWavePlan;
+	CompileError.Reset();
+	TestTrue(
+		TEXT("The calibrated procedural wave template compiles"),
+		FLLMNPCTemplateCompiler::Compile(
+			*ProceduralWaveTemplate,
+			Modifiers,
+			*Profile,
+			ProceduralWavePlan,
+			CompileError
+		)
+	);
+	if (!CompileError.IsEmpty())
+	{
+		AddError(CompileError);
+	}
+	FLLMProceduralPoseSnapshot ProceduralWaveSnapshot;
+	FLLMNPCMotionSampler::SampleClip(
+		ProceduralWavePlan.Clip,
+		nullptr,
+		nullptr,
+		EmptyTargets,
+		0.88f,
+		ProceduralWaveSnapshot
+	);
+	TestTrue(
+		TEXT("The procedural wave carries the reviewed wrist orientation"),
+		ProceduralWaveSnapshot.RightHandAdditiveRotation.Equals(
+			FRotator(-10.0f, 16.4f, 57.5f),
+			0.001f
+		)
+	);
+	TestEqual(
+		TEXT("The calibrated procedural wave keeps the hand open"),
+		ProceduralWaveSnapshot.RightFingersOpen,
+		1.0f
+	);
 	return true;
 }
 

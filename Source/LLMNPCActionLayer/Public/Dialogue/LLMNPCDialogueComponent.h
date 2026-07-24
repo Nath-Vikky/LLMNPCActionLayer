@@ -188,6 +188,10 @@ private:
 	FLLMNPCModelTurnRequest ActiveRequest;
 	bool bRequestInFlight = false;
 	FName LastProviderId = NAME_None;
+	FLLMNPCModelTurnResult LastProviderResult;
+	int32 LastSourceCandidateCount = 0;
+	int32 LastOfferedCandidateCount = 0;
+	int32 LastExcludedCandidateCount = 0;
 	FTimerHandle RequestWatchdogHandle;
 	TArray<FLLMNPCTemplateCandidate> ActiveOfferedCandidates;
 	TArray<FLLMNPCCandidateExclusion> ActiveCandidateExclusions;

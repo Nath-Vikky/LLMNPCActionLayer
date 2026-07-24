@@ -232,7 +232,7 @@ compatible.
 
 - `Mock`: deterministic, local, and the default.
 - `BackendProxy`: recommended runtime path; POSTs the turn context to `BackendProxyEndpoint`.
-- `DeepSeekDirectEditorOnly`: development-only direct adapter. It is disabled unless explicitly enabled in Project Settings and reads `DEEPSEEK_API_KEY` only from the editor process environment.
+- `DeepSeekDirectEditorOnly`: development-only direct adapter. It is disabled unless explicitly enabled in Project Settings. The editor can import its model, endpoint, and session credential from the project-root `env.txt`; a named process environment variable remains a fallback credential source.
 
 The backend may return either a `llmnpc.model_turn.v1` object or `{ "decision": <model-turn-object> }`. The model response is parsed with unknown-field rejection and then checked against the local Published template library. Invalid action IDs preserve displayable assistant text but cannot drive the body. Direct provider credentials are compiled out of non-editor targets, and runtime builds are expected to use a trusted backend proxy.
 
@@ -247,6 +247,46 @@ External runtime modules can register additional factories through
 `SetProviderId`, or project-level `DefaultProviderId`. Unknown provider IDs fail
 closed. A request watchdog recovers providers that never invoke their callback,
 and the local fallback is attempted at most once.
+
+## Forward N0 Test Workbench
+
+The editor module loads the following strict UTF-8 `KEY=VALUE` contract from
+`FPaths::ProjectDir()/env.txt` into memory only:
+
+```text
+LLM_MODEL=<model-id>
+OPENAI_BASE_URL=<openai-compatible-base-url>
+OPENAI_API_KEY=<session-credential>
+```
+
+Unknown, duplicate, missing, empty, or malformed entries fail the online gate.
+The API key is injected into the existing editor Session Secret store and is
+never copied into Settings, reports, assets, or logs. Model and endpoint
+overrides are cleared on editor shutdown. The UI displays only model ID,
+endpoint origin, a non-secret config hash, and whether a credential is present.
+
+Open `Tools > LLM NPC Provider Settings`, select
+`DeepSeek Direct (Editor)`, enable direct editor access, and run `Test DeepSeek`.
+The strict connection gate verifies the actual provider ID, returned model ID,
+`llmnpc.model_turn.v1` response schema, HTTP result, and the frozen config hash.
+A successful HTTP response with a different provider/model or stale config does
+not pass.
+
+Open `Tools > LLM NPC Motion Test Console` during PIE to:
+
+- enumerate every Published template compatible with the selected NPC profile;
+- execute custom or minimum/default/maximum modifiers;
+- run a repeatable three-point parameter sweep;
+- inspect requested/resolved modifiers, channels, target, validator, active
+  pose, provider, candidates, behavior, fallback, and IK state;
+- run a strict natural-language online selection with Mock fallback disabled;
+- save an allowlisted, sanitized report under
+  `Saved/LLMNPCActionLayer/ForwardN0/Reports`.
+
+Online reports store an input hash rather than the natural-language payload.
+Authorization headers, API keys, credentials, request/response headers, and raw
+provider payloads are removed by the final report sanitizer. Visual quality in
+PIE remains a human review decision and is written as `pending` by default.
 
 ## Product Runtime
 

@@ -51,10 +51,25 @@ struct FLLMNPCModelTurnResult
 	FName ProviderId = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
+	FString ProviderModelId;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
 	int32 HttpStatus = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
 	int32 AttemptCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
+	float TotalLatencySeconds = -1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
+	int32 PromptTokens = INDEX_NONE;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
+	int32 CompletionTokens = INDEX_NONE;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Model")
+	int32 TotalTokens = INDEX_NONE;
 };
 
 using FLLMNPCModelTurnCallback = TFunction<void(const FLLMNPCModelTurnResult&)>;

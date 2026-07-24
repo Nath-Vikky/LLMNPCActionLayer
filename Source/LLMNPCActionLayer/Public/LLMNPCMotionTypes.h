@@ -190,6 +190,12 @@ struct FLLMNPCPoseBoneBindings
 	bool bApplyAxisCalibration = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	FVector ComponentForwardDirectionCS = FVector::RightVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	FVector ComponentUpDirectionCS = FVector::UpVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	FName Head = TEXT("head");
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
@@ -212,6 +218,18 @@ struct FLLMNPCPoseBoneBindings
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	FName LeftHand = TEXT("hand_l");
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	FVector RightArmIKPoleDirectionCS = FVector::BackwardVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	float RightArmIKMaxReachScale = 0.98f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	FVector LeftArmIKPoleDirectionCS = FVector::ForwardVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	float LeftArmIKMaxReachScale = 0.98f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	FLLMNPCResolvedAxisBasis HeadAxis;
@@ -458,6 +476,69 @@ struct FLLMNPCMotionDebugState
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	int32 ReplicatedMotionSequence = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FName LastRequestedTemplateId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FName LastResolvedTemplateId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FName ActiveSourceTemplateId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString LastTargetRef;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float RequestedAmplitude = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float RequestedSpeedScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float RequestedDurationScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FName RequestedStyle = TEXT("neutral");
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bRequestedMirror = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	int32 RequestedRandomSeed = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedAmplitude = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedSpeedScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedDurationScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FName ResolvedStyle = TEXT("neutral");
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bResolvedMirror = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	int32 ResolvedRandomSeed = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bModifiersClamped = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString ModifierResolutionTrace;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	TArray<FName> ActiveChannels;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString LastValidationSource;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bLastSubmissionAccepted = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FLLMProceduralPoseSnapshot Snapshot;

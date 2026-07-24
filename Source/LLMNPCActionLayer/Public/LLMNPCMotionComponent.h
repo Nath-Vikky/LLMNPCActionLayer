@@ -138,6 +138,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion")
 	void ClearQueue();
 
+	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Test")
+	void StopAllMotions();
+
+#if WITH_EDITOR
+	void ResetMotionTestState();
+#endif
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Debug")
+	void SetRuntimeDebugOverlayEnabled(bool bEnabled);
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC Motion|Debug")
+	bool IsRuntimeDebugOverlayEnabled() const { return bShowRuntimeDebugOverlay; }
+
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Micro Motion")
 	void SetAmbientStyle(FName StyleTag);
 
@@ -264,6 +277,9 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	FLLMProceduralPoseSnapshot CurrentSnapshot;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion|Debug")
+	bool bShowRuntimeDebugOverlay = false;
+
 private:
 	UPROPERTY(ReplicatedUsing=OnRep_ReplicatedMotionCommand)
 	FLLMNPCReplicatedMotionCommand ReplicatedMotionCommand;
@@ -302,6 +318,12 @@ private:
 	float PendingReplicatedStartOffsetSeconds = 0.0f;
 	int32 LastAppliedReplicationSequence = 0;
 	bool bApplyingReplicatedCommand = false;
+	FName LastRequestedTemplateId = NAME_None;
+	FName LastResolvedTemplateId = NAME_None;
+	FLLMNPCTemplateModifiers LastRequestedTemplateModifiers;
+	FLLMNPCTemplateResolvedModifiers LastResolvedTemplateModifiers;
+	FString LastValidationSource;
+	bool bLastSubmissionAccepted = false;
 
 private:
 #if WITH_DEV_AUTOMATION_TESTS
@@ -350,6 +372,7 @@ private:
 	);
 	bool InstallPostProcessAnimBP();
 	void RestorePostProcessAnimBP();
+	void DrawRuntimeDebugOverlay() const;
 	UClass* ResolvePostProcessAnimClass() const;
 	USkeletalMeshComponent* GetOwnerMesh() const;
 

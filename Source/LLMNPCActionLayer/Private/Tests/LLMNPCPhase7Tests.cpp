@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Engine/SkeletalMesh.h"
+#include "LLMNPCArmIKSolver.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
 #include "Templates/LLMNPCMotionTemplate.h"
 #include "Templates/LLMNPCTemplateCompiler.h"
@@ -60,6 +61,10 @@ bool FLLMNPCPhase7ProfileBindingTest::RunTest(const FString& Parameters)
 	FLLMNPCFingerPoseProfile& OpenPose = Profile->FingerPoses.AddDefaulted_GetRef();
 	OpenPose.PoseId = TEXT("open");
 	OpenPose.SemanticBoneRotations.Add(TEXT("index_01_right"), FRotator(1.0f, 2.0f, 3.0f));
+	FLLMNPCIKChainProfile& RightArmIK = Profile->IKChains.AddDefaulted_GetRef();
+	RightArmIK.ChainId = TEXT("right_arm");
+	RightArmIK.PoleDirectionCS = FVector(-0.8f, 0.0f, -0.6f);
+	RightArmIK.MaxReachScale = 0.91f;
 
 	const FLLMNPCPoseBoneBindings Bindings = Profile->BuildPoseBoneBindings();
 	TestEqual(TEXT("The profile ID reaches the animation snapshot"), Bindings.ProfileId, Profile->ProfileId);
@@ -73,6 +78,123 @@ bool FLLMNPCPhase7ProfileBindingTest::RunTest(const FString& Parameters)
 	TestTrue(
 		TEXT("Profile finger calibration replaces the default open pose"),
 		Bindings.RightFingerOpenRotations[3].Equals(FRotator(1.0f, 2.0f, 3.0f))
+	);
+	TestTrue(
+		TEXT("Profile IK pole calibration reaches the fixed animation-thread layout"),
+		Bindings.RightArmIKPoleDirectionCS.Equals(FVector(-0.8f, 0.0f, -0.6f))
+	);
+	TestEqual(
+		TEXT("Profile IK reach calibration reaches the fixed animation-thread layout"),
+		Bindings.RightArmIKMaxReachScale,
+		0.91f
+	);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FLLMNPCPhase7StableArmIKTest,
+	"LLMNPCActionLayer.Phase7.SkeletonProfiles.StableArmIK",
+	Phase7TestFlags
+)
+
+bool FLLMNPCPhase7StableArmIKTest::RunTest(const FString& Parameters)
+{
+	static_cast<void>(Parameters);
+	const FVector RootPosition = FVector::ZeroVector;
+	const FVector CurrentJointPosition(-10.0f, 0.0f, -30.0f);
+	const FVector DesiredEndPosition(10.0f, 30.0f, 10.0f);
+	const FVector JointTarget = FLLMNPCArmIKSolver::BuildStableJointTarget(
+		RootPosition,
+		CurrentJointPosition,
+		DesiredEndPosition,
+		FVector::BackwardVector,
+		FVector::BackwardVector,
+		60.0f
+	);
+	const FVector BendDirection = (JointTarget - RootPosition).GetSafeNormal();
+	const FVector LimbDirection = (DesiredEndPosition - RootPosition).GetSafeNormal();
+
+	TestTrue(TEXT("The configured right-arm pole still bends outward"), BendDirection.X < -0.5f);
+	TestTrue(TEXT("The raised arm retains the current pose's downward bend"), BendDirection.Z < -0.25f);
+	TestTrue(
+		TEXT("The resolved pole lies in the plane perpendicular to the limb"),
+		FMath::Abs(FVector::DotProduct(BendDirection, LimbDirection)) < 0.001f
+	);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FLLMNPCPhase7EffectorRotationTest,
+	"LLMNPCActionLayer.Phase7.SkeletonProfiles.EffectorRelativeRotation",
+	Phase7TestFlags
+)
+
+bool FLLMNPCPhase7EffectorRotationTest::RunTest(const FString& Parameters)
+{
+	static_cast<void>(Parameters);
+	const FTransform OriginalParent(
+		FRotator(0.0f, 15.0f, 0.0f),
+		FVector(1.0f, 2.0f, 3.0f)
+	);
+	const FTransform OriginalEndLocal(
+		FRotator(5.0f, 10.0f, -7.0f),
+		FVector(25.0f, 0.0f, 0.0f)
+	);
+	const FTransform OriginalEnd = OriginalEndLocal * OriginalParent;
+	const FTransform SolvedParent(
+		FRotator(-20.0f, 80.0f, 35.0f),
+		FVector(10.0f, 12.0f, 14.0f)
+	);
+	FTransform SolvedEnd(FQuat::Identity, FVector(40.0f, 50.0f, 60.0f));
+	const FVector SolvedPosition = SolvedEnd.GetLocation();
+	const FQuat ExpectedRotation = (OriginalEndLocal * SolvedParent).GetRotation();
+
+	FLLMNPCArmIKSolver::MaintainEndEffectorRelativeRotation(
+		OriginalParent,
+		OriginalEnd,
+		SolvedParent,
+		SolvedEnd
+	);
+
+	TestTrue(
+		TEXT("The hand keeps its original local rotation relative to the solved forearm"),
+		SolvedEnd.GetRotation().Equals(ExpectedRotation, 0.0001f)
+	);
+	TestTrue(
+		TEXT("Maintaining relative rotation does not move the IK end target"),
+		SolvedEnd.GetLocation().Equals(SolvedPosition, 0.0001f)
+	);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FLLMNPCPhase7PalmFacingTest,
+	"LLMNPCActionLayer.Phase7.SkeletonProfiles.PalmFacingOrientation",
+	Phase7TestFlags
+)
+
+bool FLLMNPCPhase7PalmFacingTest::RunTest(const FString& Parameters)
+{
+	static_cast<void>(Parameters);
+	const FVector CurrentFingerDirection = FVector::UpVector;
+	const FVector CurrentPalmNormal = FVector::ForwardVector;
+	const FVector DesiredPalmNormal = FVector::RightVector;
+	const FVector DesiredFingerDirection = FVector(0.8f, 0.0f, 1.0f).GetSafeNormal();
+	const FQuat TargetRotation = FLLMNPCArmIKSolver::BuildPalmFacingRotation(
+		FQuat::Identity,
+		CurrentFingerDirection,
+		CurrentPalmNormal,
+		DesiredFingerDirection,
+		DesiredPalmNormal
+	);
+
+	TestTrue(
+		TEXT("The palm normal is aligned to the character forward direction"),
+		TargetRotation.RotateVector(CurrentPalmNormal).Equals(DesiredPalmNormal, 0.001f)
+	);
+	TestTrue(
+		TEXT("The fingers retain their requested in-plane wave direction"),
+		TargetRotation.RotateVector(CurrentFingerDirection).Equals(DesiredFingerDirection, 0.001f)
 	);
 	return true;
 }

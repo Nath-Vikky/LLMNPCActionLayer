@@ -187,6 +187,27 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::FindPublishedTempl
 	return Found ? Found->Get() : nullptr;
 }
 
+void ULLMNPCTemplateLibrarySubsystem::GetPublishedTemplateIdsForProfile(
+	FName SkeletonProfileId,
+	TArray<FName>& OutTemplateIds
+) const
+{
+	OutTemplateIds.Reset();
+	if (SkeletonProfileId.IsNone())
+	{
+		return;
+	}
+
+	for (const TPair<FName, TObjectPtr<ULLMNPCMotionTemplate>>& Pair : TemplateIndex)
+	{
+		if (Pair.Value && Pair.Value->SupportsSkeletonProfile(SkeletonProfileId))
+		{
+			OutTemplateIds.Add(Pair.Key);
+		}
+	}
+	OutTemplateIds.Sort(FNameLexicalLess());
+}
+
 const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::FindPublishedVariant(
 	FName PublicActionId,
 	FName SkeletonProfileId

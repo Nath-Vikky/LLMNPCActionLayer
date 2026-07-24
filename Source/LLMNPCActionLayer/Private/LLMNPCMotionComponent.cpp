@@ -1,6 +1,7 @@
 #include "LLMNPCMotionComponent.h"
 
 #include "Animation/LLMNPCAnimationAssetPlayer.h"
+#include "Dialogue/LLMNPCDialogueComponent.h"
 #include "LLMNPCAPIClient.h"
 #include "LLMNPCActionLayer.h"
 #include "LLMNPCMotionSampler.h"
@@ -13,6 +14,7 @@
 #include "Templates/LLMNPCTemplateLibrarySubsystem.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -76,6 +78,7 @@ void ULLMNPCMotionComponent::BeginPlay()
 
 void ULLMNPCMotionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	SetRuntimeDebugOverlayEnabled(false);
 	if (AnimationAssetPlayer)
 	{
 		AnimationAssetPlayer->Shutdown();
@@ -92,6 +95,7 @@ void ULLMNPCMotionComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	float UpdateDeltaSeconds = 0.0f;
 	if (!ShouldRunMotionUpdate(DeltaTime, UpdateDeltaSeconds))
 	{
+		DrawRuntimeDebugOverlay();
 		return;
 	}
 
@@ -101,6 +105,7 @@ void ULLMNPCMotionComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	{
 		UpdateMicroMotion(UpdateDeltaSeconds);
 	}
+	DrawRuntimeDebugOverlay();
 }
 
 void ULLMNPCMotionComponent::GetLifetimeReplicatedProps(
@@ -133,6 +138,10 @@ bool ULLMNPCMotionComponent::SubmitMotionPlanJson(const FString& JsonString)
 
 bool ULLMNPCMotionComponent::SubmitMotionPlan(FLLMMotionPlan Plan)
 {
+	LastRequestedTemplateId = NAME_None;
+	LastResolvedTemplateId = NAME_None;
+	LastRequestedTemplateModifiers = FLLMNPCTemplateModifiers();
+	LastResolvedTemplateModifiers = FLLMNPCTemplateResolvedModifiers();
 	return SubmitMotionPlanWithSource(
 		MoveTemp(Plan),
 		ELLMNPCMotionValidationSource::RuntimeModel
@@ -141,6 +150,10 @@ bool ULLMNPCMotionComponent::SubmitMotionPlan(FLLMMotionPlan Plan)
 
 bool ULLMNPCMotionComponent::SubmitCompiledTemplatePlan(FLLMMotionPlan Plan)
 {
+	LastRequestedTemplateId = NAME_None;
+	LastResolvedTemplateId = NAME_None;
+	LastRequestedTemplateModifiers = FLLMNPCTemplateModifiers();
+	LastResolvedTemplateModifiers = FLLMNPCTemplateResolvedModifiers();
 	return SubmitMotionPlanWithSource(
 		MoveTemp(Plan),
 		ELLMNPCMotionValidationSource::PublishedTemplate
@@ -152,6 +165,13 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 	FLLMNPCTemplateModifiers Modifiers
 )
 {
+	LastRequestedTemplateId = TemplateOrPublicActionId;
+	LastResolvedTemplateId = NAME_None;
+	LastRequestedTemplateModifiers = Modifiers;
+	LastResolvedTemplateModifiers = FLLMNPCTemplateResolvedModifiers();
+	LastValidationSource = TEXT("PublishedTemplate");
+	bLastSubmissionAccepted = false;
+
 	if (!CanSubmitLocally())
 	{
 		LastValidationError = TEXT("LLMNPC_MOTION_AUTHORITY_REQUIRED");
@@ -211,10 +231,33 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 		LastValidationError = TEXT("LLMNPC_TEMPLATE_NOT_FOUND_OR_NOT_PUBLISHED");
 		return false;
 	}
+	LastResolvedTemplateId = MotionTemplate->Metadata.TemplateId;
 
 	if (MotionTemplate->Kind == ELLMNPCTemplateKind::AnimationAsset)
 	{
-		return SubmitAnimationAssetTemplate(*MotionTemplate, Modifiers);
+		const bool bAccepted = SubmitAnimationAssetTemplate(*MotionTemplate, Modifiers);
+		if (bAccepted)
+		{
+			LastResolvedTemplateModifiers.TargetRef = Modifiers.TargetRef.TrimStartAndEnd();
+			LastResolvedTemplateModifiers.Amplitude = 1.0f;
+			LastResolvedTemplateModifiers.SpeedScale = FMath::Clamp(
+				Modifiers.SpeedScale,
+				MotionTemplate->ModifierPolicy.SpeedRange.X,
+				MotionTemplate->ModifierPolicy.SpeedRange.Y
+			);
+			LastResolvedTemplateModifiers.DurationScale = FMath::Clamp(
+				Modifiers.DurationScale,
+				MotionTemplate->ModifierPolicy.DurationRange.X,
+				MotionTemplate->ModifierPolicy.DurationRange.Y
+			);
+			LastResolvedTemplateModifiers.Style = Modifiers.Style.IsNone()
+				? FName(TEXT("neutral"))
+				: Modifiers.Style;
+			LastResolvedTemplateModifiers.bMirror = false;
+			LastResolvedTemplateModifiers.RandomSeed = Modifiers.RandomSeed;
+		}
+		bLastSubmissionAccepted = bAccepted;
+		return bAccepted;
 	}
 	if (MotionTemplate->Kind != ELLMNPCTemplateKind::ProceduralMotion)
 	{
@@ -224,24 +267,29 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 
 	FLLMMotionPlan CompiledPlan;
 	FString CompileError;
+	FLLMNPCTemplateResolvedModifiers ResolvedModifiers;
 	if (!FLLMNPCTemplateCompiler::Compile(
 		*MotionTemplate,
 		Modifiers,
 		*ResolvedProfile,
 		CompiledPlan,
-		CompileError
+		CompileError,
+		&ResolvedModifiers
 	))
 	{
 		LastValidationError = CompileError;
 		return false;
 	}
 
-	return SubmitMotionPlanWithSource(
+	LastResolvedTemplateModifiers = ResolvedModifiers;
+	const bool bAccepted = SubmitMotionPlanWithSource(
 		MoveTemp(CompiledPlan),
 		ELLMNPCMotionValidationSource::PublishedTemplate,
 		MotionTemplate,
 		PendingReplicatedStartOffsetSeconds
 	);
+	bLastSubmissionAccepted = bAccepted;
+	return bAccepted;
 }
 
 bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
@@ -251,6 +299,10 @@ bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
 	float InitialTimeSeconds
 )
 {
+	LastValidationSource = StaticEnum<ELLMNPCMotionValidationSource>()->GetNameStringByValue(
+		static_cast<int64>(Source)
+	);
+	bLastSubmissionAccepted = false;
 	if (!CanSubmitLocally())
 	{
 		LastValidationError = TEXT("LLMNPC_MOTION_AUTHORITY_REQUIRED");
@@ -324,6 +376,7 @@ bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
 	FJsonObjectConverter::UStructToJsonObjectString(Request.Plan, LastAcceptedMotionJson);
 	Queue.Add(MoveTemp(Request));
 	LastValidationError.Reset();
+	bLastSubmissionAccepted = true;
 	return true;
 }
 
@@ -387,6 +440,46 @@ void ULLMNPCMotionComponent::ClearTargets()
 void ULLMNPCMotionComponent::ClearQueue()
 {
 	Queue.Reset();
+}
+
+void ULLMNPCMotionComponent::StopAllMotions()
+{
+	Queue.Reset();
+	ActiveMotions.Reset();
+	bHasActivePlan = false;
+	ActiveClipId.Reset();
+	ActiveTime = 0.0f;
+	if (AnimationAssetPlayer)
+	{
+		AnimationAssetPlayer->Stop(true);
+	}
+
+	CurrentSnapshot = FLLMProceduralPoseSnapshot();
+	CurrentSnapshot.BoneBindings = CachedPoseBoneBindings;
+}
+
+#if WITH_EDITOR
+void ULLMNPCMotionComponent::ResetMotionTestState()
+{
+	StopAllMotions();
+	LastTemplateStartTimes.Reset();
+	LastValidationError.Reset();
+	LastValidationSource.Reset();
+	bLastSubmissionAccepted = false;
+}
+#endif
+
+void ULLMNPCMotionComponent::SetRuntimeDebugOverlayEnabled(bool bEnabled)
+{
+	bShowRuntimeDebugOverlay = bEnabled;
+#if !UE_BUILD_SHIPPING
+	if (!bEnabled && GEngine)
+	{
+		GEngine->RemoveOnScreenDebugMessage(
+			static_cast<uint64>(0x4C4C4D00) + GetUniqueID()
+		);
+	}
+#endif
 }
 
 void ULLMNPCMotionComponent::TestNod()
@@ -522,8 +615,192 @@ FLLMNPCMotionDebugState ULLMNPCMotionComponent::GetDebugState() const
 					: 0.0f
 			);
 	State.ReplicatedMotionSequence = ReplicatedMotionCommand.Sequence;
+	State.LastRequestedTemplateId = LastRequestedTemplateId;
+	State.LastResolvedTemplateId = LastResolvedTemplateId;
+	State.LastTargetRef = LastRequestedTemplateModifiers.TargetRef;
+	State.RequestedAmplitude = LastRequestedTemplateModifiers.Amplitude;
+	State.RequestedSpeedScale = LastRequestedTemplateModifiers.SpeedScale;
+	State.RequestedDurationScale = LastRequestedTemplateModifiers.DurationScale;
+	State.RequestedStyle = LastRequestedTemplateModifiers.Style;
+	State.bRequestedMirror = LastRequestedTemplateModifiers.bMirror;
+	State.RequestedRandomSeed = LastRequestedTemplateModifiers.RandomSeed;
+	State.ResolvedAmplitude = LastResolvedTemplateModifiers.Amplitude;
+	State.ResolvedSpeedScale = LastResolvedTemplateModifiers.SpeedScale;
+	State.ResolvedDurationScale = LastResolvedTemplateModifiers.DurationScale;
+	State.ResolvedStyle = LastResolvedTemplateModifiers.Style;
+	State.bResolvedMirror = LastResolvedTemplateModifiers.bMirror;
+	State.ResolvedRandomSeed = LastResolvedTemplateModifiers.RandomSeed;
+	TArray<FString> ModifierAdjustments;
+	if (!LastResolvedTemplateId.IsNone())
+	{
+		auto AddFloatAdjustment = [&ModifierAdjustments](
+			const TCHAR* Label,
+			float Requested,
+			float Resolved
+		)
+		{
+			if (!FMath::IsNearlyEqual(Requested, Resolved))
+			{
+				ModifierAdjustments.Add(FString::Printf(
+					TEXT("%s %.3f->%.3f"),
+					Label,
+					Requested,
+					Resolved
+				));
+			}
+		};
+		AddFloatAdjustment(
+			TEXT("amplitude"),
+			State.RequestedAmplitude,
+			State.ResolvedAmplitude
+		);
+		AddFloatAdjustment(
+			TEXT("speed"),
+			State.RequestedSpeedScale,
+			State.ResolvedSpeedScale
+		);
+		AddFloatAdjustment(
+			TEXT("duration"),
+			State.RequestedDurationScale,
+			State.ResolvedDurationScale
+		);
+		if (State.RequestedStyle != State.ResolvedStyle)
+		{
+			ModifierAdjustments.Add(FString::Printf(
+				TEXT("style %s->%s"),
+				*State.RequestedStyle.ToString(),
+				*State.ResolvedStyle.ToString()
+			));
+		}
+		if (State.bRequestedMirror != State.bResolvedMirror)
+		{
+			ModifierAdjustments.Add(FString::Printf(
+				TEXT("mirror %s->%s"),
+				State.bRequestedMirror ? TEXT("true") : TEXT("false"),
+				State.bResolvedMirror ? TEXT("true") : TEXT("false")
+			));
+		}
+	}
+	State.bModifiersClamped = !ModifierAdjustments.IsEmpty();
+	State.ModifierResolutionTrace = State.bModifiersClamped
+		? FString::Join(ModifierAdjustments, TEXT(", "))
+		: TEXT("unchanged");
+	State.LastValidationSource = LastValidationSource;
+	State.bLastSubmissionAccepted = bLastSubmissionAccepted;
+	if (!ActiveMotions.IsEmpty())
+	{
+		State.ActiveSourceTemplateId = ActiveMotions[0].Request.SourceTemplateId;
+		State.ActiveChannels = ActiveMotions[0].Request.Channels;
+	}
+	else if (bAnimationPlaying && AnimationAssetPlayer)
+	{
+		State.ActiveSourceTemplateId = State.ActiveAnimationTemplateId;
+		State.ActiveChannels = AnimationAssetPlayer->GetActiveChannels();
+	}
 	State.Snapshot = CurrentSnapshot;
 	return State;
+}
+
+void ULLMNPCMotionComponent::DrawRuntimeDebugOverlay() const
+{
+#if !UE_BUILD_SHIPPING
+	if (!bShowRuntimeDebugOverlay || !GEngine)
+	{
+		return;
+	}
+
+	const FLLMNPCMotionDebugState State = GetDebugState();
+	TArray<FString> ChannelNames;
+	ChannelNames.Reserve(State.ActiveChannels.Num());
+	for (const FName Channel : State.ActiveChannels)
+	{
+		ChannelNames.Add(Channel.ToString());
+	}
+	const FString Channels = ChannelNames.IsEmpty()
+		? TEXT("none")
+		: FString::Join(ChannelNames, TEXT(", "));
+	const FString Validation = State.LastValidationError.IsEmpty()
+		? (State.bLastSubmissionAccepted ? TEXT("accepted") : TEXT("idle"))
+		: State.LastValidationError;
+	FString DialogueTrace;
+	if (const AActor* Owner = GetOwner())
+	{
+		if (const ULLMNPCDialogueComponent* Dialogue =
+			Owner->FindComponentByClass<ULLMNPCDialogueComponent>())
+		{
+			const FLLMNPCDialogueDebugState DialogueState = Dialogue->GetDebugState();
+			const FLLMNPCBehaviorDebugState BehaviorState = Dialogue->GetBehaviorDebugState();
+			const FGuid RequestId = DialogueState.ActiveRequestId.IsValid()
+				? DialogueState.ActiveRequestId
+				: DialogueState.LastRequestId;
+			DialogueTrace = FString::Printf(
+				TEXT("Provider: %s  Model: %s  Request: %s\n")
+				TEXT("Context: %s\nCandidates: %d -> %d (%d excluded)\n")
+				TEXT("Model choice: %s  Final template: %s  Fallback: %s\n")
+				TEXT("Dialogue: %s  Behavior: %s\n"),
+				*DialogueState.ProviderId.ToString(),
+				DialogueState.ProviderModelId.IsEmpty()
+					? TEXT("pending")
+					: *DialogueState.ProviderModelId,
+				RequestId.IsValid()
+					? *RequestId.ToString(EGuidFormats::DigitsWithHyphensLower)
+					: TEXT("none"),
+				*DialogueState.ContextSummary,
+				DialogueState.SourceCandidateCount,
+				DialogueState.OfferedCandidateCount,
+				DialogueState.ExcludedCandidateCount,
+				*DialogueState.LastSelectedActionId.ToString(),
+				*DialogueState.LastResolvedTemplateId.ToString(),
+				DialogueState.bUsedLocalFallback ? TEXT("yes") : TEXT("no"),
+				*StaticEnum<ELLMNPCDialogueState>()->GetNameStringByValue(
+					static_cast<int64>(DialogueState.State)
+				),
+				*StaticEnum<ELLMNPCBehaviorState>()->GetNameStringByValue(
+					static_cast<int64>(BehaviorState.State)
+				)
+			);
+		}
+	}
+	const FString Message = FString::Printf(
+		TEXT("%sLLM NPC: %s\nRequested: %s -> Resolved: %s\n")
+		TEXT("Modifiers req %.2f/%.2f/%.2f  res %.2f/%.2f/%.2f\n")
+		TEXT("Modifier trace: %s  Clamped: %s\n")
+		TEXT("Target: %s  Channels: %s\nValidator: %s (%s)\n")
+		TEXT("Pose: %s  %.2f/%.2f  Queue: %d  Alpha: %.2f\n")
+		TEXT("IK alpha R/L: %.2f / %.2f"),
+		*DialogueTrace,
+		GetOwner() ? *GetOwner()->GetName() : TEXT("None"),
+		*State.LastRequestedTemplateId.ToString(),
+		*State.LastResolvedTemplateId.ToString(),
+		State.RequestedAmplitude,
+		State.RequestedSpeedScale,
+		State.RequestedDurationScale,
+		State.ResolvedAmplitude,
+		State.ResolvedSpeedScale,
+		State.ResolvedDurationScale,
+		*State.ModifierResolutionTrace,
+		State.bModifiersClamped ? TEXT("yes") : TEXT("no"),
+		State.LastTargetRef.IsEmpty() ? TEXT("none") : *State.LastTargetRef,
+		*Channels,
+		*Validation,
+		State.LastValidationSource.IsEmpty() ? TEXT("none") : *State.LastValidationSource,
+		State.ActiveClipId.IsEmpty() ? *State.AnimationPlaybackState : *State.ActiveClipId,
+		State.ActiveTime,
+		State.ActiveDuration,
+		State.QueueCount,
+		State.Snapshot.GlobalAlpha,
+		State.Snapshot.RightHandIKAlpha,
+		State.Snapshot.LeftHandIKAlpha
+	);
+	GEngine->AddOnScreenDebugMessage(
+		static_cast<uint64>(0x4C4C4D00) + GetUniqueID(),
+		0.0f,
+		FColor::Cyan,
+		Message,
+		false,
+		FVector2D(0.9f, 0.9f)
+	);
+#endif
 }
 
 void ULLMNPCMotionComponent::StartEligiblePlans()

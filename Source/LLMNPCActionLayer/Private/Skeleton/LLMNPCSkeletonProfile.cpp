@@ -59,6 +59,20 @@ FLLMNPCPoseBoneBindings ULLMNPCSkeletonProfile::BuildPoseBoneBindings() const
 	FLLMNPCPoseBoneBindings Bindings;
 	Bindings.ProfileId = ProfileId;
 	Bindings.bApplyAxisCalibration = bApplyAxisCalibrationAtRuntime;
+	const FVector ForwardDirection = ComponentForwardDirectionCS.GetSafeNormal();
+	if (!ForwardDirection.IsNearlyZero())
+	{
+		Bindings.ComponentForwardDirectionCS = ForwardDirection;
+	}
+	const FVector UpDirection = (
+		ComponentUpDirectionCS -
+		Bindings.ComponentForwardDirectionCS *
+			FVector::DotProduct(ComponentUpDirectionCS, Bindings.ComponentForwardDirectionCS)
+	).GetSafeNormal();
+	if (!UpDirection.IsNearlyZero())
+	{
+		Bindings.ComponentUpDirectionCS = UpDirection;
+	}
 
 	auto OverrideBone = [this](FName SemanticBone, FName& InOutBone)
 	{
@@ -77,6 +91,40 @@ FLLMNPCPoseBoneBindings ULLMNPCSkeletonProfile::BuildPoseBoneBindings() const
 	OverrideBone(TEXT("upperarm_left"), Bindings.LeftUpperArm);
 	OverrideBone(TEXT("lowerarm_left"), Bindings.LeftLowerArm);
 	OverrideBone(TEXT("hand_left"), Bindings.LeftHand);
+
+	auto OverrideIK = [this](
+		FName ChainId,
+		FVector& InOutPoleDirectionCS,
+		float& InOutMaxReachScale)
+	{
+		const FLLMNPCIKChainProfile* Chain = IKChains.FindByPredicate(
+			[ChainId](const FLLMNPCIKChainProfile& Candidate)
+			{
+				return Candidate.ChainId == ChainId;
+			});
+		if (!Chain)
+		{
+			return;
+		}
+
+		const FVector PoleDirection = Chain->PoleDirectionCS.GetSafeNormal();
+		if (!PoleDirection.IsNearlyZero())
+		{
+			InOutPoleDirectionCS = PoleDirection;
+		}
+		if (FMath::IsFinite(Chain->MaxReachScale))
+		{
+			InOutMaxReachScale = FMath::Clamp(Chain->MaxReachScale, 0.01f, 1.0f);
+		}
+	};
+	OverrideIK(
+		TEXT("right_arm"),
+		Bindings.RightArmIKPoleDirectionCS,
+		Bindings.RightArmIKMaxReachScale);
+	OverrideIK(
+		TEXT("left_arm"),
+		Bindings.LeftArmIKPoleDirectionCS,
+		Bindings.LeftArmIKMaxReachScale);
 
 	auto OverrideAxis = [this](FName SemanticBone, FLLMNPCResolvedAxisBasis& InOutBasis)
 	{
@@ -186,6 +234,17 @@ bool ULLMNPCSkeletonProfile::ValidateProfile(FString& OutError) const
 	if (!LoadedSkeleton)
 	{
 		OutError = TEXT("LLMNPC_SKELETON_PROFILE_ASSET_MISSING");
+		return false;
+	}
+	const FVector ForwardDirection = ComponentForwardDirectionCS.GetSafeNormal();
+	const FVector UpDirection = ComponentUpDirectionCS.GetSafeNormal();
+	if (
+		ForwardDirection.IsNearlyZero() ||
+		UpDirection.IsNearlyZero() ||
+		FMath::Abs(FVector::DotProduct(ForwardDirection, UpDirection)) > 0.05f
+	)
+	{
+		OutError = TEXT("LLMNPC_SKELETON_PROFILE_COMPONENT_BASIS_INVALID");
 		return false;
 	}
 

@@ -14,5 +14,7 @@ public:
 private:
 	void RegisterMenus();
 	void OpenProviderSettings();
+	void OpenMotionTestConsole();
 	TSharedRef<SDockTab> SpawnProviderSettingsTab(const FSpawnTabArgs& SpawnTabArgs);
+	TSharedRef<SDockTab> SpawnMotionTestConsoleTab(const FSpawnTabArgs& SpawnTabArgs);
 };

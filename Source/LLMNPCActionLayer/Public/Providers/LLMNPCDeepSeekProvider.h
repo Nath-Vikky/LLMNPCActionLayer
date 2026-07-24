@@ -24,7 +24,11 @@ public:
 	static bool ExtractDecisionJson(
 		const FString& ResponseBody,
 		FString& OutDecisionJson,
-		FString& OutError
+		FString& OutError,
+		FString* OutModelId = nullptr,
+		int32* OutPromptTokens = nullptr,
+		int32* OutCompletionTokens = nullptr,
+		int32* OutTotalTokens = nullptr
 	);
 
 private:

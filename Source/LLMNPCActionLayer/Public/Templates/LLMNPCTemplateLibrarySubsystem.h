@@ -55,6 +55,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
 	int32 GetPublishedTemplateCount() const { return TemplateIndex.Num(); }
 
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Template Library")
+	void GetPublishedTemplateIdsForProfile(
+		FName SkeletonProfileId,
+		TArray<FName>& OutTemplateIds
+	) const;
+
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
 	const TArray<FString>& GetScanErrors() const { return ScanErrors; }
 
