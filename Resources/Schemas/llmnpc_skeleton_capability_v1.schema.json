@@ -1,0 +1,212 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "llmnpc.skeleton_capability.v1",
+  "title": "LLM NPC Skeleton Capability Model View",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "profile_semantic_version",
+    "skeleton_signature",
+    "control_manifest_version",
+    "capability_hash",
+    "generated_at",
+    "capabilities",
+    "global_limits"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "llmnpc.skeleton_capability.v1"
+    },
+    "profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile_semantic_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "skeleton_signature": {
+      "type": "string",
+      "minLength": 1
+    },
+    "control_manifest_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capability_hash": {
+      "type": "string",
+      "pattern": "^md5:[0-9a-fA-F]{32}$"
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/capability"
+      }
+    },
+    "global_limits": {
+      "$ref": "#/definitions/global_limits"
+    }
+  },
+  "definitions": {
+    "parameter_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "unit",
+        "min",
+        "max"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "normalized_float",
+            "speed_multiplier",
+            "seconds",
+            "integer"
+          ]
+        },
+        "unit": {
+          "enum": [
+            "normalized",
+            "multiplier",
+            "seconds",
+            "count"
+          ]
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capability_id",
+        "body_region",
+        "supported_sides",
+        "parameter_ranges",
+        "requires",
+        "conflicts_with",
+        "target_modes",
+        "runtime_recipe_allowed",
+        "authoring_only",
+        "description"
+      ],
+      "properties": {
+        "capability_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "body_region": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supported_sides": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "center",
+              "left",
+              "right",
+              "both"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "parameter_ranges": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/parameter_range"
+          }
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "conflicts_with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "target_modes": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "none",
+              "direction",
+              "scene_target"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "runtime_recipe_allowed": {
+          "type": "boolean"
+        },
+        "authoring_only": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "global_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_action_duration_seconds",
+        "max_primitive_count",
+        "allowed_body_regions",
+        "allows_lower_body",
+        "allows_root_motion"
+      ],
+      "properties": {
+        "max_action_duration_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "max_primitive_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "allowed_body_regions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "head",
+              "gaze",
+              "chest",
+              "shoulders",
+              "arms",
+              "hands"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "allows_lower_body": {
+          "const": false
+        },
+        "allows_root_motion": {
+          "const": false
+        }
+      }
+    }
+  }
+}

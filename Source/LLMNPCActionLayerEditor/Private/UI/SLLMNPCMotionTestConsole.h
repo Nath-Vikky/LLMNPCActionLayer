@@ -172,6 +172,10 @@ private:
 	const ULLMNPCMotionTemplate* GetSelectedMotionTemplate() const;
 	bool ApplyPreset(ELLMNPCTestParameterPreset Preset);
 	bool ExecuteCurrent(const FString& PresetLabel);
+	void ExecuteForwardN1ReviewSample(
+		ELLMNPCMotionDebugSample Sample,
+		const FText& Label
+	);
 	void StartSweepStep();
 	void PollOnlineEvaluation();
 	void CompleteOnlineEvaluation(ULLMNPCDialogueComponent& Dialogue);
@@ -195,6 +199,9 @@ private:
 	FReply HandleDefault();
 	FReply HandleMaximum();
 	FReply HandleRunSweep();
+	FReply HandleForwardN1ShoulderReview();
+	FReply HandleForwardN1RelaxedReview();
+	FReply HandleForwardN1CurlReview();
 	FReply HandleRunOnlineEvaluation();
 	FReply HandleCancelOnlineEvaluation();
 	FReply HandleSaveReport();

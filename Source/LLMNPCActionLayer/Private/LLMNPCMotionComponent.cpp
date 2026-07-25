@@ -506,6 +506,20 @@ bool ULLMNPCMotionComponent::SubmitSampleMotionPlanJson(ELLMNPCMotionDebugSample
 			TEXT("gesture.wave.right.manny.fk.v1"),
 			FLLMNPCTemplateModifiers()
 		);
+	case ELLMNPCMotionDebugSample::ForwardN1ShoulderShrug:
+	case ELLMNPCMotionDebugSample::ForwardN1HandRelaxed:
+	case ELLMNPCMotionDebugSample::ForwardN1HandCurl:
+		{
+			FLLMMotionPlan Plan = BuildForwardN1VisualReviewPlan(Sample);
+			FJsonObjectConverter::UStructToJsonObjectString(
+				Plan,
+				LastRawMotionJson
+			);
+			return SubmitMotionPlanWithSource(
+				MoveTemp(Plan),
+				ELLMNPCMotionValidationSource::InternalDebug
+			);
+		}
 	case ELLMNPCMotionDebugSample::InvalidUnknownControl:
 		{
 			FLLMMotionPlan Plan = BuildInvalidUnknownControlPlan();
@@ -527,11 +541,20 @@ bool ULLMNPCMotionComponent::SubmitSampleMotionPlanJson(ELLMNPCMotionDebugSample
 FString ULLMNPCMotionComponent::BuildSampleMotionPlanJson(ELLMNPCMotionDebugSample Sample, const FString& TargetRef) const
 {
 	static_cast<void>(TargetRef);
-	if (Sample == ELLMNPCMotionDebugSample::InvalidUnknownControl)
+	if (
+		Sample == ELLMNPCMotionDebugSample::ForwardN1ShoulderShrug ||
+		Sample == ELLMNPCMotionDebugSample::ForwardN1HandRelaxed ||
+		Sample == ELLMNPCMotionDebugSample::ForwardN1HandCurl ||
+		Sample == ELLMNPCMotionDebugSample::InvalidUnknownControl
+	)
 	{
 		FString JsonString;
+		const FLLMMotionPlan Plan =
+			Sample == ELLMNPCMotionDebugSample::InvalidUnknownControl
+			? BuildInvalidUnknownControlPlan()
+			: BuildForwardN1VisualReviewPlan(Sample);
 		FJsonObjectConverter::UStructToJsonObjectString(
-			BuildInvalidUnknownControlPlan(),
+			Plan,
 			JsonString
 		);
 		return JsonString;
@@ -1446,6 +1469,7 @@ TArray<FName> ULLMNPCMotionComponent::DeriveMotionChannels(const FLLMMotionPlan&
 			Channel = TEXT("left_arm_ik");
 		}
 		else if (
+			Control.StartsWith(TEXT("right_shoulder.")) ||
 			Control.StartsWith(TEXT("right_upperarm.")) ||
 			Control.StartsWith(TEXT("right_lowerarm.")) ||
 			Control == TEXT("right_hand.pitch") ||
@@ -1456,6 +1480,7 @@ TArray<FName> ULLMNPCMotionComponent::DeriveMotionChannels(const FLLMMotionPlan&
 			Channel = TEXT("right_arm_fk");
 		}
 		else if (
+			Control.StartsWith(TEXT("left_shoulder.")) ||
 			Control.StartsWith(TEXT("left_upperarm.")) ||
 			Control.StartsWith(TEXT("left_lowerarm.")) ||
 			Control.StartsWith(TEXT("mirror_left_upperarm.")) ||
@@ -1532,6 +1557,8 @@ void ULLMNPCMotionComponent::MergeSnapshot(
 	InOutSnapshot.ChestPitch += Snapshot.ChestPitch;
 	InOutSnapshot.ChestYaw += Snapshot.ChestYaw;
 	InOutSnapshot.ChestRoll += Snapshot.ChestRoll;
+	InOutSnapshot.RightShoulderAdditiveRotation += Snapshot.RightShoulderAdditiveRotation;
+	InOutSnapshot.LeftShoulderAdditiveRotation += Snapshot.LeftShoulderAdditiveRotation;
 	InOutSnapshot.RightHandLocalOffsetCS += Snapshot.RightHandLocalOffsetCS;
 	InOutSnapshot.RightUpperArmAdditiveRotation += Snapshot.RightUpperArmAdditiveRotation;
 	InOutSnapshot.RightLowerArmAdditiveRotation += Snapshot.RightLowerArmAdditiveRotation;
@@ -1571,8 +1598,12 @@ void ULLMNPCMotionComponent::MergeSnapshot(
 
 	InOutSnapshot.RightFingersOpen = FMath::Max(InOutSnapshot.RightFingersOpen, Snapshot.RightFingersOpen);
 	InOutSnapshot.RightFingersPoint = FMath::Max(InOutSnapshot.RightFingersPoint, Snapshot.RightFingersPoint);
+	InOutSnapshot.RightFingersRelaxed = FMath::Max(InOutSnapshot.RightFingersRelaxed, Snapshot.RightFingersRelaxed);
+	InOutSnapshot.RightFingersCurl = FMath::Max(InOutSnapshot.RightFingersCurl, Snapshot.RightFingersCurl);
 	InOutSnapshot.LeftFingersOpen = FMath::Max(InOutSnapshot.LeftFingersOpen, Snapshot.LeftFingersOpen);
 	InOutSnapshot.LeftFingersPoint = FMath::Max(InOutSnapshot.LeftFingersPoint, Snapshot.LeftFingersPoint);
+	InOutSnapshot.LeftFingersRelaxed = FMath::Max(InOutSnapshot.LeftFingersRelaxed, Snapshot.LeftFingersRelaxed);
+	InOutSnapshot.LeftFingersCurl = FMath::Max(InOutSnapshot.LeftFingersCurl, Snapshot.LeftFingersCurl);
 }
 
 bool ULLMNPCMotionComponent::InstallPostProcessAnimBP()
@@ -1709,6 +1740,66 @@ USkeletalMeshComponent* ULLMNPCMotionComponent::GetOwnerMesh() const
 	return GetOwner() ? GetOwner()->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
 }
 
+FLLMMotionPlan ULLMNPCMotionComponent::BuildForwardN1VisualReviewPlan(
+	ELLMNPCMotionDebugSample Sample
+)
+{
+	FLLMMotionPlan Plan;
+	Plan.Version = TEXT("1.0");
+	Plan.Clip.Duration = 2.8f;
+	Plan.Clip.BlendIn = 0.45f;
+	Plan.Clip.BlendOut = 0.55f;
+	Plan.Clip.Priority = 0.9f;
+	Plan.Clip.bInterruptible = true;
+
+	auto AddHold = [&Plan](FName ControlId, float Value)
+	{
+		FLLMMotionTrack& Track =
+			Plan.Clip.Tracks.AddDefaulted_GetRef();
+		Track.ControlId = ControlId;
+		Track.TrackType = ELLMMotionTrackType::Hold;
+		Track.ValueType = ELLMMotionValueType::Float;
+		Track.StartTime = 0.0f;
+		Track.EndTime = Plan.Clip.Duration;
+		Track.Amplitude = Value;
+	};
+	auto AddRightHandReviewPose = [&AddHold]()
+	{
+		AddHold(TEXT("right_upperarm.pitch"), -5.5f);
+		AddHold(TEXT("right_upperarm.yaw"), -3.1f);
+		AddHold(TEXT("right_upperarm.roll"), -80.0f);
+		AddHold(TEXT("right_lowerarm.pitch"), -3.3f);
+		AddHold(TEXT("right_lowerarm.yaw"), 91.4f);
+		AddHold(TEXT("right_lowerarm.roll"), -3.4f);
+		AddHold(TEXT("right_hand.pitch"), -10.0f);
+		AddHold(TEXT("right_hand.yaw"), 16.4f);
+		AddHold(TEXT("right_hand.roll"), 57.5f);
+	};
+
+	switch (Sample)
+	{
+	case ELLMNPCMotionDebugSample::ForwardN1ShoulderShrug:
+		Plan.Intent = TEXT("forward_n1_review_shoulder_shrug");
+		Plan.Clip.ClipId = TEXT("forward_n1_review_shoulder_shrug");
+		AddHold(TEXT("right_shoulder.roll"), -22.0f);
+		AddHold(TEXT("left_shoulder.roll"), 22.0f);
+		break;
+	case ELLMNPCMotionDebugSample::ForwardN1HandCurl:
+		Plan.Intent = TEXT("forward_n1_review_hand_curl");
+		Plan.Clip.ClipId = TEXT("forward_n1_review_hand_curl");
+		AddRightHandReviewPose();
+		AddHold(TEXT("right_fingers.curl"), 1.0f);
+		break;
+	case ELLMNPCMotionDebugSample::ForwardN1HandRelaxed:
+	default:
+		Plan.Intent = TEXT("forward_n1_review_hand_relaxed");
+		Plan.Clip.ClipId = TEXT("forward_n1_review_hand_relaxed");
+		AddRightHandReviewPose();
+		AddHold(TEXT("right_fingers.relaxed"), 1.0f);
+		break;
+	}
+	return Plan;
+}
 
 FLLMMotionPlan ULLMNPCMotionComponent::BuildInvalidUnknownControlPlan()
 {

@@ -305,6 +305,42 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 						]
 					]
 				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 14.0f, 0.0f, 8.0f)
+				[
+					MakeSectionHeader(LOCTEXT("ForwardN1ReviewSection", "Forward N1 Pose Review"))
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(188.0f, 0.0f, 0.0f, 4.0f)
+				[
+					SNew(SUniformGridPanel)
+					.SlotPadding(FMargin(4.0f, 0.0f))
+					+ SUniformGridPanel::Slot(0, 0)
+					[
+						SNew(SButton)
+						.ToolTipText(LOCTEXT("ShoulderReviewTooltip", "Preview both calibrated shoulder outputs and automatic recovery."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleForwardN1ShoulderReview)
+						[
+							SNew(STextBlock).Text(LOCTEXT("ShoulderReview", "Shoulders"))
+						]
+					]
+					+ SUniformGridPanel::Slot(1, 0)
+					[
+						SNew(SButton)
+						.ToolTipText(LOCTEXT("RelaxedReviewTooltip", "Raise the right hand and preview the calibrated Relaxed finger pose."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleForwardN1RelaxedReview)
+						[
+							SNew(STextBlock).Text(LOCTEXT("RelaxedReview", "Relaxed Hand"))
+						]
+					]
+					+ SUniformGridPanel::Slot(2, 0)
+					[
+						SNew(SButton)
+						.ToolTipText(LOCTEXT("CurlReviewTooltip", "Raise the right hand and preview the calibrated Curl finger pose."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleForwardN1CurlReview)
+						[
+							SNew(STextBlock).Text(LOCTEXT("CurlReview", "Curl Hand"))
+						]
+					]
+				]
 				+ SVerticalBox::Slot().AutoHeight().Padding(4.0f, 12.0f, 4.0f, 0.0f)
 				[
 					SNew(STextBlock)
@@ -1200,6 +1236,69 @@ FReply SLLMNPCMotionTestConsole::HandleRunSweep()
 	bSweepRunning = true;
 	SweepStepIndex = 0;
 	StartSweepStep();
+	return FReply::Handled();
+}
+
+void SLLMNPCMotionTestConsole::ExecuteForwardN1ReviewSample(
+	ELLMNPCMotionDebugSample Sample,
+	const FText& Label
+)
+{
+	bSweepRunning = false;
+	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
+	if (!Motion)
+	{
+		SetStatus(
+			LOCTEXT("ForwardN1ReviewUnavailable", "Start PIE and select a Manny NPC before running the pose review"),
+			true
+		);
+		return;
+	}
+
+	Motion->StopAllMotions();
+	const bool bAccepted = Motion->SubmitSampleMotionPlanJson(
+		Sample,
+		nullptr
+	);
+	const FLLMNPCMotionDebugState Debug = Motion->GetDebugState();
+	SetStatus(
+		bAccepted
+			? FText::Format(
+				LOCTEXT("ForwardN1ReviewStarted", "Forward N1 review started: {0}"),
+				Label
+			)
+			: FText::Format(
+				LOCTEXT("ForwardN1ReviewRejected", "Forward N1 review rejected: {0}"),
+				FText::FromString(Debug.LastValidationError)
+			),
+		!bAccepted
+	);
+}
+
+FReply SLLMNPCMotionTestConsole::HandleForwardN1ShoulderReview()
+{
+	ExecuteForwardN1ReviewSample(
+		ELLMNPCMotionDebugSample::ForwardN1ShoulderShrug,
+		LOCTEXT("ForwardN1ShoulderLabel", "Shoulders")
+	);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleForwardN1RelaxedReview()
+{
+	ExecuteForwardN1ReviewSample(
+		ELLMNPCMotionDebugSample::ForwardN1HandRelaxed,
+		LOCTEXT("ForwardN1RelaxedLabel", "Relaxed Hand")
+	);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleForwardN1CurlReview()
+{
+	ExecuteForwardN1ReviewSample(
+		ELLMNPCMotionDebugSample::ForwardN1HandCurl,
+		LOCTEXT("ForwardN1CurlLabel", "Curl Hand")
+	);
 	return FReply::Handled();
 }
 

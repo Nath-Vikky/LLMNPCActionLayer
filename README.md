@@ -288,6 +288,67 @@ Authorization headers, API keys, credentials, request/response headers, and raw
 provider payloads are removed by the final report sanitizer. Visual quality in
 PIE remains a human review decision and is written as `pending` by default.
 
+## Forward N1 Capability And Constraints
+
+The shipped `ue5_manny.v1` Profile now exposes a versioned, model-safe
+Capability Snapshot for the allowed upper-body social-motion domain. The model
+sees semantic abilities, supported sides, target modes, dependencies, and
+normalized parameter ranges. It does not receive actual bone names, Compact
+Pose indices, axis bases, transforms, quaternions, IK implementation IDs, or
+component-space data.
+
+Version-controlled N1 artifacts:
+
+```text
+Resources/Schemas/llmnpc_skeleton_capability_v1.schema.json
+Resources/Capabilities/Manny/ue5_manny_v1.capability.json
+Resources/Validation/Manny/MannyValidationBaseline.v1.json
+Content/LLMNPC/SkeletonProfiles/SP_UE5_Manny_v1.uasset
+```
+
+The Manny Profile includes shoulder bindings, calibrated Open/Point/Relaxed/Curl
+finger poses, per-control velocity/acceleration/jerk limits, IK reach bounds,
+upper-body collision proxies, and stable ground-contact markers. Relaxed/Curl
+calibration uses a revisioned one-time migration so future Profile refreshes
+preserve deliberate project calibration.
+
+`FLLMNPCKinematicValidator` validates joint ranges, angular/positional/
+normalized derivatives, IK reach, finite samples, and start/end continuity.
+`FLLMNPCPoseOutputContract` removes invalid or duplicate transforms and sorts
+the final Compact Pose buffer before animation-thread output. Behavior-affecting
+constraints invalidate the Capability Hash; approval names, dates, and
+Baseline-management state do not.
+
+Editor commands:
+
+```text
+LLMNPC.RefreshMannyN1Profile
+LLMNPC.ApproveMannyN1ValidationBaseline
+LLMNPC.RunMannyN1CapabilitySmoke
+```
+
+`ApproveMannyN1ValidationBaseline` is an explicit human-gated operation. It
+derives per-control thresholds from all Published Manny procedural templates,
+adds 20 percent headroom, writes the values into the Profile, requires every
+template diagnostic to pass, pins the resulting Baseline Hash, and writes the
+approver/date record. It must only run after Manny PIE review.
+
+The Motion Test Console contains a `Forward N1 Pose Review` section for isolated
+shoulder, Relaxed-hand, and Curl-hand checks. The raised arm in the hand tests
+is a shared inspection pose, not a Published gesture. PIE visual acceptance
+remains human-owned.
+
+The strict online Capability Smoke uses the editor-only provider configured by
+`env.txt`, disables Mock fallback, checks exact semantic capability selection,
+and saves only sanitized evidence under:
+
+```text
+Saved/LLMNPCActionLayer/ForwardN1/Reports
+```
+
+See `Docs/Phases/forward-n1-capability-constraints.md` for the frozen N1
+acceptance record.
+
 ## Product Runtime
 
 When the owning Actor replicates, `ULLMNPCMotionComponent` replicates only a

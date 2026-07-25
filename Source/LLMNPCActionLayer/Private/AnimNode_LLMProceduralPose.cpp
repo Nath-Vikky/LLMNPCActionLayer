@@ -6,6 +6,7 @@
 #include "LLMNPCArmIKSolver.h"
 #include "LLMNPCMotionMirror.h"
 #include "Math/RotationMatrix.h"
+#include "Quality/LLMNPCPoseOutputContract.h"
 #include "TwoBoneIK.h"
 
 namespace
@@ -336,6 +337,7 @@ FAnimNode_LLMProceduralPose::FAnimNode_LLMProceduralPose()
 {
 	HeadBone.BoneName = TEXT("head");
 	ChestBone.BoneName = TEXT("spine_03");
+	RightShoulderBone.BoneName = TEXT("clavicle_r");
 	RightUpperArmBone.BoneName = TEXT("upperarm_r");
 	RightLowerArmBone.BoneName = TEXT("lowerarm_r");
 	RightHandBone.BoneName = TEXT("hand_r");
@@ -354,6 +356,7 @@ FAnimNode_LLMProceduralPose::FAnimNode_LLMProceduralPose()
 	RightPinky01Bone.BoneName = TEXT("pinky_01_r");
 	RightPinky02Bone.BoneName = TEXT("pinky_02_r");
 	RightPinky03Bone.BoneName = TEXT("pinky_03_r");
+	LeftShoulderBone.BoneName = TEXT("clavicle_l");
 	LeftUpperArmBone.BoneName = TEXT("upperarm_l");
 	LeftLowerArmBone.BoneName = TEXT("lowerarm_l");
 	LeftHandBone.BoneName = TEXT("hand_l");
@@ -392,6 +395,7 @@ void FAnimNode_LLMProceduralPose::InitializeBoneReferences(const FBoneContainer&
 {
 	HeadBone.Initialize(RequiredBones);
 	ChestBone.Initialize(RequiredBones);
+	RightShoulderBone.Initialize(RequiredBones);
 	RightUpperArmBone.Initialize(RequiredBones);
 	RightLowerArmBone.Initialize(RequiredBones);
 	RightHandBone.Initialize(RequiredBones);
@@ -410,6 +414,7 @@ void FAnimNode_LLMProceduralPose::InitializeBoneReferences(const FBoneContainer&
 	RightPinky01Bone.Initialize(RequiredBones);
 	RightPinky02Bone.Initialize(RequiredBones);
 	RightPinky03Bone.Initialize(RequiredBones);
+	LeftShoulderBone.Initialize(RequiredBones);
 	LeftUpperArmBone.Initialize(RequiredBones);
 	LeftLowerArmBone.Initialize(RequiredBones);
 	LeftHandBone.Initialize(RequiredBones);
@@ -436,6 +441,8 @@ bool FAnimNode_LLMProceduralPose::IsValidToEvaluate(const USkeleton* Skeleton, c
 	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
 	return IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, HeadBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.Head), TEXT("head"))) ||
 		IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, ChestBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.Chest), TEXT("spine_03"))) ||
+		IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, RightShoulderBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightShoulder), TEXT("clavicle_r"))) ||
+		IsValidCompactPoseBoneIndex(ResolveBoneIndex(RequiredBones, LeftShoulderBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftShoulder), TEXT("clavicle_l"))) ||
 		HasAnyRightFingerBone(RequiredBones) ||
 		HasAnyLeftFingerBone(RequiredBones) ||
 		(
@@ -483,6 +490,7 @@ void FAnimNode_LLMProceduralPose::EvaluateSkeletalControl_AnyThread(
 
 	ApplyAdditiveRotationCS(Output, OutBoneTransforms, HeadBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.Head), HeadRotation, NodeAlpha);
 	ApplyAdditiveRotationCS(Output, OutBoneTransforms, ChestBone, GetSnapshotBinding(bUseBindings, Bindings, Bindings.Chest), ChestRotation, NodeAlpha);
+	ApplyShoulderAdditiveRotations(Output, OutBoneTransforms, NodeAlpha);
 
 	if (bEnableRightArmIK && Snapshot.RightHandIKAlpha > KINDA_SMALL_NUMBER)
 	{
@@ -501,7 +509,74 @@ void FAnimNode_LLMProceduralPose::EvaluateSkeletalControl_AnyThread(
 	PropagateLeftHandChildrenCS(Output, OutBoneTransforms);
 	ApplyLeftFingerPoseLocal(Output, OutBoneTransforms, NodeAlpha);
 
-	OutBoneTransforms.Sort(FCompareBoneTransformIndex());
+	FLLMNPCPoseOutputContract::FinalizeBoneTransforms(OutBoneTransforms);
+}
+
+void FAnimNode_LLMProceduralPose::ApplyShoulderAdditiveRotations(
+	FComponentSpacePoseContext& Output,
+	TArray<FBoneTransform>& OutBoneTransforms,
+	float InAlpha
+) const
+{
+	const FLLMNPCPoseBoneBindings& Bindings = Snapshot.BoneBindings;
+	const bool bUseBindings = bUseSnapshotBoneBindings && !Bindings.ProfileId.IsNone();
+	const bool bApplyAxisCalibration = bUseBindings && Bindings.bApplyAxisCalibration;
+	const FBoneContainer& BoneContainer = Output.Pose.GetPose().GetBoneContainer();
+
+	auto ApplyShoulder = [&](
+		const FBoneReference& Bone,
+		FName BoundBoneName,
+		FName FallbackBoneName,
+		const FRotator& SemanticRotation,
+		const FLLMNPCResolvedAxisBasis& AxisBasis)
+	{
+		if (SemanticRotation.IsNearlyZero())
+		{
+			return;
+		}
+		const FRotator Rotation = ResolveCalibratedRotation(
+			SemanticRotation,
+			AxisBasis,
+			bApplyAxisCalibration
+		);
+		ApplyAdditiveRotationCS(
+			Output,
+			OutBoneTransforms,
+			Bone,
+			BoundBoneName,
+			Rotation,
+			InAlpha
+		);
+		const FCompactPoseBoneIndex ShoulderIndex = ResolveBoneIndex(
+			BoneContainer,
+			Bone,
+			BoundBoneName,
+			FallbackBoneName
+		);
+		if (IsValidCompactPoseBoneIndex(ShoulderIndex))
+		{
+			RebaseDescendantsToCurrentHierarchyCS(
+				Output,
+				OutBoneTransforms,
+				ShoulderIndex
+			);
+		}
+	};
+
+	ApplyShoulder(
+		RightShoulderBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.RightShoulder),
+		TEXT("clavicle_r"),
+		Snapshot.RightShoulderAdditiveRotation,
+		Bindings.RightShoulderAxis
+	);
+	ApplyShoulder(
+		LeftShoulderBone,
+		GetSnapshotBinding(bUseBindings, Bindings, Bindings.LeftShoulder),
+		TEXT("clavicle_l"),
+		Snapshot.LeftShoulderAdditiveRotation,
+		Bindings.LeftShoulderAxis
+	);
 }
 
 void FAnimNode_LLMProceduralPose::ApplyAdditiveRotationCS(
@@ -1197,10 +1272,15 @@ void FAnimNode_LLMProceduralPose::ApplyRightFingerPoseLocal(
 {
 	const float OpenAlpha = FMath::Clamp(Snapshot.RightFingersOpen * InAlpha, 0.0f, 1.0f);
 	const float PointAlpha = FMath::Clamp(Snapshot.RightFingersPoint * InAlpha, 0.0f, 1.0f);
-	if (OpenAlpha <= KINDA_SMALL_NUMBER && PointAlpha <= KINDA_SMALL_NUMBER)
+	const float RelaxedAlpha = FMath::Clamp(Snapshot.RightFingersRelaxed * InAlpha, 0.0f, 1.0f);
+	const float CurlAlpha = FMath::Clamp(Snapshot.RightFingersCurl * InAlpha, 0.0f, 1.0f);
+	const float PoseAlphaSum = OpenAlpha + PointAlpha + RelaxedAlpha + CurlAlpha;
+	if (PoseAlphaSum <= KINDA_SMALL_NUMBER)
 	{
 		return;
 	}
+	const float AppliedAlpha = FMath::Min(PoseAlphaSum, 1.0f);
+	const float WeightScale = 1.0f / PoseAlphaSum;
 
 	struct FFingerPoseBinding
 	{
@@ -1239,14 +1319,26 @@ void FAnimNode_LLMProceduralPose::ApplyRightFingerPoseLocal(
 		const FRotator PointRotation = Bindings.RightFingerPointRotations.IsValidIndex(Index)
 			? Bindings.RightFingerPointRotations[Index]
 			: Binding.PointRotation;
-		if (OpenAlpha > KINDA_SMALL_NUMBER)
-		{
-			ApplyFingerRotationLocal(Output, OutBoneTransforms, *Binding.Bone, BoundBoneName, Binding.BoneName, OpenRotation, OpenAlpha);
-		}
-		if (PointAlpha > KINDA_SMALL_NUMBER)
-		{
-			ApplyFingerRotationLocal(Output, OutBoneTransforms, *Binding.Bone, BoundBoneName, Binding.BoneName, PointRotation, PointAlpha);
-		}
+		const FRotator RelaxedRotation = Bindings.RightFingerRelaxedRotations.IsValidIndex(Index)
+			? Bindings.RightFingerRelaxedRotations[Index]
+			: FRotator::ZeroRotator;
+		const FRotator CurlRotation = Bindings.RightFingerCurlRotations.IsValidIndex(Index)
+			? Bindings.RightFingerCurlRotations[Index]
+			: FRotator::ZeroRotator;
+		const FRotator BlendedRotation =
+			OpenRotation * (OpenAlpha * WeightScale) +
+			PointRotation * (PointAlpha * WeightScale) +
+			RelaxedRotation * (RelaxedAlpha * WeightScale) +
+			CurlRotation * (CurlAlpha * WeightScale);
+		ApplyFingerRotationLocal(
+			Output,
+			OutBoneTransforms,
+			*Binding.Bone,
+			BoundBoneName,
+			Binding.BoneName,
+			BlendedRotation,
+			AppliedAlpha
+		);
 	}
 }
 
@@ -1258,10 +1350,15 @@ void FAnimNode_LLMProceduralPose::ApplyLeftFingerPoseLocal(
 {
 	const float OpenAlpha = FMath::Clamp(Snapshot.LeftFingersOpen * InAlpha, 0.0f, 1.0f);
 	const float PointAlpha = FMath::Clamp(Snapshot.LeftFingersPoint * InAlpha, 0.0f, 1.0f);
-	if (OpenAlpha <= KINDA_SMALL_NUMBER && PointAlpha <= KINDA_SMALL_NUMBER)
+	const float RelaxedAlpha = FMath::Clamp(Snapshot.LeftFingersRelaxed * InAlpha, 0.0f, 1.0f);
+	const float CurlAlpha = FMath::Clamp(Snapshot.LeftFingersCurl * InAlpha, 0.0f, 1.0f);
+	const float PoseAlphaSum = OpenAlpha + PointAlpha + RelaxedAlpha + CurlAlpha;
+	if (PoseAlphaSum <= KINDA_SMALL_NUMBER)
 	{
 		return;
 	}
+	const float AppliedAlpha = FMath::Min(PoseAlphaSum, 1.0f);
+	const float WeightScale = 1.0f / PoseAlphaSum;
 
 	struct FFingerPoseBinding
 	{
@@ -1300,30 +1397,26 @@ void FAnimNode_LLMProceduralPose::ApplyLeftFingerPoseLocal(
 		const FRotator PointRotation = Bindings.LeftFingerPointRotations.IsValidIndex(Index)
 			? Bindings.LeftFingerPointRotations[Index]
 			: Binding.PointRotation;
-		if (OpenAlpha > KINDA_SMALL_NUMBER)
-		{
-			ApplyFingerRotationLocal(
-				Output,
-				OutBoneTransforms,
-				*Binding.Bone,
-				BoundBoneName,
-				Binding.BoneName,
-				OpenRotation,
-				OpenAlpha
-			);
-		}
-		if (PointAlpha > KINDA_SMALL_NUMBER)
-		{
-			ApplyFingerRotationLocal(
-				Output,
-				OutBoneTransforms,
-				*Binding.Bone,
-				BoundBoneName,
-				Binding.BoneName,
-				PointRotation,
-				PointAlpha
-			);
-		}
+		const FRotator RelaxedRotation = Bindings.LeftFingerRelaxedRotations.IsValidIndex(Index)
+			? Bindings.LeftFingerRelaxedRotations[Index]
+			: FRotator::ZeroRotator;
+		const FRotator CurlRotation = Bindings.LeftFingerCurlRotations.IsValidIndex(Index)
+			? Bindings.LeftFingerCurlRotations[Index]
+			: FRotator::ZeroRotator;
+		const FRotator BlendedRotation =
+			OpenRotation * (OpenAlpha * WeightScale) +
+			PointRotation * (PointAlpha * WeightScale) +
+			RelaxedRotation * (RelaxedAlpha * WeightScale) +
+			CurlRotation * (CurlAlpha * WeightScale);
+		ApplyFingerRotationLocal(
+			Output,
+			OutBoneTransforms,
+			*Binding.Bone,
+			BoundBoneName,
+			Binding.BoneName,
+			BlendedRotation,
+			AppliedAlpha
+		);
 	}
 }
 

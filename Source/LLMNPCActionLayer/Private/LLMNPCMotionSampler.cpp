@@ -99,6 +99,30 @@ void FLLMNPCMotionSampler::SampleClip(
 		{
 			OutSnapshot.ChestRoll += FloatValue;
 		}
+		else if (Control == TEXT("right_shoulder.pitch"))
+		{
+			OutSnapshot.RightShoulderAdditiveRotation.Pitch += FloatValue;
+		}
+		else if (Control == TEXT("right_shoulder.yaw"))
+		{
+			OutSnapshot.RightShoulderAdditiveRotation.Yaw += FloatValue;
+		}
+		else if (Control == TEXT("right_shoulder.roll"))
+		{
+			OutSnapshot.RightShoulderAdditiveRotation.Roll += FloatValue;
+		}
+		else if (Control == TEXT("left_shoulder.pitch"))
+		{
+			OutSnapshot.LeftShoulderAdditiveRotation.Pitch += FloatValue;
+		}
+		else if (Control == TEXT("left_shoulder.yaw"))
+		{
+			OutSnapshot.LeftShoulderAdditiveRotation.Yaw += FloatValue;
+		}
+		else if (Control == TEXT("left_shoulder.roll"))
+		{
+			OutSnapshot.LeftShoulderAdditiveRotation.Roll += FloatValue;
+		}
 		else if (Control == TEXT("right_hand.local_offset.x"))
 		{
 			PendingRightHandLocalOffsetCS.X += FloatValue;
@@ -203,6 +227,14 @@ void FLLMNPCMotionSampler::SampleClip(
 		{
 			OutSnapshot.RightFingersPoint = FMath::Max(OutSnapshot.RightFingersPoint, FMath::Clamp(FloatValue, 0.0f, 1.0f));
 		}
+		else if (Control == TEXT("right_fingers.relaxed"))
+		{
+			OutSnapshot.RightFingersRelaxed = FMath::Max(OutSnapshot.RightFingersRelaxed, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
+		else if (Control == TEXT("right_fingers.curl"))
+		{
+			OutSnapshot.RightFingersCurl = FMath::Max(OutSnapshot.RightFingersCurl, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
 		else if (Control == TEXT("left_fingers.open"))
 		{
 			OutSnapshot.LeftFingersOpen = FMath::Max(OutSnapshot.LeftFingersOpen, FMath::Clamp(FloatValue, 0.0f, 1.0f));
@@ -210,6 +242,14 @@ void FLLMNPCMotionSampler::SampleClip(
 		else if (Control == TEXT("left_fingers.point"))
 		{
 			OutSnapshot.LeftFingersPoint = FMath::Max(OutSnapshot.LeftFingersPoint, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
+		else if (Control == TEXT("left_fingers.relaxed"))
+		{
+			OutSnapshot.LeftFingersRelaxed = FMath::Max(OutSnapshot.LeftFingersRelaxed, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
+		else if (Control == TEXT("left_fingers.curl"))
+		{
+			OutSnapshot.LeftFingersCurl = FMath::Max(OutSnapshot.LeftFingersCurl, FMath::Clamp(FloatValue, 0.0f, 1.0f));
 		}
 		else if (Control == TEXT("right_hand.ik"))
 		{

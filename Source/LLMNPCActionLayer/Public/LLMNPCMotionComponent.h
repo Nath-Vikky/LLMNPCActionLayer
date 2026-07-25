@@ -376,5 +376,8 @@ private:
 	UClass* ResolvePostProcessAnimClass() const;
 	USkeletalMeshComponent* GetOwnerMesh() const;
 
+	static FLLMMotionPlan BuildForwardN1VisualReviewPlan(
+		ELLMNPCMotionDebugSample Sample
+	);
 	static FLLMMotionPlan BuildInvalidUnknownControlPlan();
 };

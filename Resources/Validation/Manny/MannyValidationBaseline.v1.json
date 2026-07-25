@@ -1,0 +1,1016 @@
+{
+	"schema_version": "llmnpc.manny_validation_baseline.v1",
+	"profile_id": "ue5_manny.v1",
+	"profile_semantic_version": "1.1.1",
+	"skeleton_signature": "md5:6b1ff1901c28611b8c817ec9c968a58f",
+	"capability_hash": "md5:9a0b995dac43d28ce4a674fa79d6d532",
+	"sample_rate_hz": 60,
+	"validation_pose_set": [
+		{
+			"asset_path": "/Game/Characters/Mannequins/Animations/Manny/MM_Idle.MM_Idle",
+			"role": "project_idle",
+			"asset_hash": "md5:e0f056775d778f2905d19f8214974514"
+		},
+		{
+			"asset_path": "/Game/Characters/Mannequins/Animations/Manny/MM_Walk_InPlace.MM_Walk_InPlace",
+			"role": "project_walk",
+			"asset_hash": "md5:3df353eedd6706eb6d5d652ee071aae2"
+		},
+		{
+			"asset_path": "/Game/LLMNPC/Animation/Waving.Waving",
+			"role": "social_motion_reference",
+			"asset_hash": "md5:0e3e6f5ea35c2018b0d53ba2ce761b16"
+		}
+	],
+	"validation_pose_set_hash": "md5:727e39b8c456cd63c1b0c9fdfa7abee4",
+	"approved_threshold_candidates": [
+		{
+			"control_id": "chest.pitch",
+			"max_angular_speed_degrees_per_second": 240,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 9000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "chest.roll",
+			"max_angular_speed_degrees_per_second": 240,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 9000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "chest.yaw",
+			"max_angular_speed_degrees_per_second": 240,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 9000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "head.pitch",
+			"max_angular_speed_degrees_per_second": 300,
+			"max_angular_acceleration_degrees_per_second_squared": 3300,
+			"max_angular_jerk_degrees_per_second_cubed": 80000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "head.roll",
+			"max_angular_speed_degrees_per_second": 300,
+			"max_angular_acceleration_degrees_per_second_squared": 1800,
+			"max_angular_jerk_degrees_per_second_cubed": 12000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "head.yaw",
+			"max_angular_speed_degrees_per_second": 300,
+			"max_angular_acceleration_degrees_per_second_squared": 1800,
+			"max_angular_jerk_degrees_per_second_cubed": 12000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_fingers.curl",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_fingers.open",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_fingers.point",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_fingers.relaxed",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_hand.ik",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_hand.local_offset.x",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 1000,
+			"max_position_jerk_centimeters_per_second_cubed": 7000,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_hand.local_offset.y",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 1000,
+			"max_position_jerk_centimeters_per_second_cubed": 7000,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_hand.local_offset.z",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 1000,
+			"max_position_jerk_centimeters_per_second_cubed": 7000,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_hand.pitch",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_hand.roll",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_hand.yaw",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_lowerarm.pitch",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_lowerarm.roll",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_lowerarm.yaw",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_shoulder.pitch",
+			"max_angular_speed_degrees_per_second": 240,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 9000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_shoulder.roll",
+			"max_angular_speed_degrees_per_second": 240,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 9000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_shoulder.yaw",
+			"max_angular_speed_degrees_per_second": 240,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 9000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_upperarm.pitch",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_upperarm.roll",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_upperarm.yaw",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "mirror_left_hand.pitch",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "mirror_left_hand.roll",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "mirror_left_hand.yaw",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "mirror_left_lowerarm.pitch",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "mirror_left_lowerarm.roll",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "mirror_left_lowerarm.yaw",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "mirror_left_upperarm.pitch",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "mirror_left_upperarm.roll",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "mirror_left_upperarm.yaw",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_fingers.curl",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_fingers.open",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_fingers.point",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_fingers.relaxed",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_hand.ik",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_hand.local_offset.x",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 380,
+			"max_position_acceleration_centimeters_per_second_squared": 7200,
+			"max_position_jerk_centimeters_per_second_cubed": 144000,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_hand.local_offset.y",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 1000,
+			"max_position_jerk_centimeters_per_second_cubed": 7000,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_hand.local_offset.z",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 2200,
+			"max_position_jerk_centimeters_per_second_cubed": 84000,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_hand.pitch",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 7600,
+			"max_angular_jerk_degrees_per_second_cubed": 231000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_hand.roll",
+			"max_angular_speed_degrees_per_second": 570,
+			"max_angular_acceleration_degrees_per_second_squared": 9200,
+			"max_angular_jerk_degrees_per_second_cubed": 300000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_hand.yaw",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 108000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_lowerarm.pitch",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_lowerarm.roll",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 24000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_lowerarm.yaw",
+			"max_angular_speed_degrees_per_second": 720,
+			"max_angular_acceleration_degrees_per_second_squared": 11700,
+			"max_angular_jerk_degrees_per_second_cubed": 457000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_shoulder.pitch",
+			"max_angular_speed_degrees_per_second": 240,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 9000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_shoulder.roll",
+			"max_angular_speed_degrees_per_second": 240,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 9000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_shoulder.yaw",
+			"max_angular_speed_degrees_per_second": 240,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 9000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_upperarm.pitch",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 7600,
+			"max_angular_jerk_degrees_per_second_cubed": 271000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_upperarm.roll",
+			"max_angular_speed_degrees_per_second": 600,
+			"max_angular_acceleration_degrees_per_second_squared": 9600,
+			"max_angular_jerk_degrees_per_second_cubed": 409000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_upperarm.yaw",
+			"max_angular_speed_degrees_per_second": 540,
+			"max_angular_acceleration_degrees_per_second_squared": 3600,
+			"max_angular_jerk_degrees_per_second_cubed": 121000,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		}
+	],
+	"template_reports": [
+		{
+			"template_id": "gesture.nod.manny.v1",
+			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Nod_Manny_v1.MT_Nod_Manny_v1",
+			"validation_target_mode": "none",
+			"validation_style": "neutral",
+			"asset_hash": "md5:3f52932cddbf3cdd0001c121ad1883df",
+			"plan_hash": "md5:6a17c446ad051b70d9d0ad454a10e930",
+			"quality_report_hash": "md5:479cca3403af23eb5fc1418aacb00248",
+			"diagnostic_pass": true,
+			"track_metrics": [
+				{
+					"control_id": "head.pitch",
+					"max_absolute_value": 9.246589728707022,
+					"max_absolute_speed": 161.46279584520767,
+					"max_absolute_acceleration": 2679.4781604900245,
+					"max_absolute_jerk": 66391.645323593533,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				}
+			],
+			"issues": []
+		},
+		{
+			"template_id": "gesture.point.target.manny.v1",
+			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Point_Target_Manny_v1.MT_Point_Target_Manny_v1",
+			"validation_target_mode": "synthetic_semantic_reference",
+			"validation_style": "neutral",
+			"asset_hash": "md5:d0c6df24b06f6013dbb3b737e4e3d010",
+			"plan_hash": "md5:ca7f7c0fec1b964e9011465287cdff9c",
+			"quality_report_hash": "md5:c2af34ee266d20f36e942fae0a621ddf",
+			"diagnostic_pass": true,
+			"track_metrics": [
+				{
+					"control_id": "right_fingers.point",
+					"max_absolute_value": 0.99994933605194092,
+					"max_absolute_speed": 3.0604662817377348,
+					"max_absolute_acceleration": 181.16918564102883,
+					"max_absolute_jerk": 10897.688880384278,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				}
+			],
+			"issues": []
+		},
+		{
+			"template_id": "gesture.wave.right.manny.fk.v1",
+			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Wave_Right_Manny_FK_v1.MT_Wave_Right_Manny_FK_v1",
+			"validation_target_mode": "none",
+			"validation_style": "neutral",
+			"asset_hash": "md5:3bf4e3cb1fc5f0112ba48608a2fd744a",
+			"plan_hash": "md5:dff3174637f600fc6b3a9c4c642bc861",
+			"quality_report_hash": "md5:121064b042b4fe7505f3e209bac087fd",
+			"diagnostic_pass": true,
+			"track_metrics": [
+				{
+					"control_id": "right_upperarm.pitch",
+					"max_absolute_value": 49.900001525878906,
+					"max_absolute_speed": 405.49294041914027,
+					"max_absolute_acceleration": 6269.0006688924987,
+					"max_absolute_jerk": 225334.01107920505,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_upperarm.yaw",
+					"max_absolute_value": 13.600000381469727,
+					"max_absolute_speed": 122.41840899356723,
+					"max_absolute_acceleration": 2111.3349947446281,
+					"max_absolute_jerk": 100072.83130479243,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_upperarm.roll",
+					"max_absolute_value": 83.699996948242188,
+					"max_absolute_speed": 491.82202306340201,
+					"max_absolute_acceleration": 7990.7081643904321,
+					"max_absolute_jerk": 340707.45983496681,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_lowerarm.pitch",
+					"max_absolute_value": 3.2999999523162842,
+					"max_absolute_speed": 22.809162434732851,
+					"max_absolute_acceleration": 373.56075965992267,
+					"max_absolute_jerk": 15047.90426368459,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_lowerarm.yaw",
+					"max_absolute_value": 91.400001525878906,
+					"max_absolute_speed": 592.32486888479207,
+					"max_absolute_acceleration": 9734.0151481828816,
+					"max_absolute_jerk": 380263.12129600899,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_lowerarm.roll",
+					"max_absolute_value": 3.4000000953674316,
+					"max_absolute_speed": 21.383560933479483,
+					"max_absolute_acceleration": 352.62575650327369,
+					"max_absolute_jerk": 13380.008381149022,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.pitch",
+					"max_absolute_value": 43.099998474121094,
+					"max_absolute_speed": 378.48932122165797,
+					"max_absolute_acceleration": 6256.5521257564224,
+					"max_absolute_jerk": 192021.90749555134,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.yaw",
+					"max_absolute_value": 20,
+					"max_absolute_speed": 114.04565831189058,
+					"max_absolute_acceleration": 1862.8453499688374,
+					"max_absolute_jerk": 89716.031060912341,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.roll",
+					"max_absolute_value": 57.5,
+					"max_absolute_speed": 466.87461040946567,
+					"max_absolute_acceleration": 7628.7285398958256,
+					"max_absolute_jerk": 249911.51815841263,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_fingers.open",
+					"max_absolute_value": 1,
+					"max_absolute_speed": 4.8298619555110509,
+					"max_absolute_acceleration": 81.250166893249798,
+					"max_absolute_jerk": 3010.0819056082519,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				}
+			],
+			"issues": []
+		},
+		{
+			"template_id": "gesture.wave.right.manny.procedural.v1",
+			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Wave_Right_Manny_Procedural_v1.MT_Wave_Right_Manny_Procedural_v1",
+			"validation_target_mode": "none",
+			"validation_style": "neutral",
+			"asset_hash": "md5:5a792dd89a3903c85969003a94029191",
+			"plan_hash": "md5:e9285e290dd4207afc870eacad01cdcf",
+			"quality_report_hash": "md5:b0113aed8ba2b26f20e1b2b4d47916ad",
+			"diagnostic_pass": true,
+			"track_metrics": [
+				{
+					"control_id": "right_hand.local_offset.x",
+					"max_absolute_value": 16.420739829540253,
+					"max_absolute_speed": 314.76668595841204,
+					"max_absolute_acceleration": 5940.6524185965727,
+					"max_absolute_jerk": 119799.68484602768,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.local_offset.z",
+					"max_absolute_value": 5,
+					"max_absolute_speed": 90.67912292308263,
+					"max_absolute_acceleration": 1808.8939118631936,
+					"max_absolute_jerk": 69938.665109169247,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.pitch",
+					"max_absolute_value": 43.099998474121094,
+					"max_absolute_speed": 378.48932122165797,
+					"max_absolute_acceleration": 6256.5530732170537,
+					"max_absolute_jerk": 192022.57623887973,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.yaw",
+					"max_absolute_value": 20,
+					"max_absolute_speed": 114.04565831189058,
+					"max_absolute_acceleration": 1862.8432003868786,
+					"max_absolute_jerk": 89716.076615927173,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.roll",
+					"max_absolute_value": 57.5,
+					"max_absolute_speed": 466.87461040946567,
+					"max_absolute_acceleration": 7628.7197303829053,
+					"max_absolute_jerk": 249910.4643039057,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_fingers.open",
+					"max_absolute_value": 1,
+					"max_absolute_speed": 8.507893878243399,
+					"max_absolute_acceleration": 159.06784785715271,
+					"max_absolute_jerk": 5469.0253395766767,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				}
+			],
+			"issues": []
+		},
+		{
+			"template_id": "gesture.wave.right.manny.subtle.v1",
+			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Wave_Right_Manny_Subtle_v1.MT_Wave_Right_Manny_Subtle_v1",
+			"validation_target_mode": "none",
+			"validation_style": "subtle",
+			"asset_hash": "md5:8c06bb1cdb505e06c87780263e3ecd21",
+			"plan_hash": "md5:87ae50e140f5dcd37cb3fdcdea06db03",
+			"quality_report_hash": "md5:346994464b6f22f744fd28cc1a89c4fa",
+			"diagnostic_pass": true,
+			"track_metrics": [
+				{
+					"control_id": "right_upperarm.pitch",
+					"max_absolute_value": 44.909999847412109,
+					"max_absolute_speed": 364.94362348902081,
+					"max_absolute_acceleration": 5642.1033486003416,
+					"max_absolute_jerk": 202801.74293961393,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_upperarm.yaw",
+					"max_absolute_value": 12.239999771118164,
+					"max_absolute_speed": 112.39427128138661,
+					"max_absolute_acceleration": 2430.8703696531134,
+					"max_absolute_jerk": 73592.727914496558,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_upperarm.roll",
+					"max_absolute_value": 75.329994201660156,
+					"max_absolute_speed": 442.63970631623931,
+					"max_absolute_acceleration": 7191.6361463191524,
+					"max_absolute_jerk": 306639.3505701024,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_lowerarm.pitch",
+					"max_absolute_value": 2.9699997901916504,
+					"max_absolute_speed": 20.528245476003146,
+					"max_absolute_acceleration": 336.20459786307822,
+					"max_absolute_jerk": 13543.048338315522,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_lowerarm.yaw",
+					"max_absolute_value": 82.260002136230469,
+					"max_absolute_speed": 533.0921302265034,
+					"max_absolute_acceleration": 8760.597153840974,
+					"max_absolute_jerk": 343573.82551230438,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_lowerarm.roll",
+					"max_absolute_value": 3.059999942779541,
+					"max_absolute_speed": 19.24521270793808,
+					"max_absolute_acceleration": 317.36215088272007,
+					"max_absolute_jerk": 12042.00255411022,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.pitch",
+					"max_absolute_value": 38.789997100830078,
+					"max_absolute_speed": 340.64035476718402,
+					"max_absolute_acceleration": 5630.8745972206016,
+					"max_absolute_jerk": 172819.31892057692,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.yaw",
+					"max_absolute_value": 18,
+					"max_absolute_speed": 102.64105814845477,
+					"max_absolute_acceleration": 1676.5580683846833,
+					"max_absolute_jerk": 83291.141591174412,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_hand.roll",
+					"max_absolute_value": 51.75,
+					"max_absolute_speed": 420.18687471054517,
+					"max_absolute_acceleration": 6865.8501927317029,
+					"max_absolute_jerk": 219062.159217251,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				},
+				{
+					"control_id": "right_fingers.open",
+					"max_absolute_value": 1,
+					"max_absolute_speed": 5.8789572082917196,
+					"max_absolute_acceleration": 81.250166893249798,
+					"max_absolute_jerk": 2949.661328213675,
+					"start_absolute_value": 0,
+					"end_absolute_value": 0
+				}
+			],
+			"issues": []
+		}
+	],
+	"status": "approved",
+	"generated_at": "2026-07-25T03:13:42.563Z",
+	"human_approval":
+	{
+		"approved_by": "project_owner",
+		"approved_at": "2026-07-25T03:13:42.584Z",
+		"note": "Manny N1 PIE visual review accepted shoulders, relaxed/curl hands, interruption/recovery, and the published gesture set."
+	},
+	"baseline_hash": "md5:2e346854d3be9b09e8a666484b5821da"
+}

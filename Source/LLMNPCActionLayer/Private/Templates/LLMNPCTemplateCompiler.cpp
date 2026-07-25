@@ -18,6 +18,9 @@ bool TrackAcceptsResolvedTarget(const FLLMMotionTrack& Track)
 bool MirrorTrack(FLLMMotionTrack& Track)
 {
 	static const TMap<FName, FName> ControlMap = {
+		{TEXT("right_shoulder.pitch"), TEXT("left_shoulder.pitch")},
+		{TEXT("right_shoulder.yaw"), TEXT("left_shoulder.yaw")},
+		{TEXT("right_shoulder.roll"), TEXT("left_shoulder.roll")},
 		{TEXT("right_upperarm.pitch"), TEXT("mirror_left_upperarm.pitch")},
 		{TEXT("right_upperarm.yaw"), TEXT("mirror_left_upperarm.yaw")},
 		{TEXT("right_upperarm.roll"), TEXT("mirror_left_upperarm.roll")},
@@ -33,7 +36,9 @@ bool MirrorTrack(FLLMMotionTrack& Track)
 		{TEXT("right_hand.local_offset.z"), TEXT("left_hand.local_offset.z")},
 		{TEXT("right_hand.palm_target"), TEXT("left_hand.palm_target")},
 		{TEXT("right_fingers.open"), TEXT("left_fingers.open")},
-		{TEXT("right_fingers.point"), TEXT("left_fingers.point")}
+		{TEXT("right_fingers.point"), TEXT("left_fingers.point")},
+		{TEXT("right_fingers.relaxed"), TEXT("left_fingers.relaxed")},
+		{TEXT("right_fingers.curl"), TEXT("left_fingers.curl")}
 	};
 	const FName* MirroredControl = ControlMap.Find(Track.ControlId);
 	if (!MirroredControl)

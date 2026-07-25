@@ -50,6 +50,12 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			Result.Add(MakeRotationControl(TEXT("chest.pitch"), TEXT("spine_03"), -20.0f, 20.0f));
 			Result.Add(MakeRotationControl(TEXT("chest.yaw"), TEXT("spine_03"), -25.0f, 25.0f));
 			Result.Add(MakeRotationControl(TEXT("chest.roll"), TEXT("spine_03"), -18.0f, 18.0f));
+			Result.Add(MakeRotationControl(TEXT("right_shoulder.pitch"), TEXT("clavicle_r"), -35.0f, 35.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_shoulder.yaw"), TEXT("clavicle_r"), -30.0f, 30.0f, false));
+			Result.Add(MakeRotationControl(TEXT("right_shoulder.roll"), TEXT("clavicle_r"), -30.0f, 30.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_shoulder.pitch"), TEXT("clavicle_l"), -35.0f, 35.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_shoulder.yaw"), TEXT("clavicle_l"), -30.0f, 30.0f, false));
+			Result.Add(MakeRotationControl(TEXT("left_shoulder.roll"), TEXT("clavicle_l"), -30.0f, 30.0f, false));
 			Result.Add(MakeRotationControl(TEXT("right_upperarm.pitch"), TEXT("upperarm_r"), -125.0f, 125.0f, false));
 			Result.Add(MakeRotationControl(TEXT("right_upperarm.yaw"), TEXT("upperarm_r"), -125.0f, 125.0f, false));
 			Result.Add(MakeRotationControl(TEXT("right_upperarm.roll"), TEXT("upperarm_r"), -125.0f, 125.0f, false));
@@ -165,6 +171,14 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			FingersPoint.ControlId = TEXT("right_fingers.point");
 			Result.Add(FingersPoint);
 
+			FLLMControlDefinition FingersRelaxed = FingersOpen;
+			FingersRelaxed.ControlId = TEXT("right_fingers.relaxed");
+			Result.Add(FingersRelaxed);
+
+			FLLMControlDefinition FingersCurl = FingersOpen;
+			FingersCurl.ControlId = TEXT("right_fingers.curl");
+			Result.Add(FingersCurl);
+
 			FLLMControlDefinition LeftFingersOpen = FingersOpen;
 			LeftFingersOpen.ControlId = TEXT("left_fingers.open");
 			Result.Add(LeftFingersOpen);
@@ -172,6 +186,14 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			FLLMControlDefinition LeftFingersPoint = FingersOpen;
 			LeftFingersPoint.ControlId = TEXT("left_fingers.point");
 			Result.Add(LeftFingersPoint);
+
+			FLLMControlDefinition LeftFingersRelaxed = FingersOpen;
+			LeftFingersRelaxed.ControlId = TEXT("left_fingers.relaxed");
+			Result.Add(LeftFingersRelaxed);
+
+			FLLMControlDefinition LeftFingersCurl = FingersOpen;
+			LeftFingersCurl.ControlId = TEXT("left_fingers.curl");
+			Result.Add(LeftFingersCurl);
 
 			return Result;
 		}();
@@ -277,4 +299,10 @@ const TArray<FLLMControlDefinition>& ULLMNPCControlManifest::GetBuiltInControls(
 const TArray<FLLMAnchorDefinition>& ULLMNPCControlManifest::GetBuiltInAnchors()
 {
 	return BuiltInAnchors();
+}
+
+const FString& ULLMNPCControlManifest::GetBuiltInManifestVersion()
+{
+	static const FString Version(TEXT("llmnpc.control_manifest.v1"));
+	return Version;
 }

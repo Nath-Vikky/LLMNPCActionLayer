@@ -36,6 +36,9 @@ struct LLMNPCACTIONLAYER_API FAnimNode_LLMProceduralPose : public FAnimNode_Skel
 	FBoneReference ChestBone;
 
 	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
+	FBoneReference RightShoulderBone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
 	FBoneReference RightUpperArmBone;
 
 	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
@@ -43,6 +46,9 @@ struct LLMNPCACTIONLAYER_API FAnimNode_LLMProceduralPose : public FAnimNode_Skel
 
 	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
 	FBoneReference RightHandBone;
+
+	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
+	FBoneReference LeftShoulderBone;
 
 	UPROPERTY(EditAnywhere, Category="LLM NPC Motion|Bones")
 	FBoneReference LeftUpperArmBone;
@@ -174,6 +180,12 @@ private:
 	) const;
 
 	void ApplyRightArmAdditiveRotationsLocal(
+		FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& OutBoneTransforms,
+		float Alpha
+	) const;
+
+	void ApplyShoulderAdditiveRotations(
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms,
 		float Alpha

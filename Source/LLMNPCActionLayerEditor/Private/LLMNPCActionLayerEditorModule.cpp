@@ -1,7 +1,17 @@
 #include "LLMNPCActionLayerEditorModule.h"
 
+#include "Authoring/LLMNPCSkeletonCapabilityExporter.h"
+#include "Authoring/LLMNPCSkeletonProfileAuthoringSubsystem.h"
+#include "Authoring/LLMNPCMannyValidationBaselineExporter.h"
+#include "Editor.h"
 #include "Framework/Docking/TabManager.h"
+#include "HAL/IConsoleManager.h"
+#include "Interfaces/IPluginManager.h"
+#include "Misc/Paths.h"
+#include "Misc/Parse.h"
+#include "Online/LLMNPCCapabilitySmokeRunner.h"
 #include "Online/LLMNPCOnlineTestConfigLoader.h"
+#include "Skeleton/LLMNPCSkeletonProfile.h"
 #include "Styling/AppStyle.h"
 #include "ToolMenus.h"
 #include "UI/SLLMNPCMotionTestConsole.h"
@@ -17,6 +27,325 @@ namespace
 {
 const FName ProviderSettingsTabName(TEXT("LLMNPCProviderSettings"));
 const FName MotionTestConsoleTabName(TEXT("LLMNPCMotionTestConsole"));
+
+void RefreshMannyN1Profile()
+{
+	ULLMNPCSkeletonProfile* Profile = LoadObject<ULLMNPCSkeletonProfile>(
+		nullptr,
+		TEXT("/LLMNPCActionLayer/LLMNPC/SkeletonProfiles/SP_UE5_Manny_v1.SP_UE5_Manny_v1")
+	);
+	ULLMNPCSkeletonProfileAuthoringSubsystem* Authoring =
+		GEditor
+		? GEditor->GetEditorSubsystem<ULLMNPCSkeletonProfileAuthoringSubsystem>()
+		: nullptr;
+	if (!Profile || !Authoring)
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny Profile refresh could not load its asset or Editor subsystem.")
+		);
+		return;
+	}
+
+	const FLLMNPCSkeletonProfileAuthoringResult RefreshResult =
+		Authoring->RefreshGeneratedProfile(Profile, true);
+	if (!RefreshResult.bSuccess || !RefreshResult.QualityReport.bCapabilityReady)
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny Profile refresh failed: %s %s CapabilityReady=%s"),
+			*RefreshResult.ErrorCode.ToString(),
+			*RefreshResult.Message,
+			RefreshResult.QualityReport.bCapabilityReady ? TEXT("true") : TEXT("false")
+		);
+		return;
+	}
+
+	const TSharedPtr<IPlugin> Plugin =
+		IPluginManager::Get().FindPlugin(TEXT("LLMNPCActionLayer"));
+	if (!Plugin.IsValid())
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny Profile refresh could not resolve the plugin directory.")
+		);
+		return;
+	}
+
+	const FString OutputPath = FPaths::Combine(
+		Plugin->GetBaseDir(),
+		TEXT("Resources"),
+		TEXT("Capabilities"),
+		TEXT("Manny"),
+		TEXT("ue5_manny_v1.capability.json")
+	);
+	FLLMNPCSkeletonCapabilitySnapshot Snapshot;
+	FString ExportError;
+	if (!FLLMNPCSkeletonCapabilityExporter::ExportModelView(
+		*Profile,
+		nullptr,
+		OutputPath,
+		Snapshot,
+		ExportError
+	))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny Capability export failed: %s"),
+			*ExportError
+		);
+		return;
+	}
+
+	const FString BaselinePath = FPaths::Combine(
+		Plugin->GetBaseDir(),
+		TEXT("Resources"),
+		TEXT("Validation"),
+		TEXT("Manny"),
+		TEXT("MannyValidationBaseline.v1.json")
+	);
+	FString BaselineError;
+	if (!FLLMNPCMannyValidationBaselineExporter::Export(
+		*Profile,
+		Snapshot,
+		BaselinePath,
+		BaselineError
+	))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny Validation Baseline export failed: %s"),
+			*BaselineError
+		);
+		return;
+	}
+
+	UE_LOG(
+		LogLLMNPCActionLayerEditor,
+		Display,
+		TEXT("LLMNPC N1 Manny Profile, Capability, and Validation Baseline refreshed. Hash=%s Capability=%s Baseline=%s"),
+		*Snapshot.CapabilityHash,
+		*OutputPath,
+		*BaselinePath
+	);
+}
+
+FAutoConsoleCommand RefreshMannyN1ProfileCommand(
+	TEXT("LLMNPC.RefreshMannyN1Profile"),
+	TEXT("Idempotently refresh the shipped Manny Profile to the Forward N1 contract."),
+	FConsoleCommandDelegate::CreateStatic(&RefreshMannyN1Profile)
+);
+
+void ApproveMannyN1ValidationBaseline()
+{
+	ULLMNPCSkeletonProfile* Profile = LoadObject<ULLMNPCSkeletonProfile>(
+		nullptr,
+		TEXT("/LLMNPCActionLayer/LLMNPC/SkeletonProfiles/SP_UE5_Manny_v1.SP_UE5_Manny_v1")
+	);
+	ULLMNPCSkeletonProfileAuthoringSubsystem* Authoring =
+		GEditor
+		? GEditor->GetEditorSubsystem<ULLMNPCSkeletonProfileAuthoringSubsystem>()
+		: nullptr;
+	const TSharedPtr<IPlugin> Plugin =
+		IPluginManager::Get().FindPlugin(TEXT("LLMNPCActionLayer"));
+	if (!Profile || !Authoring || !Plugin.IsValid())
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny Baseline approval could not resolve the Profile, Editor subsystem, or plugin directory.")
+		);
+		return;
+	}
+
+	FString Error;
+	if (!FLLMNPCMannyValidationBaselineExporter::CalibrateThresholdsFromPublishedTemplates(
+		*Profile,
+		1.2f,
+		Error
+	))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny Baseline calibration failed: %s"),
+			*Error
+		);
+		return;
+	}
+	Profile->UpperBodyConstraints.ValidationBaselineVersion =
+		TEXT("manny.validation.baseline.v1");
+	const FLLMNPCSkeletonProfileAuthoringResult CalibratedRefresh =
+		Authoring->RefreshGeneratedProfile(Profile, true);
+	if (
+		!CalibratedRefresh.bSuccess ||
+		!CalibratedRefresh.QualityReport.bCapabilityReady
+	)
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny calibrated Profile save failed: %s %s"),
+			*CalibratedRefresh.ErrorCode.ToString(),
+			*CalibratedRefresh.Message
+		);
+		return;
+	}
+
+	const FString CapabilityPath = FPaths::Combine(
+		Plugin->GetBaseDir(),
+		TEXT("Resources"),
+		TEXT("Capabilities"),
+		TEXT("Manny"),
+		TEXT("ue5_manny_v1.capability.json")
+	);
+	const FString BaselinePath = FPaths::Combine(
+		Plugin->GetBaseDir(),
+		TEXT("Resources"),
+		TEXT("Validation"),
+		TEXT("Manny"),
+		TEXT("MannyValidationBaseline.v1.json")
+	);
+	FLLMNPCSkeletonCapabilitySnapshot CandidateCapability;
+	if (!FLLMNPCSkeletonCapabilityExporter::ExportModelView(
+		*Profile,
+		nullptr,
+		CapabilityPath,
+		CandidateCapability,
+		Error
+	))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny calibrated Capability export failed: %s"),
+			*Error
+		);
+		return;
+	}
+	FString BaselineHash;
+	if (!FLLMNPCMannyValidationBaselineExporter::Export(
+		*Profile,
+		CandidateCapability,
+		BaselinePath,
+		Error,
+		&BaselineHash
+	))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny Baseline candidate export failed: %s"),
+			*Error
+		);
+		return;
+	}
+
+	Profile->UpperBodyConstraints.bKinematicBaselineApproved = true;
+	Profile->UpperBodyConstraints.ValidationBaselineHash = BaselineHash;
+	const FLLMNPCSkeletonProfileAuthoringResult ApprovedRefresh =
+		Authoring->RefreshGeneratedProfile(Profile, true);
+	if (!ApprovedRefresh.bSuccess)
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny approved Profile save failed: %s %s"),
+			*ApprovedRefresh.ErrorCode.ToString(),
+			*ApprovedRefresh.Message
+		);
+		return;
+	}
+
+	FLLMNPCSkeletonCapabilitySnapshot ApprovedCapability;
+	if (!FLLMNPCSkeletonCapabilityExporter::ExportModelView(
+		*Profile,
+		nullptr,
+		CapabilityPath,
+		ApprovedCapability,
+		Error
+	))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny approved Capability export failed: %s"),
+			*Error
+		);
+		return;
+	}
+	FString ApprovedBaselineHash;
+	if (
+		CandidateCapability.CapabilityHash != ApprovedCapability.CapabilityHash ||
+		!FLLMNPCMannyValidationBaselineExporter::Export(
+			*Profile,
+			ApprovedCapability,
+			BaselinePath,
+			Error,
+			&ApprovedBaselineHash
+		) ||
+		ApprovedBaselineHash != BaselineHash
+	)
+	{
+		Profile->UpperBodyConstraints.bKinematicBaselineApproved = false;
+		Profile->UpperBodyConstraints.ValidationBaselineHash.Reset();
+		Authoring->RefreshGeneratedProfile(Profile, true);
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC N1 Manny Baseline approval became inconsistent and was cleared: %s"),
+			*Error
+		);
+		return;
+	}
+
+	UE_LOG(
+		LogLLMNPCActionLayerEditor,
+		Display,
+		TEXT("LLMNPC N1 Manny Validation Baseline APPROVED. CapabilityHash=%s BaselineHash=%s Headroom=1.2"),
+		*ApprovedCapability.CapabilityHash,
+		*ApprovedBaselineHash
+	);
+}
+
+FAutoConsoleCommand ApproveMannyN1ValidationBaselineCommand(
+	TEXT("LLMNPC.ApproveMannyN1ValidationBaseline"),
+	TEXT("Calibrate Manny constraints from Published templates and finalize the human-approved N1 Baseline."),
+	FConsoleCommandDelegate::CreateStatic(&ApproveMannyN1ValidationBaseline)
+);
+
+void RunMannyN1CapabilitySmoke()
+{
+	const bool bExitWhenComplete = FParse::Param(
+		FCommandLine::Get(),
+		TEXT("LLMNPCCapabilitySmokeExit")
+	);
+	FString Error;
+	if (!FLLMNPCCapabilitySmokeRunner::Start(bExitWhenComplete, Error))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC Forward N1 Capability Smoke could not start: %s"),
+			*Error
+		);
+		if (bExitWhenComplete)
+		{
+			FPlatformMisc::RequestExit(false);
+		}
+	}
+}
+
+FAutoConsoleCommand RunMannyN1CapabilitySmokeCommand(
+	TEXT("LLMNPC.RunMannyN1CapabilitySmoke"),
+	TEXT("Run the strict online Manny Capability Smoke and write a sanitized Forward N1 report."),
+	FConsoleCommandDelegate::CreateStatic(&RunMannyN1CapabilitySmoke)
+);
 }
 
 void FLLMNPCActionLayerEditorModule::StartupModule()
@@ -57,6 +386,7 @@ void FLLMNPCActionLayerEditorModule::StartupModule()
 
 void FLLMNPCActionLayerEditorModule::ShutdownModule()
 {
+	FLLMNPCCapabilitySmokeRunner::Cancel();
 	FLLMNPCOnlineTestConfigLoader::ClearSession();
 	if (UToolMenus::IsToolMenuUIEnabled())
 	{

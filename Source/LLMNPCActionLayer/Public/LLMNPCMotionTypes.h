@@ -49,6 +49,9 @@ enum class ELLMNPCMotionDebugSample : uint8
 {
 	Nod,
 	Wave,
+	ForwardN1ShoulderShrug,
+	ForwardN1HandRelaxed,
+	ForwardN1HandCurl,
 	InvalidUnknownControl
 };
 
@@ -202,6 +205,9 @@ struct FLLMNPCPoseBoneBindings
 	FName Chest = TEXT("spine_03");
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	FName RightShoulder = TEXT("clavicle_r");
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	FName RightUpperArm = TEXT("upperarm_r");
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
@@ -209,6 +215,9 @@ struct FLLMNPCPoseBoneBindings
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	FName RightHand = TEXT("hand_r");
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	FName LeftShoulder = TEXT("clavicle_l");
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	FName LeftUpperArm = TEXT("upperarm_l");
@@ -238,6 +247,9 @@ struct FLLMNPCPoseBoneBindings
 	FLLMNPCResolvedAxisBasis ChestAxis;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	FLLMNPCResolvedAxisBasis RightShoulderAxis;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	FLLMNPCResolvedAxisBasis RightUpperArmAxis;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
@@ -245,6 +257,9 @@ struct FLLMNPCPoseBoneBindings
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	FLLMNPCResolvedAxisBasis RightHandAxis;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	FLLMNPCResolvedAxisBasis LeftShoulderAxis;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	FLLMNPCResolvedAxisBasis LeftUpperArmAxis;
@@ -292,6 +307,24 @@ struct FLLMNPCPoseBoneBindings
 	};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	TArray<FRotator> RightFingerRelaxedRotations = {
+		FRotator(-3.0f, 1.0f, 3.0f), FRotator(-1.0f, 1.0f, 1.0f), FRotator(0.0f, 0.5f, 0.0f),
+		FRotator(0.0f, 4.0f, 0.0f), FRotator(0.0f, 3.0f, 0.0f), FRotator(0.0f, 1.0f, 0.0f),
+		FRotator(0.0f, 3.0f, 0.0f), FRotator(0.0f, 2.5f, 0.0f), FRotator(0.0f, 1.0f, 0.0f),
+		FRotator(0.0f, 2.5f, 0.5f), FRotator(0.0f, 2.0f, 0.0f), FRotator(0.0f, 1.0f, 0.0f),
+		FRotator(0.0f, 2.0f, 1.0f), FRotator(0.0f, 1.5f, 0.0f), FRotator(0.0f, 0.5f, 0.0f)
+	};
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	TArray<FRotator> RightFingerCurlRotations = {
+		FRotator(18.0f, -22.0f, -10.0f), FRotator(12.0f, -28.0f, -5.0f), FRotator(5.0f, -18.0f, 0.0f),
+		FRotator(0.0f, -42.0f, 0.0f), FRotator(0.0f, -58.0f, 0.0f), FRotator(0.0f, -34.0f, 0.0f),
+		FRotator(0.0f, -46.0f, 0.0f), FRotator(0.0f, -62.0f, 0.0f), FRotator(0.0f, -38.0f, 0.0f),
+		FRotator(0.0f, -48.0f, 2.0f), FRotator(0.0f, -64.0f, 0.0f), FRotator(0.0f, -40.0f, 0.0f),
+		FRotator(2.0f, -50.0f, 4.0f), FRotator(2.0f, -66.0f, 0.0f), FRotator(0.0f, -42.0f, 0.0f)
+	};
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
 	TArray<FRotator> LeftFingerOpenRotations = {
 		FRotator(-5.0f, -2.0f, -6.0f), FRotator(-2.0f, -2.0f, -2.0f), FRotator(0.0f, -1.0f, 0.0f),
 		FRotator(0.0f, -7.0f, 0.0f), FRotator(0.0f, -5.0f, 0.0f), FRotator(0.0f, -2.0f, 0.0f),
@@ -307,6 +340,24 @@ struct FLLMNPCPoseBoneBindings
 		FRotator(0.0f, 44.0f, 0.0f), FRotator(0.0f, 54.0f, 0.0f), FRotator(0.0f, 28.0f, 0.0f),
 		FRotator(0.0f, 46.0f, -2.0f), FRotator(0.0f, 56.0f, 0.0f), FRotator(0.0f, 30.0f, 0.0f),
 		FRotator(2.0f, 48.0f, -4.0f), FRotator(2.0f, 58.0f, 0.0f), FRotator(0.0f, 32.0f, 0.0f)
+	};
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	TArray<FRotator> LeftFingerRelaxedRotations = {
+		FRotator(-3.0f, -1.0f, -3.0f), FRotator(-1.0f, -1.0f, -1.0f), FRotator(0.0f, -0.5f, 0.0f),
+		FRotator(0.0f, -4.0f, 0.0f), FRotator(0.0f, -3.0f, 0.0f), FRotator(0.0f, -1.0f, 0.0f),
+		FRotator(0.0f, -3.0f, 0.0f), FRotator(0.0f, -2.5f, 0.0f), FRotator(0.0f, -1.0f, 0.0f),
+		FRotator(0.0f, -2.5f, -0.5f), FRotator(0.0f, -2.0f, 0.0f), FRotator(0.0f, -1.0f, 0.0f),
+		FRotator(0.0f, -2.0f, -1.0f), FRotator(0.0f, -1.5f, 0.0f), FRotator(0.0f, -0.5f, 0.0f)
+	};
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Skeleton")
+	TArray<FRotator> LeftFingerCurlRotations = {
+		FRotator(18.0f, 22.0f, 10.0f), FRotator(12.0f, 28.0f, 5.0f), FRotator(5.0f, 18.0f, 0.0f),
+		FRotator(0.0f, 42.0f, 0.0f), FRotator(0.0f, 58.0f, 0.0f), FRotator(0.0f, 34.0f, 0.0f),
+		FRotator(0.0f, 46.0f, 0.0f), FRotator(0.0f, 62.0f, 0.0f), FRotator(0.0f, 38.0f, 0.0f),
+		FRotator(0.0f, 48.0f, -2.0f), FRotator(0.0f, 64.0f, 0.0f), FRotator(0.0f, 40.0f, 0.0f),
+		FRotator(2.0f, 50.0f, -4.0f), FRotator(2.0f, 66.0f, 0.0f), FRotator(0.0f, 42.0f, 0.0f)
 	};
 };
 
@@ -338,6 +389,12 @@ struct FLLMProceduralPoseSnapshot
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	float ChestRoll = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FRotator RightShoulderAdditiveRotation = FRotator::ZeroRotator;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	FRotator LeftShoulderAdditiveRotation = FRotator::ZeroRotator;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	float RightHandIKAlpha = 0.0f;
@@ -403,10 +460,22 @@ struct FLLMProceduralPoseSnapshot
 	float RightFingersPoint = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	float RightFingersRelaxed = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	float RightFingersCurl = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	float LeftFingersOpen = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
 	float LeftFingersPoint = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	float LeftFingersRelaxed = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	float LeftFingersCurl = 0.0f;
 };
 
 USTRUCT(BlueprintType)

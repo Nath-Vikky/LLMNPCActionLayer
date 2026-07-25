@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "LLMNPCMotionTypes.h"
+#include "Skeleton/LLMNPCSkeletonConstraintTypes.h"
 #include "LLMNPCSkeletonProfile.generated.h"
 
 class USkeleton;
@@ -49,7 +50,13 @@ struct FLLMNPCIKChainProfile
 	FVector PoleDirectionCS = FVector::BackwardVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float MinReachScale = 0.05f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float MaxReachScale = 0.98f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton", meta=(ClampMin="0.0", ClampMax="180.0"))
+	float PoleSafetyConeDegrees = 70.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -94,6 +101,21 @@ struct FLLMNPCSkeletonProfileQualityReport
 	float AxisCalibrationCoverage = 0.0f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	float ShoulderCoverage = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	float ShoulderAxisCalibrationCoverage = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	float ExtendedFingerPoseCoverage = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	float KinematicConstraintCoverage = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	float CollisionProxyCoverage = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
 	int32 IKChainCount = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
@@ -101,6 +123,9 @@ struct FLLMNPCSkeletonProfileQualityReport
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
 	bool bPassed = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
+	bool bCapabilityReady = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Quality")
 	TArray<FString> Errors;
@@ -145,6 +170,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
 	TArray<FLLMNPCFingerPoseProfile> FingerPoses;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Calibration")
+	int32 FingerPoseCalibrationRevision = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Constraints")
+	TArray<FLLMNPCKinematicControlConstraint> ControlConstraints;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Constraints")
+	FLLMNPCUpperBodyConstraintProfile UpperBodyConstraints;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Constraints")
+	TArray<FLLMNPCCollisionProxyProfile> CollisionProxies;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton|Constraints")
+	TArray<FName> StableGroundContactBoneSemantics;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="LLM NPC|Skeleton")
 	FString SkeletonSignature;
 
@@ -153,6 +193,8 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Skeleton")
 	FLLMNPCPoseBoneBindings BuildPoseBoneBindings() const;
+
+	const FLLMNPCKinematicControlConstraint* FindControlConstraint(FName ControlId) const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Skeleton")
 	bool IsCompatibleSkeleton(const USkeleton* CandidateSkeleton) const;

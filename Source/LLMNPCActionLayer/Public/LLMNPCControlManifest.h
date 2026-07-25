@@ -102,6 +102,9 @@ class LLMNPCACTIONLAYER_API ULLMNPCControlManifest : public UDataAsset
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
+	FString ManifestVersion = TEXT("llmnpc.control_manifest.v1");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
 	TArray<FLLMControlDefinition> Controls;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
@@ -114,4 +117,5 @@ public:
 	static const FLLMAnchorDefinition* FindBuiltInAnchor(FName AnchorId);
 	static const TArray<FLLMControlDefinition>& GetBuiltInControls();
 	static const TArray<FLLMAnchorDefinition>& GetBuiltInAnchors();
+	static const FString& GetBuiltInManifestVersion();
 };
