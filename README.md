@@ -176,7 +176,7 @@ Add optional `LLM NPC Emotion`, `LLM NPC Relationship`, and `LLM NPC Scene Conte
 
 `RegisterSceneTarget` registers the same opaque Target Ref with both the motion executor and scene-selection context. `SetSceneStateActive("right_hand_busy", true)` removes templates blocked by that state before the request reaches the model. Template cooldown and short-term repeat suppression also operate before selection; the motion scheduler remains the final execution-time guard.
 
-The request contract is `llmnpc.turn_request.v2`, with prompt version `llmnpc.selection_prompt.v3`. Context-constrained amplitude, speed, duration, style, mirror recommendation, and Target refs are enforced again after parsing. Selection events are retained in a bounded `ULLMNPCSelectionAnalyticsSubsystem` ring buffer and do not leave the process automatically.
+The current request contract is `llmnpc.turn_request.v3`, with prompt version `llmnpc.selection_prompt.v3`. Providers that explicitly declare only v2 support receive a fail-closed v2 projection through `FLLMNPCTurnRequestV3Adapter`; the projection never adds candidates, targets, or private implementation fields. Context-constrained amplitude, speed, duration, style, mirror recommendation, and Target refs are enforced again after parsing. Selection events are retained in a bounded `ULLMNPCSelectionAnalyticsSubsystem` ring buffer and do not leave the process automatically.
 
 ## Restricted Compound Behavior
 
@@ -349,6 +349,44 @@ Saved/LLMNPCActionLayer/ForwardN1/Reports
 See `Docs/Phases/forward-n1-capability-constraints.md` for the frozen N1
 acceptance record.
 
+## Forward N2 Catalog And Workbench
+
+N2 separates model-facing Public Actions from skeleton-specific runtime
+templates. Published Nod, Wave, and Point definitions describe intent, suitable
+and unsuitable contexts, target contracts, semantic effects, and allowed
+styles. Their Manny variants retain the private execution details. The runtime
+search index offers only the latest valid Published definitions and variants;
+Generated or invalid assets never enter normal provider candidates.
+
+Open the unified editor surface from `Tools > LLM NPC Template Workbench`, or
+run:
+
+```text
+LLMNPC.OpenTemplateWorkbench
+```
+
+Its Library, Preview, Quality, and Review pages provide catalog search, exact
+Turn Request v3 Candidate Card inspection, deterministic diagnostics, human
+review, and explicit publication to project-owned Published paths. Model-facing
+descriptions and valid vocabulary tags are mandatory publication gates.
+
+Version-controlled N2 artifacts include:
+
+```text
+Resources/Schemas/llmnpc_turn_request_v3.schema.json
+Resources/Schemas/llmnpc_public_action_definition_v1.schema.json
+Resources/Schemas/llmnpc_action_vocabulary_v1.schema.json
+Resources/Vocabulary/action_vocabulary_v1.json
+Resources/Catalog/Manny/public_actions_v1.json
+Content/LLMNPC/PublicActions
+Content/LLMNPC/Catalog
+```
+
+Use `LLMNPC.MigrateMannyN2Catalog` for the idempotent Manny migration and
+`LLMNPC.RunMannyN2CatalogSelectionSmoke` for the strict real-provider selection
+suite. See `Docs/Phases/forward-n2-catalog-workbench.md` for the frozen N2
+acceptance record.
+
 ## Product Runtime
 
 When the owning Actor replicates, `ULLMNPCMotionComponent` replicates only a
@@ -365,8 +403,10 @@ evaluation. Use `STATGROUP_LLMNPCActionLayer` in Unreal Insights or stat tools
 to inspect component and sampling cost.
 
 Protocol versions are centralized in `FLLMNPCProtocolCompatibility`. Known
-MotionPlan 1.x spellings migrate to `1.0`; unknown Prompt, response Schema, and
-MotionPlan versions fail closed. Selection telemetry is local and opt-in.
+MotionPlan 1.x spellings migrate to `1.0`; Turn Request v3 can be projected to
+v2 only for providers that explicitly advertise v2 support. Unknown Prompt,
+response Schema, request Schema, and MotionPlan versions fail closed. Selection
+telemetry is local and opt-in.
 
 The plugin is validated with isolated Win64 `BuildPlugin` Development and
 Shipping targets. See `Docs/Phases/phase8-productization.md` for networking,

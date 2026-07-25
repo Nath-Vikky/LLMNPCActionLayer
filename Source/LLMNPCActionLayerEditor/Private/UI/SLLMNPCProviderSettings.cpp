@@ -10,6 +10,7 @@
 #include "Dialogue/LLMNPCDialogueComponent.h"
 #include "Dialogue/LLMNPCModelTurnValidator.h"
 #include "Online/LLMNPCOnlineTestConfigLoader.h"
+#include "Protocol/LLMNPCProtocolCompatibility.h"
 #include "Providers/LLMNPCDeepSeekProvider.h"
 #include "Providers/LLMNPCProviderCredentials.h"
 #include "ScopedTransaction.h"
@@ -70,7 +71,10 @@ FString BuildConnectionTestContextJson(
 	);
 
 	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
-	Root->SetStringField(TEXT("schema_version"), TEXT("llmnpc.turn_request.v2"));
+	Root->SetStringField(
+		TEXT("schema_version"),
+		FLLMNPCProtocolCompatibility::CurrentTurnRequestSchema()
+	);
 	Root->SetStringField(TEXT("prompt_version"), Settings.SelectionPromptVersion);
 	Root->SetStringField(
 		TEXT("request_id"),

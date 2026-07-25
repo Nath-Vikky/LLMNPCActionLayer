@@ -41,7 +41,13 @@ FMockContext ParseMockContext(const FLLMNPCModelTurnRequest& Request)
 		{
 			const TSharedPtr<FJsonObject> CandidateObject = Value->AsObject();
 			FString SelectionId;
-			if (!CandidateObject.IsValid() || !CandidateObject->TryGetStringField(TEXT("template_id"), SelectionId))
+			if (
+				!CandidateObject.IsValid() ||
+				(
+					!CandidateObject->TryGetStringField(TEXT("selection_id"), SelectionId) &&
+					!CandidateObject->TryGetStringField(TEXT("template_id"), SelectionId)
+				)
+			)
 			{
 				continue;
 			}
@@ -66,6 +72,61 @@ FMockContext ParseMockContext(const FLLMNPCModelTurnRequest& Request)
 			if (CandidateObject->TryGetStringField(TEXT("recommended_style"), RecommendedStyle))
 			{
 				Candidate.RecommendedStyle = FName(*RecommendedStyle);
+			}
+			const TArray<TSharedPtr<FJsonValue>>* StyleOptions = nullptr;
+			if (
+				CandidateObject->TryGetArrayField(TEXT("style_options"), StyleOptions) &&
+				StyleOptions
+			)
+			{
+				for (const TSharedPtr<FJsonValue>& StyleValue : *StyleOptions)
+				{
+					const TSharedPtr<FJsonObject> StyleObject = StyleValue->AsObject();
+					FString StyleName;
+					if (
+						!StyleObject ||
+						!StyleObject->TryGetStringField(TEXT("style"), StyleName) ||
+						FName(*StyleName) != Candidate.RecommendedStyle
+					)
+					{
+						continue;
+					}
+					const TArray<TSharedPtr<FJsonValue>>* Range = nullptr;
+					if (
+						StyleObject->TryGetArrayField(TEXT("amplitude"), Range) &&
+						Range && Range->Num() == 2
+					)
+					{
+						Candidate.RecommendedAmplitude = FMath::Clamp(
+							1.0f,
+							static_cast<float>((*Range)[0]->AsNumber()),
+							static_cast<float>((*Range)[1]->AsNumber())
+						);
+					}
+					if (
+						StyleObject->TryGetArrayField(TEXT("speed_scale"), Range) &&
+						Range && Range->Num() == 2
+					)
+					{
+						Candidate.RecommendedSpeedScale = FMath::Clamp(
+							1.0f,
+							static_cast<float>((*Range)[0]->AsNumber()),
+							static_cast<float>((*Range)[1]->AsNumber())
+						);
+					}
+					if (
+						StyleObject->TryGetArrayField(TEXT("duration_scale"), Range) &&
+						Range && Range->Num() == 2
+					)
+					{
+						Candidate.RecommendedDurationScale = FMath::Clamp(
+							1.0f,
+							static_cast<float>((*Range)[0]->AsNumber()),
+							static_cast<float>((*Range)[1]->AsNumber())
+						);
+					}
+					break;
+				}
 			}
 			Context.Candidates.Add(FName(*SelectionId), Candidate);
 		}

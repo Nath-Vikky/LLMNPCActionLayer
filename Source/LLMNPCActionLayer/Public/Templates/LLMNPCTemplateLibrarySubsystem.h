@@ -3,9 +3,12 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Templates/LLMNPCTemplateCandidate.h"
+#include "Templates/LLMNPCTemplateSearchIndex.h"
 #include "LLMNPCTemplateLibrarySubsystem.generated.h"
 
+class ULLMNPCActionVocabulary;
 class ULLMNPCMotionTemplate;
+class ULLMNPCPublicActionDefinition;
 class ULLMNPCSkeletonProfile;
 
 UCLASS()
@@ -22,6 +25,11 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
 	const ULLMNPCMotionTemplate* FindPublishedTemplate(FName TemplateId) const;
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
+	const ULLMNPCPublicActionDefinition* FindPublishedPublicAction(
+		FName PublicActionId
+	) const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
 	const ULLMNPCMotionTemplate* FindPublishedVariant(
@@ -53,7 +61,13 @@ public:
 	) const;
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
-	int32 GetPublishedTemplateCount() const { return TemplateIndex.Num(); }
+	int32 GetPublishedTemplateCount() const { return CatalogIndex.GetTemplateCount(); }
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
+	int32 GetPublishedPublicActionCount() const { return CatalogIndex.GetPublicActionCount(); }
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
+	FString GetCatalogHash() const { return CatalogIndex.GetCatalogHash(); }
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Template Library")
 	void GetPublishedTemplateIdsForProfile(
@@ -64,14 +78,25 @@ public:
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
 	const TArray<FString>& GetScanErrors() const { return ScanErrors; }
 
+	const TArray<FLLMNPCCatalogDiagnostic>& GetCatalogDiagnostics() const
+	{
+		return CatalogIndex.GetDiagnostics();
+	}
+
 private:
 	UPROPERTY(Transient)
-	TMap<FName, TObjectPtr<ULLMNPCMotionTemplate>> TemplateIndex;
+	TArray<TObjectPtr<ULLMNPCMotionTemplate>> LoadedTemplates;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<ULLMNPCPublicActionDefinition>> LoadedPublicActions;
+
+	UPROPERTY(Transient)
+	TObjectPtr<ULLMNPCActionVocabulary> LoadedVocabulary;
 
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<ULLMNPCSkeletonProfile>> SkeletonProfileIndex;
 
-	TMap<FName, TArray<FName>> PublicActionIndex;
+	FLLMNPCTemplateSearchIndex CatalogIndex;
 
 	UPROPERTY(Transient)
 	TArray<FString> ScanErrors;

@@ -235,6 +235,9 @@ struct FLLMNPCDialogueDebugState
 	int32 ExcludedCandidateCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
+	FString RequestSchemaVersion;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")
 	bool bUsedLocalFallback = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue|Debug")

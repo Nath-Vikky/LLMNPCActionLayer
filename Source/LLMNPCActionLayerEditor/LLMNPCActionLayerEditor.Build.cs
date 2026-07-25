@@ -21,6 +21,7 @@ public class LLMNPCActionLayerEditor : ModuleRules
 			{
 				"AssetRegistry",
 				"AssetTools",
+				"DesktopPlatform",
 				"EditorSubsystem",
 				"InputCore",
 				"Json",

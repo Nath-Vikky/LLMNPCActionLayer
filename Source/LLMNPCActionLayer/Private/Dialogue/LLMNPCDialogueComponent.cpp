@@ -13,6 +13,7 @@
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCSettings.h"
 #include "Protocol/LLMNPCProtocolCompatibility.h"
+#include "Protocol/LLMNPCTurnRequestV3Adapter.h"
 #include "Providers/LLMNPCModelProviderRegistry.h"
 #include "Selection/LLMNPCCandidateRetriever.h"
 #include "Selection/LLMNPCSelectionAnalyticsSubsystem.h"
@@ -69,6 +70,7 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	LastSourceCandidateCount = 0;
 	LastOfferedCandidateCount = 0;
 	LastExcludedCandidateCount = 0;
+	LastRequestSchemaVersion.Reset();
 
 	EnsureRuntimeObjects();
 	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
@@ -131,6 +133,43 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	LastExcludedCandidateCount = Retrieval.Exclusions.Num();
 	ActiveOfferedCandidates = MoveTemp(Retrieval.Candidates);
 	ActiveCandidateExclusions = MoveTemp(Retrieval.Exclusions);
+	const FLLMNPCProviderCapabilityProfile ProviderCapabilities =
+		ModelProvider->GetCapabilityProfile();
+	LastRequestSchemaVersion =
+		ProviderCapabilities.SupportsTurnRequestSchema(
+			FLLMNPCProtocolCompatibility::CurrentTurnRequestSchema()
+		)
+		? FLLMNPCProtocolCompatibility::CurrentTurnRequestSchema()
+		: ProviderCapabilities.PreferredTurnRequestSchema;
+	if (!FLLMNPCProtocolCompatibility::IsSupportedTurnRequestSchema(
+		LastRequestSchemaVersion
+	))
+	{
+		CompleteFailure(
+			TEXT("LLMNPC_PROVIDER_TURN_REQUEST_SCHEMA_UNSUPPORTED"),
+			LastRequestSchemaVersion,
+			false
+		);
+		return false;
+	}
+	TArray<FName> AdapterExclusions;
+	TArray<FLLMNPCTemplateCandidate> AdaptedCandidates;
+	FLLMNPCTurnRequestV3Adapter::AdaptCandidatesForSchema(
+		LastRequestSchemaVersion,
+		ActiveOfferedCandidates,
+		AdaptedCandidates,
+		&AdapterExclusions
+	);
+	for (const FName ExcludedId : AdapterExclusions)
+	{
+		FLLMNPCCandidateExclusion& Exclusion =
+			ActiveCandidateExclusions.AddDefaulted_GetRef();
+		Exclusion.SelectionId = ExcludedId;
+		Exclusion.Reason = TEXT("request_schema_adapter");
+	}
+	ActiveOfferedCandidates = MoveTemp(AdaptedCandidates);
+	LastOfferedCandidateCount = ActiveOfferedCandidates.Num();
+	LastExcludedCandidateCount = ActiveCandidateExclusions.Num();
 	LastOfferedCandidates = ActiveOfferedCandidates;
 
 	ActiveRequest = FLLMNPCModelTurnRequest();
@@ -138,11 +177,12 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	ActiveRequest.SessionId = ConversationSession->GetSessionId();
 	ActiveRequest.NPCId = NPCId;
 	ActiveRequest.UserMessage = CleanMessage;
-	ActiveRequest.ContextJson = ConversationSession->BuildContextualRequestJson(
+	ActiveRequest.ContextJson = ConversationSession->BuildContextualRequestJsonForSchema(
 		ActiveRequest.RequestId,
 		ActiveOfferedCandidates,
 		RetrievalRequest.Context,
-		PromptVersion
+		PromptVersion,
+		LastRequestSchemaVersion
 	);
 	if (GetWorld() && GetWorld()->GetGameInstance())
 	{
@@ -388,6 +428,7 @@ FLLMNPCDialogueDebugState ULLMNPCDialogueComponent::GetDebugState() const
 	Debug.SourceCandidateCount = LastSourceCandidateCount;
 	Debug.OfferedCandidateCount = LastOfferedCandidateCount;
 	Debug.ExcludedCandidateCount = LastExcludedCandidateCount;
+	Debug.RequestSchemaVersion = LastRequestSchemaVersion;
 	Debug.bUsedLocalFallback = LastTurnResult.bUsedLocalFallback;
 	const FLLMNPCSelectionContextSnapshot Context = GetSelectionContextSnapshot();
 	Debug.ContextSummary = FString::Printf(

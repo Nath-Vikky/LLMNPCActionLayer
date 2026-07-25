@@ -18,17 +18,31 @@ ULLMNPCMotionTemplate* MakeAnimationTemplate(UAnimationAsset* AnimationAsset)
 	Template->Kind = ELLMNPCTemplateKind::AnimationAsset;
 	Template->Metadata.TemplateId = TEXT("gesture.wave.asset.manny.v1");
 	Template->Metadata.PublicActionId = TEXT("gesture.wave.asset");
+	Template->Metadata.CatalogSchemaVersion = LLMNPCCatalog::SchemaVersion;
+	Template->Metadata.CatalogRevision = 1;
+	Template->Metadata.VariantId = TEXT("animation_asset");
+	Template->Metadata.VariantStyleTags = { TEXT("neutral"), TEXT("friendly") };
+	Template->Metadata.VisualDescription =
+		TEXT("A reviewed right-hand wave animation plays through a bounded Dynamic Montage.");
+	Template->Metadata.IntentTags = { TEXT("greet"), TEXT("farewell") };
+	Template->Metadata.BodyRegionTags = { TEXT("one_arm"), TEXT("hand"), TEXT("fingers") };
+	Template->Metadata.SpatialRequirementTags = { TEXT("target_independent") };
+	Template->Metadata.SemanticEffectTags = { TEXT("greet"), TEXT("farewell") };
+	Template->Metadata.RequiredCapabilities = { TEXT("animation_asset.playback") };
 	Template->Metadata.SkeletonProfileId = TEXT("ue5_manny.v1");
 	Template->Metadata.RequiredChannels = { TEXT("full_body") };
 	Template->Metadata.ReviewState = ELLMNPCTemplateReviewState::Published;
 	Template->ModifierPolicy.AmplitudeRange = FVector2D(1.0f, 1.0f);
 	Template->ModifierPolicy.SpeedRange = FVector2D(0.8f, 1.2f);
 	Template->ModifierPolicy.DurationRange = FVector2D(0.8f, 1.2f);
+	Template->ModifierPolicy.AllowedStyleTags = { TEXT("neutral"), TEXT("friendly") };
 	Template->AnimationAsset = AnimationAsset;
 	Template->AnimationPlayback.SlotName = TEXT("DefaultSlot");
 	Template->AnimationPlayback.MaxDurationSeconds = 5.0f;
 	Template->SourceProvenanceJson = TEXT("{\"source\":\"automation\"}");
 	Template->ValidationReportJson = TEXT("{\"status\":\"pass\"}");
+	Template->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*Template);
 	return Template;
 }
 }
@@ -58,10 +72,14 @@ bool FLLMNPCPhase6AnimationTemplatePolicyTest::RunTest(const FString& Parameters
 	TestTrue(TEXT("A reviewed animation alias has a valid template policy"), Template->ValidateTemplate(Error));
 
 	Template->Metadata.RequiredChannels.Reset();
+	Template->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*Template);
 	TestFalse(TEXT("Animation aliases require explicit interaction channels"), Template->ValidateTemplate(Error));
 	TestEqual(TEXT("Missing channels have a stable error"), Error, FString(TEXT("LLMNPC_TEMPLATE_ANIMATION_CHANNELS_MISSING")));
 
 	Template->Metadata.RequiredChannels = { TEXT("full_body") };
+	Template->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*Template);
 	Template->AnimationPlayback.MaxDurationSeconds = 0.0f;
 	TestFalse(TEXT("Animation aliases reject an invalid hard timeout"), Template->ValidateTemplate(Error));
 	TestEqual(

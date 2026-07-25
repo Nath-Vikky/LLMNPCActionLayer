@@ -183,6 +183,8 @@ void FLLMNPCDeepSeekProvider::StartHttpRequest(const FGuid& RequestId)
 	{
 		SystemPrompt += TEXT("\n\n");
 	}
+	SystemPrompt += FLLMNPCModelTurnContract::GetSelectionSafetyInstruction();
+	SystemPrompt += TEXT("\n\n");
 	SystemPrompt += FLLMNPCModelTurnContract::GetResponseInstruction();
 	SystemMessage->SetStringField(TEXT("role"), TEXT("system"));
 	SystemMessage->SetStringField(TEXT("content"), SystemPrompt);

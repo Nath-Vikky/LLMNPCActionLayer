@@ -1,5 +1,7 @@
 #include "Templates/LLMNPCMotionTemplate.h"
 
+#include "Misc/SecureHash.h"
+
 namespace
 {
 bool IsOrderedPositiveRange(const FVector2D& Range)
@@ -26,6 +28,31 @@ bool IsValidAnimationPlaybackPolicy(const FLLMNPCAnimationPlaybackPolicy& Policy
 		Policy.StartPositionSeconds >= 0.0f &&
 		Policy.MaxDurationSeconds >= 0.1f &&
 		Policy.MaxDurationSeconds <= 60.0f;
+}
+
+FString JoinNames(const TArray<FName>& Names)
+{
+	TArray<FString> Values;
+	for (const FName Name : Names)
+	{
+		Values.Add(Name.ToString().ToLower());
+	}
+	Values.Sort();
+	return FString::Join(Values, TEXT(","));
+}
+
+bool HasUniqueNonEmptyNames(const TArray<FName>& Names)
+{
+	TSet<FName> Unique;
+	for (const FName Name : Names)
+	{
+		if (Name.IsNone() || Unique.Contains(Name))
+		{
+			return false;
+		}
+		Unique.Add(Name);
+	}
+	return true;
 }
 }
 
@@ -85,6 +112,19 @@ bool ULLMNPCMotionTemplate::ValidateTemplate(FString& OutError) const
 	}
 
 	if (
+		!HasUniqueNonEmptyNames(Metadata.VariantStyleTags) ||
+		!HasUniqueNonEmptyNames(Metadata.IntentTags) ||
+		!HasUniqueNonEmptyNames(Metadata.EmotionTags) ||
+		!HasUniqueNonEmptyNames(Metadata.PersonalityTags) ||
+		!HasUniqueNonEmptyNames(Metadata.RequiredChannels) ||
+		!HasUniqueNonEmptyNames(Metadata.BlockedStates)
+	)
+	{
+		OutError = TEXT("LLMNPC_TEMPLATE_METADATA_TAGS_INVALID");
+		return false;
+	}
+
+	if (
 		!IsOrderedPositiveRange(ModifierPolicy.AmplitudeRange) ||
 		!IsOrderedPositiveRange(ModifierPolicy.SpeedRange) ||
 		!IsOrderedPositiveRange(ModifierPolicy.DurationRange)
@@ -110,6 +150,68 @@ bool ULLMNPCMotionTemplate::ValidateTemplate(FString& OutError) const
 	{
 		OutError = TEXT("LLMNPC_TEMPLATE_RANDOMIZATION_POLICY_INVALID");
 		return false;
+	}
+
+	if (IsPublished())
+	{
+		const FString VisualDescription =
+			Metadata.VisualDescription.TrimStartAndEnd();
+		if (
+			Metadata.CatalogSchemaVersion != LLMNPCCatalog::SchemaVersion ||
+			Metadata.CatalogRevision < 1
+		)
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_CATALOG_VERSION_INVALID");
+			return false;
+		}
+		if (VisualDescription.IsEmpty() || VisualDescription.Len() > 600)
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_VISUAL_DESCRIPTION_INVALID");
+			return false;
+		}
+		if (
+			Metadata.BodyRegionTags.IsEmpty() ||
+			Metadata.RequiredCapabilities.IsEmpty() ||
+			(Kind != ELLMNPCTemplateKind::AnimationAsset && Metadata.RequiredChannels.IsEmpty()) ||
+			(Metadata.IntentTags.IsEmpty() && Metadata.SemanticEffectTags.IsEmpty()) ||
+			!HasUniqueNonEmptyNames(Metadata.BodyRegionTags) ||
+			!HasUniqueNonEmptyNames(Metadata.SpatialRequirementTags) ||
+			!HasUniqueNonEmptyNames(Metadata.SemanticEffectTags) ||
+			!HasUniqueNonEmptyNames(Metadata.TargetCategoryTags) ||
+			!HasUniqueNonEmptyNames(Metadata.RequiredCapabilities)
+		)
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_CATALOG_METADATA_INVALID");
+			return false;
+		}
+		if (Metadata.bRequiresTarget != !Metadata.TargetCategoryTags.IsEmpty())
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_TARGET_CONTRACT_INVALID");
+			return false;
+		}
+		if (
+			!FMath::IsFinite(Metadata.Expressiveness) ||
+			!FMath::IsFinite(Metadata.Energy) ||
+			!FMath::IsFinite(Metadata.SocialIntensity) ||
+			Metadata.Expressiveness < 0.0f ||
+			Metadata.Expressiveness > 1.0f ||
+			Metadata.Energy < 0.0f ||
+			Metadata.Energy > 1.0f ||
+			Metadata.SocialIntensity < 0.0f ||
+			Metadata.SocialIntensity > 1.0f
+		)
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_CATALOG_SCALES_INVALID");
+			return false;
+		}
+		if (
+			Metadata.CatalogContentHash.IsEmpty() ||
+			Metadata.CatalogContentHash != BuildCatalogContentHash(*this)
+		)
+		{
+			OutError = TEXT("LLMNPC_TEMPLATE_CATALOG_CONTENT_HASH_STALE");
+			return false;
+		}
 	}
 
 	if (Kind == ELLMNPCTemplateKind::ProceduralMotion)
@@ -160,10 +262,58 @@ bool ULLMNPCMotionTemplate::ValidateTemplate(FString& OutError) const
 	return true;
 }
 
+FString ULLMNPCMotionTemplate::BuildCatalogContentHash(
+	const ULLMNPCMotionTemplate& Template
+)
+{
+	const FLLMNPCTemplateMetadata& Metadata = Template.Metadata;
+	const FLLMNPCModifierPolicy& Policy = Template.ModifierPolicy;
+	const TArray<FString> Lines = {
+		Metadata.TemplateId.ToString().ToLower(),
+		Metadata.PublicActionId.ToString().ToLower(),
+		Metadata.SemanticVersion.TrimStartAndEnd(),
+		FString::FromInt(Metadata.CatalogRevision),
+		Metadata.VariantId.ToString().ToLower(),
+		JoinNames(Metadata.VariantStyleTags),
+		FString::Printf(TEXT("%.6f"), Metadata.VariantWeight),
+		Metadata.DisplayName.ToString().TrimStartAndEnd(),
+		Metadata.VisualDescription.TrimStartAndEnd(),
+		JoinNames(Metadata.IntentTags),
+		JoinNames(Metadata.EmotionTags),
+		JoinNames(Metadata.PersonalityTags),
+		JoinNames(Metadata.BodyRegionTags),
+		JoinNames(Metadata.SpatialRequirementTags),
+		JoinNames(Metadata.SemanticEffectTags),
+		JoinNames(Metadata.TargetCategoryTags),
+		JoinNames(Metadata.RequiredCapabilities),
+		JoinNames(Metadata.RequiredChannels),
+		JoinNames(Metadata.BlockedStates),
+		Metadata.SkeletonProfileId.ToString().ToLower(),
+		JoinNames(Metadata.CompatibleSkeletonProfileIds),
+		Metadata.bRequiresTarget ? TEXT("1") : TEXT("0"),
+		Metadata.bCanRunWhileMoving ? TEXT("1") : TEXT("0"),
+		Metadata.bAllowRuntimeModelSelection ? TEXT("1") : TEXT("0"),
+		FString::Printf(TEXT("%.6f"), Metadata.CooldownSeconds),
+		FString::Printf(TEXT("%.6f"), Metadata.Expressiveness),
+		FString::Printf(TEXT("%.6f"), Metadata.Energy),
+		FString::Printf(TEXT("%.6f"), Metadata.SocialIntensity),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.AmplitudeRange.X, Policy.AmplitudeRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.SpeedRange.X, Policy.SpeedRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.DurationRange.X, Policy.DurationRange.Y),
+		Policy.bAllowMirror ? TEXT("1") : TEXT("0"),
+		JoinNames(Policy.AllowedStyleTags),
+		Metadata.VariantDifference.TrimStartAndEnd(),
+		Metadata.SourceRecipeHash.TrimStartAndEnd(),
+		Metadata.KinematicReportHash.TrimStartAndEnd(),
+		Metadata.CatalogSchemaVersion
+	};
+	return FString::Printf(
+		TEXT("md5:%s"),
+		*FMD5::HashAnsiString(*FString::Join(Lines, TEXT("\n")))
+	);
+}
+
 FPrimaryAssetId ULLMNPCMotionTemplate::GetPrimaryAssetId() const
 {
-	return FPrimaryAssetId(
-		TEXT("LLMNPCTemplate"),
-		Metadata.TemplateId.IsNone() ? GetFName() : Metadata.TemplateId
-	);
+	return FPrimaryAssetId(TEXT("LLMNPCTemplate"), GetFName());
 }

@@ -192,6 +192,7 @@ private:
 	int32 LastSourceCandidateCount = 0;
 	int32 LastOfferedCandidateCount = 0;
 	int32 LastExcludedCandidateCount = 0;
+	FString LastRequestSchemaVersion;
 	FTimerHandle RequestWatchdogHandle;
 	TArray<FLLMNPCTemplateCandidate> ActiveOfferedCandidates;
 	TArray<FLLMNPCCandidateExclusion> ActiveCandidateExclusions;

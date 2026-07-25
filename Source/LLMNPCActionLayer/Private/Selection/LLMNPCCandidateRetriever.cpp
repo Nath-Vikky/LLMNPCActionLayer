@@ -1,5 +1,6 @@
 #include "Selection/LLMNPCCandidateRetriever.h"
 
+#include "Protocol/LLMNPCTurnRequestV3Adapter.h"
 #include "Style/LLMNPCStyleResolver.h"
 
 namespace
@@ -74,6 +75,17 @@ bool TargetMatchesMessage(const FLLMNPCSceneTargetContext& Target, const FString
 	return false;
 }
 
+bool TargetMatchesContract(
+	const FLLMNPCTemplateCandidate& Candidate,
+	const FLLMNPCSceneTargetContext& Target
+)
+{
+	return
+		Candidate.TargetCategoryTags.IsEmpty() ||
+		Candidate.TargetCategoryTags.Contains(TEXT("scene_target")) ||
+		Candidate.TargetCategoryTags.Contains(Target.Category);
+}
+
 double ResolveNowSeconds(double RequestedNow)
 {
 	return RequestedNow > 0.0 ? RequestedNow : FPlatformTime::Seconds();
@@ -137,7 +149,15 @@ FLLMNPCCandidateRetrievalResult ULLMNPCCandidateRetriever::Retrieve(
 			AddExclusion(Result, Source.SelectionId, ExclusionBlockedState);
 			continue;
 		}
-		if (Source.bRequiresTarget && Request.Context.AvailableTargets.IsEmpty())
+		if (
+			Source.bRequiresTarget &&
+			!Request.Context.AvailableTargets.ContainsByPredicate(
+				[&Source](const FLLMNPCSceneTargetContext& Target)
+				{
+					return TargetMatchesContract(Source, Target);
+				}
+			)
+		)
 		{
 			AddExclusion(Result, Source.SelectionId, ExclusionTargetMissing);
 			continue;
@@ -177,6 +197,20 @@ FLLMNPCCandidateRetrievalResult ULLMNPCCandidateRetriever::Retrieve(
 			Request.Context,
 			Candidate.AllowedStyles
 		);
+		const FLLMNPCCandidateStyleOption* RecommendedStyleOption =
+			FLLMNPCTurnRequestV3Adapter::FindStyleOption(
+				Candidate,
+				Candidate.RecommendedStyle
+			);
+		if (!RecommendedStyleOption)
+		{
+			AddExclusion(Result, Source.SelectionId, TEXT("style_unavailable"));
+			continue;
+		}
+		Candidate.AmplitudeRange = RecommendedStyleOption->AmplitudeRange;
+		Candidate.SpeedRange = RecommendedStyleOption->SpeedRange;
+		Candidate.DurationRange = RecommendedStyleOption->DurationRange;
+		Candidate.bAllowMirror = RecommendedStyleOption->bMirrorAllowed;
 		const FLLMNPCStylePreset StylePreset = ULLMNPCStyleResolver::GetBuiltInPreset(
 			Candidate.RecommendedStyle
 		);
@@ -186,10 +220,45 @@ FLLMNPCCandidateRetrievalResult ULLMNPCCandidateRetriever::Retrieve(
 			0.25f,
 			1.5f
 		);
-		Candidate.AmplitudeRange.Y = FMath::Max(
-			Candidate.AmplitudeRange.X,
-			FMath::Min(Candidate.AmplitudeRange.Y, Candidate.AmplitudeRange.Y * ExpressionScale)
+		const float ContextAmplitudeMax = FMath::Max(
+			RecommendedStyleOption->AmplitudeRange.X,
+			RecommendedStyleOption->AmplitudeRange.Y * ExpressionScale
 		);
+		for (int32 StyleIndex = Candidate.StyleOptions.Num() - 1; StyleIndex >= 0; --StyleIndex)
+		{
+			FLLMNPCCandidateStyleOption& StyleOption = Candidate.StyleOptions[StyleIndex];
+			const float ContextualMax = FMath::Min(
+				StyleOption.AmplitudeRange.Y,
+				ContextAmplitudeMax
+			);
+			if (
+				StyleOption.Style != Candidate.RecommendedStyle &&
+				ContextualMax < StyleOption.AmplitudeRange.X
+			)
+			{
+				Candidate.StyleOptions.RemoveAt(StyleIndex);
+				continue;
+			}
+			StyleOption.AmplitudeRange.Y = FMath::Max(
+				StyleOption.AmplitudeRange.X,
+				ContextualMax
+			);
+		}
+		Candidate.AllowedStyles.Reset();
+		for (const FLLMNPCCandidateStyleOption& StyleOption : Candidate.StyleOptions)
+		{
+			Candidate.AllowedStyles.Add(StyleOption.Style);
+		}
+		RecommendedStyleOption = FLLMNPCTurnRequestV3Adapter::FindStyleOption(
+			Candidate,
+			Candidate.RecommendedStyle
+		);
+		if (!RecommendedStyleOption)
+		{
+			AddExclusion(Result, Source.SelectionId, TEXT("style_unavailable"));
+			continue;
+		}
+		Candidate.AmplitudeRange = RecommendedStyleOption->AmplitudeRange;
 		Candidate.RecommendedAmplitude = FMath::Clamp(
 			ExpressionScale * StylePreset.AmplitudeScale,
 			Candidate.AmplitudeRange.X,
@@ -208,7 +277,13 @@ FLLMNPCCandidateRetrievalResult ULLMNPCCandidateRetriever::Retrieve(
 
 		if (Candidate.bRequiresTarget)
 		{
-			TArray<FLLMNPCSceneTargetContext> Targets = Request.Context.AvailableTargets;
+			TArray<FLLMNPCSceneTargetContext> Targets =
+				Request.Context.AvailableTargets.FilterByPredicate(
+					[&Candidate](const FLLMNPCSceneTargetContext& Target)
+					{
+						return TargetMatchesContract(Candidate, Target);
+					}
+				);
 			Targets.Sort(
 				[&Request](const FLLMNPCSceneTargetContext& A, const FLLMNPCSceneTargetContext& B)
 				{
@@ -318,24 +393,40 @@ bool ULLMNPCCandidateRetriever::ApplySelectionPolicy(
 		return false;
 	}
 
+	const FLLMNPCCandidateStyleOption* StyleOption =
+		FLLMNPCTurnRequestV3Adapter::FindStyleOption(
+			*Candidate,
+			Decision.Action.Style
+		);
+	const FVector2D AllowedAmplitude = StyleOption
+		? StyleOption->AmplitudeRange
+		: Candidate->AmplitudeRange;
+	const FVector2D AllowedSpeed = StyleOption
+		? StyleOption->SpeedRange
+		: Candidate->SpeedRange;
+	const FVector2D AllowedDuration = StyleOption
+		? StyleOption->DurationRange
+		: Candidate->DurationRange;
 	Decision.Action.Amplitude = FMath::Clamp(
 		Decision.Action.Amplitude,
-		Candidate->AmplitudeRange.X,
-		Candidate->AmplitudeRange.Y
+		AllowedAmplitude.X,
+		AllowedAmplitude.Y
 	);
 	Decision.Action.SpeedScale = FMath::Clamp(
 		Decision.Action.SpeedScale,
-		Candidate->SpeedRange.X,
-		Candidate->SpeedRange.Y
+		AllowedSpeed.X,
+		AllowedSpeed.Y
 	);
 	Decision.Action.DurationScale = FMath::Clamp(
 		Decision.Action.DurationScale,
-		Candidate->DurationRange.X,
-		Candidate->DurationRange.Y
+		AllowedDuration.X,
+		AllowedDuration.Y
 	);
-	Decision.Action.bMirror = Candidate->bMirrorRecommended;
-	Decision.Action.ContextAmplitudeRange = Candidate->AmplitudeRange;
-	Decision.Action.ContextSpeedRange = Candidate->SpeedRange;
-	Decision.Action.ContextDurationRange = Candidate->DurationRange;
+	Decision.Action.bMirror =
+		Candidate->bMirrorRecommended &&
+		(!StyleOption || StyleOption->bMirrorAllowed);
+	Decision.Action.ContextAmplitudeRange = AllowedAmplitude;
+	Decision.Action.ContextSpeedRange = AllowedSpeed;
+	Decision.Action.ContextDurationRange = AllowedDuration;
 	return true;
 }

@@ -8,6 +8,7 @@
 #include "JsonObjectConverter.h"
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCMotionValidator.h"
+#include "LLMNPCSettings.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
@@ -17,7 +18,10 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
+#include "Templates/LLMNPCActionVocabulary.h"
 #include "Templates/LLMNPCMotionTemplate.h"
+#include "Templates/LLMNPCPublicActionDefinition.h"
+#include "Templates/LLMNPCTemplateSearchIndex.h"
 #include "Templates/LLMNPCTemplateCompiler.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
@@ -46,6 +50,20 @@ FLLMNPCAuthoringOperationResult SuccessResult(
 	return Result;
 }
 
+FLLMNPCAuthoringOperationResult PublicActionSuccessResult(
+	const FString& Message,
+	const FString& OutputPath,
+	ULLMNPCPublicActionDefinition* Definition
+)
+{
+	FLLMNPCAuthoringOperationResult Result;
+	Result.bSuccess = true;
+	Result.Message = Message;
+	Result.OutputPath = OutputPath;
+	Result.PublicActionAsset = Definition;
+	return Result;
+}
+
 void CopyTemplateData(
 	const ULLMNPCMotionTemplate& Source,
 	ULLMNPCMotionTemplate& Destination
@@ -59,6 +77,31 @@ void CopyTemplateData(
 	Destination.AnimationPlayback = Source.AnimationPlayback;
 	Destination.SourceProvenanceJson = Source.SourceProvenanceJson;
 	Destination.ValidationReportJson = Source.ValidationReportJson;
+}
+
+void CopyPublicActionData(
+	const ULLMNPCPublicActionDefinition& Source,
+	ULLMNPCPublicActionDefinition& Destination
+)
+{
+	Destination.PublicActionId = Source.PublicActionId;
+	Destination.SemanticVersion = Source.SemanticVersion;
+	Destination.DefinitionRevision = Source.DefinitionRevision;
+	Destination.DisplayName = Source.DisplayName;
+	Destination.SelectionSummary = Source.SelectionSummary;
+	Destination.SuitableWhen = Source.SuitableWhen;
+	Destination.AvoidWhen = Source.AvoidWhen;
+	Destination.SemanticEffectTags = Source.SemanticEffectTags;
+	Destination.TargetCategoryTags = Source.TargetCategoryTags;
+	Destination.GestureFamily = Source.GestureFamily;
+	Destination.DefaultStyle = Source.DefaultStyle;
+	Destination.IncompatibleActionFamilies = Source.IncompatibleActionFamilies;
+	Destination.SearchKeywords = Source.SearchKeywords;
+	Destination.bRequiresTarget = Source.bRequiresTarget;
+	Destination.CatalogSchemaVersion = Source.CatalogSchemaVersion;
+	Destination.ReviewState = Source.ReviewState;
+	Destination.ContentHash = Source.ContentHash;
+	Destination.ReviewRecordJson = Source.ReviewRecordJson;
 }
 
 bool ParseJsonObject(
@@ -118,6 +161,57 @@ bool AppendReviewRecord(
 	if (!SerializeJsonObject(Provenance.ToSharedRef(), Template.SourceProvenanceJson))
 	{
 		OutError = TEXT("LLMNPC_AUTHORING_PROVENANCE_SERIALIZE_FAILED");
+		return false;
+	}
+	return true;
+}
+
+bool AppendPublicActionReviewRecord(
+	ULLMNPCPublicActionDefinition& Definition,
+	const FString& Event,
+	const FString& Reviewer,
+	const FString& Notes,
+	bool bApproved,
+	FString& OutError
+)
+{
+	TSharedPtr<FJsonObject> ReviewRecord;
+	if (
+		Definition.ReviewRecordJson.TrimStartAndEnd().IsEmpty() ||
+		!ParseJsonObject(Definition.ReviewRecordJson, ReviewRecord)
+	)
+	{
+		ReviewRecord = MakeShared<FJsonObject>();
+		ReviewRecord->SetStringField(
+			TEXT("schema_version"),
+			TEXT("llmnpc.public_action_review.v1")
+		);
+	}
+
+	TArray<TSharedPtr<FJsonValue>> History;
+	const TArray<TSharedPtr<FJsonValue>>* ExistingHistory = nullptr;
+	if (
+		ReviewRecord->TryGetArrayField(TEXT("history"), ExistingHistory) &&
+		ExistingHistory
+	)
+	{
+		History = *ExistingHistory;
+	}
+	TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+	Entry->SetStringField(TEXT("event"), Event);
+	Entry->SetStringField(TEXT("reviewer"), Reviewer);
+	Entry->SetStringField(TEXT("notes"), Notes);
+	Entry->SetStringField(TEXT("timestamp_utc"), FDateTime::UtcNow().ToIso8601());
+	Entry->SetBoolField(TEXT("approved"), bApproved);
+	History.Add(MakeShared<FJsonValueObject>(Entry));
+	ReviewRecord->SetArrayField(TEXT("history"), History);
+	if (Event == TEXT("human_approved") || Event == TEXT("rejected"))
+	{
+		ReviewRecord->SetObjectField(TEXT("human_review"), Entry);
+	}
+	if (!SerializeJsonObject(ReviewRecord.ToSharedRef(), Definition.ReviewRecordJson))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_REVIEW_SERIALIZE_FAILED");
 		return false;
 	}
 	return true;
@@ -203,6 +297,65 @@ bool CreateTemplateAsset(
 	return true;
 }
 
+bool CreatePublicActionAsset(
+	const FString& DestinationPackagePath,
+	const FString& RequestedAssetName,
+	const ULLMNPCPublicActionDefinition& Source,
+	ULLMNPCPublicActionDefinition*& OutAsset,
+	FString& OutError
+)
+{
+	OutAsset = nullptr;
+	FString RootPath = DestinationPackagePath.TrimStartAndEnd();
+	while (RootPath.EndsWith(TEXT("/")))
+	{
+		RootPath.LeftChopInline(1);
+	}
+	if (!RootPath.StartsWith(TEXT("/Game/")) || !FPackageName::IsValidLongPackageName(RootPath))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_DESTINATION_PATH_INVALID");
+		return false;
+	}
+
+	const FString AssetName = ObjectTools::SanitizeObjectName(RequestedAssetName);
+	if (AssetName.IsEmpty() || AssetName != RequestedAssetName)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_ASSET_NAME_INVALID");
+		return false;
+	}
+	const FString PackageName = RootPath / AssetName;
+	const FString ObjectPath = PackageName + TEXT(".") + AssetName;
+	if (
+		FindObject<ULLMNPCPublicActionDefinition>(nullptr, *ObjectPath) ||
+		FPackageName::DoesPackageExist(PackageName)
+	)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_ASSET_ALREADY_EXISTS");
+		return false;
+	}
+
+	UPackage* Package = CreatePackage(*PackageName);
+	if (!Package)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_PACKAGE_CREATE_FAILED");
+		return false;
+	}
+	OutAsset = NewObject<ULLMNPCPublicActionDefinition>(
+		Package,
+		*AssetName,
+		RF_Public | RF_Standalone | RF_Transactional
+	);
+	if (!OutAsset)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_ASSET_CREATE_FAILED");
+		return false;
+	}
+	CopyPublicActionData(Source, *OutAsset);
+	FAssetRegistryModule::AssetCreated(OutAsset);
+	Package->MarkPackageDirty();
+	return true;
+}
+
 bool HasPublishedTemplateId(FName TemplateId, const ULLMNPCMotionTemplate* IgnoreTemplate)
 {
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(
@@ -227,6 +380,174 @@ bool HasPublishedTemplateId(FName TemplateId, const ULLMNPCMotionTemplate* Ignor
 		}
 	}
 	return false;
+}
+
+bool HasPublishedPublicActionVersion(
+	const ULLMNPCPublicActionDefinition& Definition,
+	const ULLMNPCPublicActionDefinition* IgnoreDefinition
+)
+{
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(
+		TEXT("AssetRegistry")
+	);
+	FARFilter Filter;
+	Filter.ClassPaths.Add(ULLMNPCPublicActionDefinition::StaticClass()->GetClassPathName());
+	Filter.bRecursiveClasses = true;
+	TArray<FAssetData> Assets;
+	AssetRegistryModule.Get().GetAssets(Filter, Assets);
+	for (const FAssetData& AssetData : Assets)
+	{
+		const ULLMNPCPublicActionDefinition* Candidate =
+			Cast<ULLMNPCPublicActionDefinition>(AssetData.GetAsset());
+		if (
+			Candidate &&
+			Candidate != IgnoreDefinition &&
+			Candidate->IsPublished() &&
+			Candidate->PublicActionId == Definition.PublicActionId &&
+			Candidate->SemanticVersion == Definition.SemanticVersion &&
+			Candidate->DefinitionRevision == Definition.DefinitionRevision
+		)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool LoadPublishedDefinitionForAction(
+	FName PublicActionId,
+	ULLMNPCActionVocabulary*& OutVocabulary,
+	const ULLMNPCPublicActionDefinition*& OutDefinition,
+	FString& OutError
+)
+{
+	OutVocabulary = nullptr;
+	OutDefinition = nullptr;
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	if (!Settings)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_SETTINGS_MISSING");
+		return false;
+	}
+	OutVocabulary = Settings->ActionVocabulary.LoadSynchronous();
+	if (!OutVocabulary || !OutVocabulary->ValidateVocabulary(OutError))
+	{
+		if (OutError.IsEmpty())
+		{
+			OutError = TEXT("LLMNPC_AUTHORING_VOCABULARY_MISSING");
+		}
+		return false;
+	}
+
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(
+		TEXT("AssetRegistry")
+	);
+	FARFilter Filter;
+	Filter.ClassPaths.Add(ULLMNPCPublicActionDefinition::StaticClass()->GetClassPathName());
+	Filter.bRecursiveClasses = true;
+	TArray<FAssetData> Assets;
+	AssetRegistryModule.Get().GetAssets(Filter, Assets);
+	TArray<ULLMNPCPublicActionDefinition*> Definitions;
+	for (const FAssetData& AssetData : Assets)
+	{
+		if (ULLMNPCPublicActionDefinition* Definition =
+			Cast<ULLMNPCPublicActionDefinition>(AssetData.GetAsset()))
+		{
+			Definitions.Add(Definition);
+		}
+	}
+	FLLMNPCTemplateSearchIndex DefinitionIndex;
+	if (!DefinitionIndex.Build({}, Definitions, OutVocabulary, {}))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_CATALOG_INVALID");
+		return false;
+	}
+	for (const FLLMNPCCatalogDiagnostic& Diagnostic : DefinitionIndex.GetDiagnostics())
+	{
+		if (
+			Diagnostic.AssetPath.Contains(PublicActionId.ToString()) ||
+			Diagnostic.Message.Contains(PublicActionId.ToString())
+		)
+		{
+			OutError = Diagnostic.Code.ToString();
+			return false;
+		}
+	}
+	OutDefinition = DefinitionIndex.FindDefinition(PublicActionId);
+	if (!OutDefinition)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLISHED_PUBLIC_ACTION_REQUIRED");
+		return false;
+	}
+	return true;
+}
+
+bool HaveSameNames(const TArray<FName>& A, const TArray<FName>& B)
+{
+	if (A.Num() != B.Num())
+	{
+		return false;
+	}
+	TArray<FName> SortedA = A;
+	TArray<FName> SortedB = B;
+	SortedA.Sort(FNameLexicalLess());
+	SortedB.Sort(FNameLexicalLess());
+	return SortedA == SortedB;
+}
+
+bool ValidateTemplateVocabularyTags(
+	const ULLMNPCMotionTemplate& Template,
+	const ULLMNPCActionVocabulary& Vocabulary,
+	FString& OutError
+)
+{
+	const FLLMNPCTemplateMetadata& Metadata = Template.Metadata;
+	return
+		Vocabulary.ValidateTags(
+			Metadata.IntentTags,
+			ELLMNPCActionVocabularyField::Intent,
+			OutError
+		) &&
+		Vocabulary.ValidateTags(
+			Metadata.EmotionTags,
+			ELLMNPCActionVocabularyField::Emotion,
+			OutError
+		) &&
+		Vocabulary.ValidateTags(
+			Metadata.PersonalityTags,
+			ELLMNPCActionVocabularyField::Personality,
+			OutError
+		) &&
+		Vocabulary.ValidateTags(
+			Metadata.BodyRegionTags,
+			ELLMNPCActionVocabularyField::BodyRegion,
+			OutError
+		) &&
+		Vocabulary.ValidateTags(
+			Metadata.SpatialRequirementTags,
+			ELLMNPCActionVocabularyField::SpatialRequirement,
+			OutError
+		) &&
+		Vocabulary.ValidateTags(
+			Metadata.SemanticEffectTags,
+			ELLMNPCActionVocabularyField::SemanticEffect,
+			OutError
+		) &&
+		Vocabulary.ValidateTags(
+			Metadata.TargetCategoryTags,
+			ELLMNPCActionVocabularyField::TargetCategory,
+			OutError
+		) &&
+		Vocabulary.ValidateTags(
+			Metadata.VariantStyleTags,
+			ELLMNPCActionVocabularyField::VariantStyle,
+			OutError
+		) &&
+		Vocabulary.ValidateTags(
+			Template.ModifierPolicy.AllowedStyleTags,
+			ELLMNPCActionVocabularyField::VariantStyle,
+			OutError
+		);
 }
 
 TSharedRef<FJsonObject> MakeCheck(
@@ -762,6 +1083,12 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::PublishTempla
 	const FString& DestinationPackagePath
 )
 {
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	const FString ResolvedDestination = DestinationPackagePath.TrimStartAndEnd().IsEmpty()
+		? (Settings
+			? Settings->ProjectPublishedTemplatePath
+			: TEXT("/Game/LLMNPCActionLayer/MotionTemplates/Published"))
+		: DestinationPackagePath.TrimStartAndEnd();
 	FString Error;
 	if (!CanPublishTemplate(Template, Error))
 	{
@@ -789,6 +1116,9 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::PublishTempla
 		GetTransientPackage()
 	);
 	PublishCandidate->Metadata.ReviewState = ELLMNPCTemplateReviewState::Published;
+	PublishCandidate->Metadata.CatalogContentHash.Reset();
+	PublishCandidate->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*PublishCandidate);
 	FString ValidationError;
 	if (!PublishCandidate->ValidateTemplate(ValidationError))
 	{
@@ -797,7 +1127,7 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::PublishTempla
 
 	ULLMNPCMotionTemplate* PublishedAsset = nullptr;
 	if (!CreateTemplateAsset(
-		DestinationPackagePath,
+		ResolvedDestination,
 		PublishedAssetName,
 		*PublishCandidate,
 		PublishedAsset,
@@ -810,15 +1140,260 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::PublishTempla
 	{
 		return ErrorResult(FName(*Error), Error);
 	}
+	FString SourcePath;
+	if (!ExportPublishedTemplateSource(*PublishedAsset, SourcePath, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
 
 	UAssetManager::Get().ScanPathForPrimaryAssets(
 		TEXT("LLMNPCTemplate"),
-		DestinationPackagePath,
+		ResolvedDestination,
 		ULLMNPCMotionTemplate::StaticClass(),
 		false
 	);
 	return SuccessResult(
-		TEXT("HumanApproved template copied to the Published runtime library."),
+		FString::Printf(
+			TEXT("HumanApproved template published with canonical source: %s"),
+			*SourcePath
+		),
+		PublishedAsset->GetPathName(),
+		PublishedAsset
+	);
+}
+
+FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::MarkPublicActionPreviewed(
+	ULLMNPCPublicActionDefinition* Definition,
+	const FString& PreviewNotes
+)
+{
+	if (
+		!Definition ||
+		(Definition->ReviewState != ELLMNPCTemplateReviewState::Draft &&
+			Definition->ReviewState != ELLMNPCTemplateReviewState::Generated)
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_PREVIEW_STATE_INVALID"),
+			TEXT("Only a Draft or Generated Public Action can be marked Previewed.")
+		);
+	}
+	const FString Notes = PreviewNotes.TrimStartAndEnd();
+	if (Notes.IsEmpty())
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_PREVIEW_NOTES_REQUIRED"),
+			TEXT("Preview notes are required.")
+		);
+	}
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	ULLMNPCActionVocabulary* Vocabulary =
+		Settings ? Settings->ActionVocabulary.LoadSynchronous() : nullptr;
+	FString Error;
+	Definition->ContentHash.Reset();
+	Definition->ContentHash =
+		ULLMNPCPublicActionDefinition::BuildContentHash(*Definition);
+	if (!Definition->ValidateDefinition(Vocabulary, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	if (!AppendPublicActionReviewRecord(
+		*Definition,
+		TEXT("previewed"),
+		TEXT("preview_operator"),
+		Notes,
+		false,
+		Error
+	))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	Definition->ReviewState = ELLMNPCTemplateReviewState::Previewed;
+	if (!SavePublicActionAsset(Definition, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	return PublicActionSuccessResult(
+		TEXT("Public Action marked Previewed; human approval is still required."),
+		Definition->GetPathName(),
+		Definition
+	);
+}
+
+FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::ApprovePublicAction(
+	ULLMNPCPublicActionDefinition* Definition,
+	const FString& Reviewer,
+	const FString& ReviewNotes
+)
+{
+	if (!Definition || Definition->ReviewState != ELLMNPCTemplateReviewState::Previewed)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_APPROVAL_STATE_INVALID"),
+			TEXT("Only a Previewed Public Action can be approved.")
+		);
+	}
+	const FString CleanReviewer = Reviewer.TrimStartAndEnd();
+	const FString CleanNotes = ReviewNotes.TrimStartAndEnd();
+	if (CleanReviewer.IsEmpty() || CleanNotes.IsEmpty())
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_APPROVAL_IDENTITY_REQUIRED"),
+			TEXT("Reviewer identity and review notes are required.")
+		);
+	}
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	ULLMNPCActionVocabulary* Vocabulary =
+		Settings ? Settings->ActionVocabulary.LoadSynchronous() : nullptr;
+	FString Error;
+	if (
+		!Definition->ValidateDefinition(Vocabulary, Error) ||
+		!AppendPublicActionReviewRecord(
+			*Definition,
+			TEXT("human_approved"),
+			CleanReviewer,
+			CleanNotes,
+			true,
+			Error
+		)
+	)
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	Definition->ReviewState = ELLMNPCTemplateReviewState::HumanApproved;
+	if (!SavePublicActionAsset(Definition, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	return PublicActionSuccessResult(
+		TEXT("Public Action is HumanApproved and eligible for Publish."),
+		Definition->GetPathName(),
+		Definition
+	);
+}
+
+FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::RejectPublicAction(
+	ULLMNPCPublicActionDefinition* Definition,
+	const FString& Reviewer,
+	const FString& RejectionReason
+)
+{
+	if (!Definition || Definition->IsPublished())
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_REJECT_STATE_INVALID"),
+			TEXT("A Published Public Action cannot be rejected in place.")
+		);
+	}
+	const FString CleanReviewer = Reviewer.TrimStartAndEnd();
+	const FString CleanReason = RejectionReason.TrimStartAndEnd();
+	if (CleanReviewer.IsEmpty() || CleanReason.IsEmpty())
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_REJECTION_REASON_REQUIRED"),
+			TEXT("Reviewer identity and rejection reason are required.")
+		);
+	}
+	FString Error;
+	if (!AppendPublicActionReviewRecord(
+		*Definition,
+		TEXT("rejected"),
+		CleanReviewer,
+		CleanReason,
+		false,
+		Error
+	))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	Definition->ReviewState = ELLMNPCTemplateReviewState::Rejected;
+	if (!SavePublicActionAsset(Definition, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	return PublicActionSuccessResult(
+		TEXT("Public Action rejected and excluded from the runtime catalog."),
+		Definition->GetPathName(),
+		Definition
+	);
+}
+
+FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::PublishPublicAction(
+	ULLMNPCPublicActionDefinition* Definition,
+	const FString& DestinationPackagePath
+)
+{
+	FString Error;
+	if (!CanPublishPublicAction(Definition, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	if (HasPublishedPublicActionVersion(*Definition, Definition))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_VERSION_ALREADY_PUBLISHED"),
+			TEXT("This Public Action semantic version and definition revision are already Published.")
+		);
+	}
+
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	const FString ResolvedDestination = DestinationPackagePath.TrimStartAndEnd().IsEmpty()
+		? (Settings
+			? Settings->ProjectPublishedPublicActionPath
+			: TEXT("/Game/LLMNPCActionLayer/PublicActions/Published"))
+		: DestinationPackagePath.TrimStartAndEnd();
+	FString PublishedAssetName = Definition->GetName();
+	if (!PublishedAssetName.StartsWith(TEXT("PA_")))
+	{
+		PublishedAssetName = TEXT("PA_") + PublishedAssetName;
+	}
+	ULLMNPCPublicActionDefinition* PublishCandidate =
+		DuplicateObject<ULLMNPCPublicActionDefinition>(
+			Definition,
+			GetTransientPackage()
+		);
+	PublishCandidate->ReviewState = ELLMNPCTemplateReviewState::Published;
+	PublishCandidate->ContentHash.Reset();
+	PublishCandidate->ContentHash =
+		ULLMNPCPublicActionDefinition::BuildContentHash(*PublishCandidate);
+
+	ULLMNPCActionVocabulary* Vocabulary =
+		Settings ? Settings->ActionVocabulary.LoadSynchronous() : nullptr;
+	if (!PublishCandidate->ValidateDefinition(Vocabulary, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	ULLMNPCPublicActionDefinition* PublishedAsset = nullptr;
+	if (!CreatePublicActionAsset(
+		ResolvedDestination,
+		PublishedAssetName,
+		*PublishCandidate,
+		PublishedAsset,
+		Error
+	))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	if (!SavePublicActionAsset(PublishedAsset, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	FString SourcePath;
+	if (!ExportPublishedPublicActionSource(*PublishedAsset, SourcePath, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	UAssetManager::Get().ScanPathForPrimaryAssets(
+		TEXT("LLMNPCPublicAction"),
+		ResolvedDestination,
+		ULLMNPCPublicActionDefinition::StaticClass(),
+		false
+	);
+	return PublicActionSuccessResult(
+		FString::Printf(
+			TEXT("Public Action published with canonical source: %s"),
+			*SourcePath
+		),
 		PublishedAsset->GetPathName(),
 		PublishedAsset
 	);
@@ -875,7 +1450,53 @@ bool ULLMNPCTemplateAuthoringSubsystem::CanPublishTemplate(
 	{
 		return false;
 	}
-	return ValidateProvenanceForPublish(*Template, OutError);
+	return
+		ValidateProvenanceForPublish(*Template, OutError) &&
+		ValidateTemplateCatalogForPublish(*Template, OutError);
+}
+
+bool ULLMNPCTemplateAuthoringSubsystem::CanPublishPublicAction(
+	const ULLMNPCPublicActionDefinition* Definition,
+	FString& OutError
+) const
+{
+	OutError.Reset();
+	if (
+		!Definition ||
+		Definition->ReviewState != ELLMNPCTemplateReviewState::HumanApproved
+	)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_HUMAN_APPROVAL_REQUIRED");
+		return false;
+	}
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	ULLMNPCActionVocabulary* Vocabulary =
+		Settings ? Settings->ActionVocabulary.LoadSynchronous() : nullptr;
+	if (!Vocabulary)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_VOCABULARY_MISSING");
+		return false;
+	}
+	if (!Definition->ValidateDefinition(Vocabulary, OutError))
+	{
+		return false;
+	}
+	TSharedPtr<FJsonObject> ReviewRecord;
+	const TSharedPtr<FJsonObject>* HumanReview = nullptr;
+	bool bApproved = false;
+	if (
+		!ParseJsonObject(Definition->ReviewRecordJson, ReviewRecord) ||
+		!ReviewRecord->TryGetObjectField(TEXT("human_review"), HumanReview) ||
+		!HumanReview ||
+		!HumanReview->IsValid() ||
+		!(*HumanReview)->TryGetBoolField(TEXT("approved"), bApproved) ||
+		!bApproved
+	)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_REVIEW_REQUIRED");
+		return false;
+	}
+	return true;
 }
 
 FString ULLMNPCTemplateAuthoringSubsystem::GetDraftDirectory()
@@ -899,6 +1520,14 @@ FString ULLMNPCTemplateAuthoringSubsystem::GetRejectedDirectory()
 	return FPaths::ConvertRelativePathToFull(FPaths::Combine(
 		FPaths::ProjectSavedDir(),
 		TEXT("LLMNPCActionLayer/Authoring/Rejected")
+	));
+}
+
+FString ULLMNPCTemplateAuthoringSubsystem::GetPublishedSourceDirectory()
+{
+	return FPaths::ConvertRelativePathToFull(FPaths::Combine(
+		FPaths::ProjectDir(),
+		TEXT("LLMNPCSource/Templates/Published")
 	));
 }
 
@@ -939,7 +1568,12 @@ bool ULLMNPCTemplateAuthoringSubsystem::EnsureAuthoringDirectories(FString& OutE
 		GetDraftDirectory(),
 		GetReportDirectory(),
 		GetRejectedDirectory(),
-		FPaths::Combine(FPaths::GetPath(GetDraftDirectory()), TEXT("Contexts"))
+		FPaths::Combine(FPaths::GetPath(GetDraftDirectory()), TEXT("Contexts")),
+		GetPublishedSourceDirectory(),
+		FPaths::ConvertRelativePathToFull(FPaths::Combine(
+			FPaths::ProjectDir(),
+			TEXT("LLMNPCSource/PublicActions/Published")
+		))
 	};
 	for (const FString& Directory : Directories)
 	{
@@ -986,6 +1620,223 @@ bool ULLMNPCTemplateAuthoringSubsystem::SaveTemplateAsset(
 	if (!UPackage::SavePackage(Package, Template, *Filename, SaveArgs))
 	{
 		OutError = TEXT("LLMNPC_AUTHORING_ASSET_SAVE_FAILED");
+		return false;
+	}
+	return true;
+}
+
+bool ULLMNPCTemplateAuthoringSubsystem::SavePublicActionAsset(
+	ULLMNPCPublicActionDefinition* Definition,
+	FString& OutError
+)
+{
+	OutError.Reset();
+	if (!Definition)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_MISSING");
+		return false;
+	}
+	UPackage* Package = Definition->GetOutermost();
+	if (!Package || Package == GetTransientPackage())
+	{
+		return true;
+	}
+	Package->MarkPackageDirty();
+	const FString PackageName = Package->GetName();
+	if (!FPackageName::IsValidLongPackageName(PackageName))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_PACKAGE_NAME_INVALID");
+		return false;
+	}
+	const FString Filename = FPackageName::LongPackageNameToFilename(
+		PackageName,
+		FPackageName::GetAssetPackageExtension()
+	);
+	FSavePackageArgs SaveArgs;
+	SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+	SaveArgs.SaveFlags = SAVE_None;
+	SaveArgs.Error = GError;
+	if (!UPackage::SavePackage(Package, Definition, *Filename, SaveArgs))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_ASSET_SAVE_FAILED");
+		return false;
+	}
+	return true;
+}
+
+bool ULLMNPCTemplateAuthoringSubsystem::ExportPublishedTemplateSource(
+	const ULLMNPCMotionTemplate& Template,
+	FString& OutPath,
+	FString& OutError
+)
+{
+	OutPath.Reset();
+	if (!Template.IsPublished())
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_SOURCE_REQUIRES_PUBLISHED_TEMPLATE");
+		return false;
+	}
+	FString MetadataJson;
+	FString ModifierJson;
+	FString ClipJson;
+	FString PlaybackJson;
+	if (
+		!FJsonObjectConverter::UStructToJsonObjectString(Template.Metadata, MetadataJson) ||
+		!FJsonObjectConverter::UStructToJsonObjectString(Template.ModifierPolicy, ModifierJson) ||
+		!FJsonObjectConverter::UStructToJsonObjectString(Template.ProceduralClip, ClipJson) ||
+		!FJsonObjectConverter::UStructToJsonObjectString(Template.AnimationPlayback, PlaybackJson)
+	)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_SOURCE_STRUCT_SERIALIZE_FAILED");
+		return false;
+	}
+	TSharedPtr<FJsonObject> MetadataObject;
+	TSharedPtr<FJsonObject> ModifierObject;
+	TSharedPtr<FJsonObject> ClipObject;
+	TSharedPtr<FJsonObject> PlaybackObject;
+	if (
+		!ParseJsonObject(MetadataJson, MetadataObject) ||
+		!ParseJsonObject(ModifierJson, ModifierObject) ||
+		!ParseJsonObject(ClipJson, ClipObject) ||
+		!ParseJsonObject(PlaybackJson, PlaybackObject)
+	)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_SOURCE_STRUCT_JSON_INVALID");
+		return false;
+	}
+
+	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+	Root->SetStringField(
+		TEXT("schema_version"),
+		TEXT("llmnpc.published_template_source.v1")
+	);
+	Root->SetStringField(TEXT("asset_path"), Template.GetPathName());
+	Root->SetStringField(TEXT("catalog_content_hash"), Template.Metadata.CatalogContentHash);
+	Root->SetNumberField(TEXT("template_kind"), static_cast<int32>(Template.Kind));
+	Root->SetObjectField(TEXT("metadata"), MetadataObject.ToSharedRef());
+	Root->SetObjectField(TEXT("modifier_policy"), ModifierObject.ToSharedRef());
+	Root->SetObjectField(TEXT("procedural_clip"), ClipObject.ToSharedRef());
+	Root->SetStringField(
+		TEXT("animation_asset"),
+		Template.AnimationAsset.ToSoftObjectPath().ToString()
+	);
+	Root->SetObjectField(TEXT("animation_playback"), PlaybackObject.ToSharedRef());
+	TSharedPtr<FJsonObject> Provenance;
+	if (ParseJsonObject(Template.SourceProvenanceJson, Provenance))
+	{
+		Root->SetObjectField(TEXT("source_provenance"), Provenance.ToSharedRef());
+	}
+	TSharedPtr<FJsonObject> QualityReport;
+	if (ParseJsonObject(Template.ValidationReportJson, QualityReport))
+	{
+		Root->SetObjectField(TEXT("quality_report"), QualityReport.ToSharedRef());
+	}
+
+	FString SourceJson;
+	if (!SerializeJsonObject(Root, SourceJson))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_SOURCE_SERIALIZE_FAILED");
+		return false;
+	}
+	FString DirectoryError;
+	if (!EnsureAuthoringDirectories(DirectoryError))
+	{
+		OutError = DirectoryError;
+		return false;
+	}
+	FString FileStem = FString::Printf(
+		TEXT("%s_%s_r%d"),
+		*Template.Metadata.TemplateId.ToString(),
+		*Template.Metadata.SemanticVersion,
+		Template.Metadata.CatalogRevision
+	);
+	FileStem.ReplaceInline(TEXT("."), TEXT("_"));
+	OutPath = FPaths::Combine(
+		GetPublishedSourceDirectory(),
+		FileStem + TEXT(".json")
+	);
+	if (!FFileHelper::SaveStringToFile(
+		SourceJson,
+		*OutPath,
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM
+	))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_SOURCE_WRITE_FAILED");
+		OutPath.Reset();
+		return false;
+	}
+	return true;
+}
+
+bool ULLMNPCTemplateAuthoringSubsystem::ExportPublishedPublicActionSource(
+	const ULLMNPCPublicActionDefinition& Definition,
+	FString& OutPath,
+	FString& OutError
+)
+{
+	OutPath.Reset();
+	if (!Definition.IsPublished())
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_SOURCE_REQUIRES_PUBLISHED_PUBLIC_ACTION");
+		return false;
+	}
+	FString ObjectJson;
+	if (!FJsonObjectConverter::UStructToJsonObjectString(
+		Definition.GetClass(),
+		&Definition,
+		ObjectJson,
+		0,
+		0
+	))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_SOURCE_SERIALIZE_FAILED");
+		return false;
+	}
+	TSharedPtr<FJsonObject> DefinitionObject;
+	if (!ParseJsonObject(ObjectJson, DefinitionObject))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_SOURCE_JSON_INVALID");
+		return false;
+	}
+	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
+	Root->SetStringField(
+		TEXT("schema_version"),
+		TEXT("llmnpc.published_public_action_source.v1")
+	);
+	Root->SetStringField(TEXT("asset_path"), Definition.GetPathName());
+	Root->SetStringField(TEXT("content_hash"), Definition.ContentHash);
+	Root->SetObjectField(TEXT("definition"), DefinitionObject.ToSharedRef());
+	FString SourceJson;
+	if (!SerializeJsonObject(Root, SourceJson))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_SOURCE_SERIALIZE_FAILED");
+		return false;
+	}
+	const FString Directory = FPaths::ConvertRelativePathToFull(FPaths::Combine(
+		FPaths::ProjectDir(),
+		TEXT("LLMNPCSource/PublicActions/Published")
+	));
+	if (!IFileManager::Get().MakeDirectory(*Directory, true))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_SOURCE_DIRECTORY_FAILED");
+		return false;
+	}
+	FString FileStem = FString::Printf(
+		TEXT("%s_%s_r%d"),
+		*Definition.PublicActionId.ToString(),
+		*Definition.SemanticVersion,
+		Definition.DefinitionRevision
+	);
+	FileStem.ReplaceInline(TEXT("."), TEXT("_"));
+	OutPath = FPaths::Combine(Directory, FileStem + TEXT(".json"));
+	if (!FFileHelper::SaveStringToFile(
+		SourceJson,
+		*OutPath,
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM
+	))
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_SOURCE_WRITE_FAILED");
+		OutPath.Reset();
 		return false;
 	}
 	return true;
@@ -1110,4 +1961,58 @@ bool ULLMNPCTemplateAuthoringSubsystem::ValidateProvenanceForPublish(
 		return false;
 	}
 	return true;
+}
+
+bool ULLMNPCTemplateAuthoringSubsystem::ValidateTemplateCatalogForPublish(
+	const ULLMNPCMotionTemplate& Template,
+	FString& OutError
+)
+{
+	if (Template.Metadata.VisualDescription.TrimStartAndEnd().IsEmpty())
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_VISUAL_DESCRIPTION_REQUIRED");
+		return false;
+	}
+	ULLMNPCActionVocabulary* Vocabulary = nullptr;
+	const ULLMNPCPublicActionDefinition* Definition = nullptr;
+	if (!LoadPublishedDefinitionForAction(
+		Template.Metadata.PublicActionId,
+		Vocabulary,
+		Definition,
+		OutError
+	))
+	{
+		return false;
+	}
+	if (
+		Template.Metadata.bRequiresTarget != Definition->bRequiresTarget ||
+		!HaveSameNames(
+			Template.Metadata.TargetCategoryTags,
+			Definition->TargetCategoryTags
+		)
+	)
+	{
+		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_TARGET_CONTRACT_MISMATCH");
+		return false;
+	}
+	for (const FName Effect : Template.Metadata.SemanticEffectTags)
+	{
+		if (!Definition->SemanticEffectTags.Contains(Effect))
+		{
+			OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_EFFECT_MISMATCH");
+			return false;
+		}
+	}
+	if (!ValidateTemplateVocabularyTags(Template, *Vocabulary, OutError))
+	{
+		return false;
+	}
+
+	ULLMNPCMotionTemplate* PublishCandidate =
+		DuplicateObject<ULLMNPCMotionTemplate>(&Template, GetTransientPackage());
+	PublishCandidate->Metadata.ReviewState = ELLMNPCTemplateReviewState::Published;
+	PublishCandidate->Metadata.CatalogContentHash.Reset();
+	PublishCandidate->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*PublishCandidate);
+	return PublishCandidate->ValidateTemplate(OutError);
 }

@@ -7,6 +7,7 @@
 
 class AActor;
 class ULLMNPCMotionTemplate;
+class ULLMNPCPublicActionDefinition;
 struct FLLMMotionPlan;
 
 USTRUCT(BlueprintType)
@@ -28,6 +29,9 @@ struct FLLMNPCAuthoringOperationResult
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Authoring")
 	TObjectPtr<ULLMNPCMotionTemplate> TemplateAsset;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Authoring")
+	TObjectPtr<ULLMNPCPublicActionDefinition> PublicActionAsset;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Authoring")
 	FLLMNPCUEPIReconstructionSummary ReconstructionSummary;
@@ -88,7 +92,33 @@ public:
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Authoring|Publish")
 	FLLMNPCAuthoringOperationResult PublishTemplate(
 		ULLMNPCMotionTemplate* Template,
-		const FString& DestinationPackagePath = TEXT("/Game/LLMNPCActionLayer/MotionTemplates")
+		const FString& DestinationPackagePath = TEXT("")
+	);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Authoring|Review")
+	FLLMNPCAuthoringOperationResult MarkPublicActionPreviewed(
+		ULLMNPCPublicActionDefinition* Definition,
+		const FString& PreviewNotes
+	);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Authoring|Review")
+	FLLMNPCAuthoringOperationResult ApprovePublicAction(
+		ULLMNPCPublicActionDefinition* Definition,
+		const FString& Reviewer,
+		const FString& ReviewNotes
+	);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Authoring|Review")
+	FLLMNPCAuthoringOperationResult RejectPublicAction(
+		ULLMNPCPublicActionDefinition* Definition,
+		const FString& Reviewer,
+		const FString& RejectionReason
+	);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Authoring|Publish")
+	FLLMNPCAuthoringOperationResult PublishPublicAction(
+		ULLMNPCPublicActionDefinition* Definition,
+		const FString& DestinationPackagePath = TEXT("")
 	);
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Authoring|Preview")
@@ -100,6 +130,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Authoring|Publish")
 	bool CanPublishTemplate(const ULLMNPCMotionTemplate* Template, FString& OutError) const;
 
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Authoring|Publish")
+	bool CanPublishPublicAction(
+		const ULLMNPCPublicActionDefinition* Definition,
+		FString& OutError
+	) const;
+
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Authoring|Paths")
 	static FString GetDraftDirectory();
 
@@ -108,6 +144,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Authoring|Paths")
 	static FString GetRejectedDirectory();
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Authoring|Paths")
+	static FString GetPublishedSourceDirectory();
 
 	static bool CompileTemplateForPreview(
 		const ULLMNPCMotionTemplate& Template,
@@ -118,12 +157,30 @@ public:
 private:
 	static bool EnsureAuthoringDirectories(FString& OutError);
 	static bool SaveTemplateAsset(ULLMNPCMotionTemplate* Template, FString& OutError);
+	static bool SavePublicActionAsset(
+		ULLMNPCPublicActionDefinition* Definition,
+		FString& OutError
+	);
+	static bool ExportPublishedTemplateSource(
+		const ULLMNPCMotionTemplate& Template,
+		FString& OutPath,
+		FString& OutError
+	);
+	static bool ExportPublishedPublicActionSource(
+		const ULLMNPCPublicActionDefinition& Definition,
+		FString& OutPath,
+		FString& OutError
+	);
 	static FString BuildTemplateContentHash(const ULLMNPCMotionTemplate& Template);
 	static bool HasCurrentPassingQualityReport(
 		const ULLMNPCMotionTemplate& Template,
 		FString& OutError
 	);
 	static bool ValidateProvenanceForPublish(
+		const ULLMNPCMotionTemplate& Template,
+		FString& OutError
+	);
+	static bool ValidateTemplateCatalogForPublish(
 		const ULLMNPCMotionTemplate& Template,
 		FString& OutError
 	);

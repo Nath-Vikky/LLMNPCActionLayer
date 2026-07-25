@@ -2,7 +2,7 @@
 
 namespace
 {
-const FString TurnRequestSchema(TEXT("llmnpc.turn_request.v2"));
+const FString TurnRequestSchema(TEXT("llmnpc.turn_request.v3"));
 const FString ModelTurnSchema(TEXT("llmnpc.model_turn.v1"));
 const FString SelectionPrompt(TEXT("llmnpc.selection_prompt.v3"));
 const FString MotionPlanVersion(TEXT("1.0"));
@@ -30,7 +30,9 @@ const FString& FLLMNPCProtocolCompatibility::CurrentMotionPlanVersion()
 
 bool FLLMNPCProtocolCompatibility::IsSupportedTurnRequestSchema(const FString& Version)
 {
-	return Version == TurnRequestSchema;
+	return
+		Version == TEXT("llmnpc.turn_request.v2") ||
+		Version == TurnRequestSchema;
 }
 
 bool FLLMNPCProtocolCompatibility::IsSupportedModelTurnSchema(const FString& Version)

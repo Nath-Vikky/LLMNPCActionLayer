@@ -3,6 +3,7 @@
 #include "Authoring/LLMNPCSkeletonCapabilityExporter.h"
 #include "Authoring/LLMNPCSkeletonProfileAuthoringSubsystem.h"
 #include "Authoring/LLMNPCMannyValidationBaselineExporter.h"
+#include "Authoring/LLMNPCMannyN2CatalogMigration.h"
 #include "Editor.h"
 #include "Framework/Docking/TabManager.h"
 #include "HAL/IConsoleManager.h"
@@ -10,12 +11,14 @@
 #include "Misc/Paths.h"
 #include "Misc/Parse.h"
 #include "Online/LLMNPCCapabilitySmokeRunner.h"
+#include "Online/LLMNPCCatalogSelectionSmokeRunner.h"
 #include "Online/LLMNPCOnlineTestConfigLoader.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
 #include "Styling/AppStyle.h"
 #include "ToolMenus.h"
 #include "UI/SLLMNPCMotionTestConsole.h"
 #include "UI/SLLMNPCProviderSettings.h"
+#include "UI/SLLMNPCTemplateWorkbench.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Modules/ModuleManager.h"
 
@@ -27,6 +30,18 @@ namespace
 {
 const FName ProviderSettingsTabName(TEXT("LLMNPCProviderSettings"));
 const FName MotionTestConsoleTabName(TEXT("LLMNPCMotionTestConsole"));
+const FName TemplateWorkbenchTabName(TEXT("LLMNPCTemplateWorkbench"));
+
+void OpenTemplateWorkbenchTab()
+{
+	FGlobalTabmanager::Get()->TryInvokeTab(TemplateWorkbenchTabName);
+}
+
+FAutoConsoleCommand OpenTemplateWorkbenchCommand(
+	TEXT("LLMNPC.OpenTemplateWorkbench"),
+	TEXT("Open the LLM NPC Template Workbench Nomad tab."),
+	FConsoleCommandDelegate::CreateStatic(&OpenTemplateWorkbenchTab)
+);
 
 void RefreshMannyN1Profile()
 {
@@ -346,6 +361,62 @@ FAutoConsoleCommand RunMannyN1CapabilitySmokeCommand(
 	TEXT("Run the strict online Manny Capability Smoke and write a sanitized Forward N1 report."),
 	FConsoleCommandDelegate::CreateStatic(&RunMannyN1CapabilitySmoke)
 );
+
+void RunMannyN2CatalogSelectionSmoke()
+{
+	const bool bExitWhenComplete = FParse::Param(
+		FCommandLine::Get(),
+		TEXT("LLMNPCSelectionSmokeExit")
+	);
+	FString Error;
+	if (!FLLMNPCCatalogSelectionSmokeRunner::Start(bExitWhenComplete, Error))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC Forward N2 Catalog Selection could not start: %s"),
+			*Error
+		);
+		if (bExitWhenComplete)
+		{
+			FPlatformMisc::RequestExit(false);
+		}
+	}
+}
+
+FAutoConsoleCommand RunMannyN2CatalogSelectionSmokeCommand(
+	TEXT("LLMNPC.RunMannyN2CatalogSelectionSmoke"),
+	TEXT("Run the versioned real-model Manny N2 Catalog selection suite and write a sanitized report."),
+	FConsoleCommandDelegate::CreateStatic(&RunMannyN2CatalogSelectionSmoke)
+);
+
+void MigrateMannyN2Catalog()
+{
+	FString CatalogHash;
+	FString Error;
+	if (!FLLMNPCMannyN2CatalogMigration::Run(CatalogHash, Error))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC Forward N2 Manny Catalog migration failed: %s"),
+			*Error
+		);
+		return;
+	}
+	UE_LOG(
+		LogLLMNPCActionLayerEditor,
+		Display,
+		TEXT("LLMNPC Forward N2 Manny Catalog migrated. CatalogHash=%s"),
+		*CatalogHash
+	);
+}
+
+FAutoConsoleCommand MigrateMannyN2CatalogCommand(
+	TEXT("LLMNPC.MigrateMannyN2Catalog"),
+	TEXT("Idempotently create the Manny Forward N2 vocabulary, Public Actions, and Catalog metadata."),
+	FConsoleCommandDelegate::CreateStatic(&MigrateMannyN2Catalog)
+);
 }
 
 void FLLMNPCActionLayerEditorModule::StartupModule()
@@ -378,6 +449,14 @@ void FLLMNPCActionLayerEditorModule::StartupModule()
 		.SetTooltipText(LOCTEXT("MotionTestConsoleTabTooltip", "Run Published motion templates against PIE NPCs."))
 		.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Play"))
 		.SetMenuType(ETabSpawnerMenuType::Hidden);
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(
+		TemplateWorkbenchTabName,
+		FOnSpawnTab::CreateRaw(this, &FLLMNPCActionLayerEditorModule::SpawnTemplateWorkbenchTab)
+	)
+		.SetDisplayName(LOCTEXT("TemplateWorkbenchTabTitle", "LLM NPC Template Workbench"))
+		.SetTooltipText(LOCTEXT("TemplateWorkbenchTabTooltip", "Browse, preview, validate, review, and publish motion catalog assets."))
+		.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.FolderOpen"))
+		.SetMenuType(ETabSpawnerMenuType::Hidden);
 
 	UToolMenus::RegisterStartupCallback(
 		FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FLLMNPCActionLayerEditorModule::RegisterMenus)
@@ -387,6 +466,7 @@ void FLLMNPCActionLayerEditorModule::StartupModule()
 void FLLMNPCActionLayerEditorModule::ShutdownModule()
 {
 	FLLMNPCCapabilitySmokeRunner::Cancel();
+	FLLMNPCCatalogSelectionSmokeRunner::Cancel();
 	FLLMNPCOnlineTestConfigLoader::ClearSession();
 	if (UToolMenus::IsToolMenuUIEnabled())
 	{
@@ -395,6 +475,7 @@ void FLLMNPCActionLayerEditorModule::ShutdownModule()
 	}
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(ProviderSettingsTabName);
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(MotionTestConsoleTabName);
+	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(TemplateWorkbenchTabName);
 }
 
 void FLLMNPCActionLayerEditorModule::RegisterMenus()
@@ -417,6 +498,13 @@ void FLLMNPCActionLayerEditorModule::RegisterMenus()
 			FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Play"),
 			FUIAction(FExecuteAction::CreateRaw(this, &FLLMNPCActionLayerEditorModule::OpenMotionTestConsole))
 		);
+		Section.AddMenuEntry(
+			"LLMNPC_OpenTemplateWorkbench",
+			LOCTEXT("OpenTemplateWorkbench", "LLM NPC Template Workbench"),
+			LOCTEXT("OpenTemplateWorkbenchTooltip", "Browse, preview, validate, review, and publish motion catalog assets."),
+			FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.FolderOpen"),
+			FUIAction(FExecuteAction::CreateRaw(this, &FLLMNPCActionLayerEditorModule::OpenTemplateWorkbench))
+		);
 	}
 }
 
@@ -428,6 +516,11 @@ void FLLMNPCActionLayerEditorModule::OpenProviderSettings()
 void FLLMNPCActionLayerEditorModule::OpenMotionTestConsole()
 {
 	FGlobalTabmanager::Get()->TryInvokeTab(MotionTestConsoleTabName);
+}
+
+void FLLMNPCActionLayerEditorModule::OpenTemplateWorkbench()
+{
+	OpenTemplateWorkbenchTab();
 }
 
 TSharedRef<SDockTab> FLLMNPCActionLayerEditorModule::SpawnProviderSettingsTab(const FSpawnTabArgs& SpawnTabArgs)
@@ -449,6 +542,18 @@ TSharedRef<SDockTab> FLLMNPCActionLayerEditorModule::SpawnMotionTestConsoleTab(
 		.TabRole(ETabRole::NomadTab)
 		[
 			SNew(SLLMNPCMotionTestConsole)
+		];
+}
+
+TSharedRef<SDockTab> FLLMNPCActionLayerEditorModule::SpawnTemplateWorkbenchTab(
+	const FSpawnTabArgs& SpawnTabArgs
+)
+{
+	static_cast<void>(SpawnTabArgs);
+	return SNew(SDockTab)
+		.TabRole(ETabRole::NomadTab)
+		[
+			SNew(SLLMNPCTemplateWorkbench)
 		];
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Protocol/LLMNPCProviderCapabilityTypes.h"
 #include "LLMNPCModelProvider.generated.h"
 
 USTRUCT(BlueprintType)
@@ -87,4 +88,9 @@ public:
 	virtual void CancelRequest(const FGuid& RequestId) = 0;
 
 	virtual FName GetProviderId() const = 0;
+
+	virtual FLLMNPCProviderCapabilityProfile GetCapabilityProfile() const
+	{
+		return FLLMNPCProviderCapabilityProfile();
+	}
 };

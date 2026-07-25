@@ -70,6 +70,21 @@ bool PrepareDraft(
 	);
 	return true;
 }
+
+void PopulateWaveCatalogMetadata(ULLMNPCMotionTemplate& Template)
+{
+	Template.Metadata.CatalogSchemaVersion = LLMNPCCatalog::SchemaVersion;
+	Template.Metadata.CatalogRevision = 1;
+	Template.Metadata.VariantId = TEXT("phase3_review");
+	Template.Metadata.VariantStyleTags = { TEXT("neutral"), TEXT("friendly") };
+	Template.Metadata.VisualDescription =
+		TEXT("The right arm rises beside the body and the open hand follows a compact greeting wave.");
+	Template.Metadata.BodyRegionTags = { TEXT("one_arm"), TEXT("hand"), TEXT("fingers") };
+	Template.Metadata.SpatialRequirementTags = { TEXT("target_independent") };
+	Template.Metadata.SemanticEffectTags = { TEXT("greet"), TEXT("farewell") };
+	Template.Metadata.RequiredCapabilities = { TEXT("hand.wave_arc"), TEXT("hand.pose.open") };
+	Template.ModifierPolicy.AllowedStyleTags = { TEXT("neutral"), TEXT("friendly") };
+}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -198,6 +213,7 @@ bool FLLMNPCTemplateReviewGateTest::RunTest(const FString& Parameters)
 	ULLMNPCMotionTemplate* Template = NewObject<ULLMNPCMotionTemplate>();
 	FLLMNPCParsedDraftInfo Info;
 	TestTrue(TEXT("The review Draft parses"), FLLMNPCTemplateDraftImporter::ParseDraftJson(DraftJson, *Template, Info, Error));
+	PopulateWaveCatalogMetadata(*Template);
 	ULLMNPCTemplateAuthoringSubsystem* Authoring = NewObject<ULLMNPCTemplateAuthoringSubsystem>();
 
 	TestFalse(TEXT("Generated templates cannot publish"), Authoring->CanPublishTemplate(Template, Error));

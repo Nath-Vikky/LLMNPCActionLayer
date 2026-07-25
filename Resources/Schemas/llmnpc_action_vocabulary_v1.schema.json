@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://llmnpc.local/schemas/llmnpc_action_vocabulary_v1.schema.json",
+  "title": "LLM NPC Action Vocabulary v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "vocabulary_id",
+    "semantic_version",
+    "revision",
+    "content_hash",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": { "const": "llmnpc.action_vocabulary.v1" },
+    "vocabulary_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "semantic_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "revision": { "type": "integer", "minimum": 1 },
+    "content_hash": { "type": "string", "pattern": "^md5:[0-9a-f]{32}$" },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "field": {
+      "enum": [
+        "GestureFamily",
+        "Intent",
+        "Emotion",
+        "Personality",
+        "BodyRegion",
+        "SpatialRequirement",
+        "TargetCategory",
+        "SemanticEffect",
+        "SuitableState",
+        "AvoidState",
+        "VariantStyle"
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tag",
+        "display_name_en",
+        "display_name_zh",
+        "synonyms",
+        "allowed_fields",
+        "deprecated",
+        "replacement_tag"
+      ],
+      "properties": {
+        "tag": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "display_name_en": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "display_name_zh": { "type": "string", "maxLength": 128 },
+        "synonyms": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+        },
+        "allowed_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/field" }
+        },
+        "deprecated": { "type": "boolean" },
+        "replacement_tag": { "type": "string", "maxLength": 64 }
+      }
+    }
+  }
+}

@@ -14,4 +14,8 @@ public:
 	virtual void CancelRequest(const FGuid& RequestId) override;
 
 	virtual FName GetProviderId() const override { return TEXT("mock"); }
+	virtual FLLMNPCProviderCapabilityProfile GetCapabilityProfile() const override
+	{
+		return FLLMNPCProviderCapabilityProfile::V3();
+	}
 };

@@ -20,6 +20,10 @@ public:
 
 	virtual void CancelRequest(const FGuid& RequestId) override;
 	virtual FName GetProviderId() const override { return TEXT("deepseek_direct_editor"); }
+	virtual FLLMNPCProviderCapabilityProfile GetCapabilityProfile() const override
+	{
+		return FLLMNPCProviderCapabilityProfile::V3();
+	}
 
 	static bool ExtractDecisionJson(
 		const FString& ResponseBody,

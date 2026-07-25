@@ -1,6 +1,7 @@
 #include "Dialogue/LLMNPCConversationSession.h"
 
 #include "Protocol/LLMNPCProtocolCompatibility.h"
+#include "Protocol/LLMNPCTurnRequestV3Adapter.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -41,6 +42,155 @@ TArray<TSharedPtr<FJsonValue>> StringsToJson(const TArray<FString>& Strings)
 		Values.Add(MakeShared<FJsonValueString>(Value));
 	}
 	return Values;
+}
+
+TArray<TSharedPtr<FJsonValue>> RangeToJson(const FVector2D& Range)
+{
+	return {
+		MakeShared<FJsonValueNumber>(Range.X),
+		MakeShared<FJsonValueNumber>(Range.Y)
+	};
+}
+
+FString SanitizePromptText(const FString& Value, int32 MaxLength)
+{
+	FString Result;
+	Result.Reserve(FMath::Min(Value.Len(), MaxLength));
+	for (const TCHAR Character : Value)
+	{
+		if (Result.Len() >= MaxLength)
+		{
+			break;
+		}
+		if (Character == TEXT('\n') || Character == TEXT('\t') || !FChar::IsControl(Character))
+		{
+			Result.AppendChar(Character);
+		}
+	}
+	return Result.TrimStartAndEnd();
+}
+
+TSharedRef<FJsonObject> BuildV3CandidateObject(
+	const FLLMNPCTemplateCandidate& Candidate
+)
+{
+	TSharedRef<FJsonObject> CandidateObject = MakeShared<FJsonObject>();
+	CandidateObject->SetStringField(
+		TEXT("selection_id"),
+		Candidate.SelectionId.ToString()
+	);
+	CandidateObject->SetStringField(
+		TEXT("selection_summary"),
+		SanitizePromptText(Candidate.SelectionSummary, 240)
+	);
+	TArray<FString> Suitable;
+	for (const FString& Value : Candidate.SuitableWhen)
+	{
+		Suitable.Add(SanitizePromptText(Value, 160));
+	}
+	TArray<FString> Avoid;
+	for (const FString& Value : Candidate.AvoidWhen)
+	{
+		Avoid.Add(SanitizePromptText(Value, 160));
+	}
+	CandidateObject->SetArrayField(TEXT("suitable_when"), StringsToJson(Suitable));
+	CandidateObject->SetArrayField(TEXT("avoid_when"), StringsToJson(Avoid));
+	CandidateObject->SetArrayField(
+		TEXT("body_regions"),
+		NamesToJson(Candidate.BodyRegionTags)
+	);
+	CandidateObject->SetArrayField(
+		TEXT("semantic_effects"),
+		NamesToJson(Candidate.SemanticEffectTags)
+	);
+
+	TSharedRef<FJsonObject> TargetContract = MakeShared<FJsonObject>();
+	TargetContract->SetBoolField(TEXT("requires_target"), Candidate.bRequiresTarget);
+	TargetContract->SetArrayField(
+		TEXT("allowed_categories"),
+		NamesToJson(Candidate.TargetCategoryTags)
+	);
+	CandidateObject->SetObjectField(TEXT("target_contract"), TargetContract);
+
+	TArray<TSharedPtr<FJsonValue>> StyleValues;
+	for (const FLLMNPCCandidateStyleOption& Style : Candidate.StyleOptions)
+	{
+		TSharedRef<FJsonObject> StyleObject = MakeShared<FJsonObject>();
+		StyleObject->SetStringField(TEXT("style"), Style.Style.ToString());
+		StyleObject->SetArrayField(TEXT("amplitude"), RangeToJson(Style.AmplitudeRange));
+		StyleObject->SetArrayField(TEXT("speed_scale"), RangeToJson(Style.SpeedRange));
+		StyleObject->SetArrayField(TEXT("duration_scale"), RangeToJson(Style.DurationRange));
+		StyleObject->SetBoolField(TEXT("mirror_allowed"), Style.bMirrorAllowed);
+		StyleValues.Add(MakeShared<FJsonValueObject>(StyleObject));
+	}
+	CandidateObject->SetArrayField(TEXT("style_options"), StyleValues);
+	CandidateObject->SetStringField(
+		TEXT("recommended_style"),
+		Candidate.RecommendedStyle.ToString()
+	);
+	CandidateObject->SetArrayField(
+		TEXT("allowed_target_refs"),
+		StringsToJson(Candidate.AllowedTargetRefs)
+	);
+	CandidateObject->SetStringField(
+		TEXT("default_target_ref"),
+		Candidate.DefaultTargetRef
+	);
+	CandidateObject->SetBoolField(
+		TEXT("mirror_recommended"),
+		Candidate.bMirrorRecommended
+	);
+	return CandidateObject;
+}
+
+TSharedRef<FJsonObject> BuildV2CandidateObject(
+	const FLLMNPCTemplateCandidate& Candidate
+)
+{
+	TSharedRef<FJsonObject> CandidateObject = MakeShared<FJsonObject>();
+	CandidateObject->SetStringField(
+		TEXT("template_id"),
+		Candidate.SelectionId.ToString()
+	);
+	CandidateObject->SetStringField(
+		TEXT("description"),
+		SanitizePromptText(Candidate.Description.ToString(), 240)
+	);
+	CandidateObject->SetArrayField(TEXT("intent_tags"), NamesToJson(Candidate.IntentTags));
+	CandidateObject->SetArrayField(TEXT("emotion_tags"), NamesToJson(Candidate.EmotionTags));
+	CandidateObject->SetBoolField(TEXT("requires_target"), Candidate.bRequiresTarget);
+	CandidateObject->SetArrayField(
+		TEXT("allowed_target_refs"),
+		StringsToJson(Candidate.AllowedTargetRefs)
+	);
+	CandidateObject->SetStringField(TEXT("default_target_ref"), Candidate.DefaultTargetRef);
+	CandidateObject->SetNumberField(
+		TEXT("recommended_amplitude"),
+		Candidate.RecommendedAmplitude
+	);
+	CandidateObject->SetNumberField(
+		TEXT("recommended_speed_scale"),
+		Candidate.RecommendedSpeedScale
+	);
+	CandidateObject->SetNumberField(
+		TEXT("recommended_duration_scale"),
+		Candidate.RecommendedDurationScale
+	);
+	CandidateObject->SetStringField(
+		TEXT("recommended_style"),
+		Candidate.RecommendedStyle.ToString()
+	);
+	CandidateObject->SetBoolField(
+		TEXT("mirror_recommended"),
+		Candidate.bMirrorRecommended
+	);
+	TSharedRef<FJsonObject> Modifiers = MakeShared<FJsonObject>();
+	Modifiers->SetArrayField(TEXT("amplitude"), RangeToJson(Candidate.AmplitudeRange));
+	Modifiers->SetArrayField(TEXT("speed_scale"), RangeToJson(Candidate.SpeedRange));
+	Modifiers->SetArrayField(TEXT("duration_scale"), RangeToJson(Candidate.DurationRange));
+	Modifiers->SetArrayField(TEXT("styles"), NamesToJson(Candidate.AllowedStyles));
+	CandidateObject->SetObjectField(TEXT("allowed_modifiers"), Modifiers);
+	return CandidateObject;
 }
 }
 
@@ -124,10 +274,27 @@ FString ULLMNPCConversationSession::BuildContextualRequestJson(
 	const FString& PromptVersion
 ) const
 {
+	return BuildContextualRequestJsonForSchema(
+		RequestId,
+		Candidates,
+		Context,
+		PromptVersion,
+		FLLMNPCProtocolCompatibility::CurrentTurnRequestSchema()
+	);
+}
+
+FString ULLMNPCConversationSession::BuildContextualRequestJsonForSchema(
+	const FGuid& RequestId,
+	const TArray<FLLMNPCTemplateCandidate>& Candidates,
+	const FLLMNPCSelectionContextSnapshot& Context,
+	const FString& PromptVersion,
+	const FString& RequestSchemaVersion
+) const
+{
 	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
 	Root->SetStringField(
 		TEXT("schema_version"),
-		FLLMNPCProtocolCompatibility::CurrentTurnRequestSchema()
+		RequestSchemaVersion
 	);
 	Root->SetStringField(TEXT("prompt_version"), PromptVersion);
 	Root->SetStringField(TEXT("request_id"), RequestId.ToString(EGuidFormats::DigitsWithHyphensLower));
@@ -187,35 +354,10 @@ FString ULLMNPCConversationSession::BuildContextualRequestJson(
 	CandidateValues.Reserve(Candidates.Num());
 	for (const FLLMNPCTemplateCandidate& Candidate : Candidates)
 	{
-		TSharedRef<FJsonObject> CandidateObject = MakeShared<FJsonObject>();
-		CandidateObject->SetStringField(TEXT("template_id"), Candidate.SelectionId.ToString());
-		CandidateObject->SetStringField(TEXT("description"), Candidate.Description.ToString());
-		CandidateObject->SetArrayField(TEXT("intent_tags"), NamesToJson(Candidate.IntentTags));
-		CandidateObject->SetArrayField(TEXT("emotion_tags"), NamesToJson(Candidate.EmotionTags));
-		CandidateObject->SetBoolField(TEXT("requires_target"), Candidate.bRequiresTarget);
-		CandidateObject->SetArrayField(TEXT("allowed_target_refs"), StringsToJson(Candidate.AllowedTargetRefs));
-		CandidateObject->SetStringField(TEXT("default_target_ref"), Candidate.DefaultTargetRef);
-		CandidateObject->SetNumberField(TEXT("recommended_amplitude"), Candidate.RecommendedAmplitude);
-		CandidateObject->SetNumberField(TEXT("recommended_speed_scale"), Candidate.RecommendedSpeedScale);
-		CandidateObject->SetNumberField(TEXT("recommended_duration_scale"), Candidate.RecommendedDurationScale);
-		CandidateObject->SetStringField(TEXT("recommended_style"), Candidate.RecommendedStyle.ToString());
-		CandidateObject->SetBoolField(TEXT("mirror_recommended"), Candidate.bMirrorRecommended);
-
-		TSharedRef<FJsonObject> Modifiers = MakeShared<FJsonObject>();
-		Modifiers->SetArrayField(TEXT("amplitude"), {
-			MakeShared<FJsonValueNumber>(Candidate.AmplitudeRange.X),
-			MakeShared<FJsonValueNumber>(Candidate.AmplitudeRange.Y)
-		});
-		Modifiers->SetArrayField(TEXT("speed_scale"), {
-			MakeShared<FJsonValueNumber>(Candidate.SpeedRange.X),
-			MakeShared<FJsonValueNumber>(Candidate.SpeedRange.Y)
-		});
-		Modifiers->SetArrayField(TEXT("duration_scale"), {
-			MakeShared<FJsonValueNumber>(Candidate.DurationRange.X),
-			MakeShared<FJsonValueNumber>(Candidate.DurationRange.Y)
-		});
-		Modifiers->SetArrayField(TEXT("styles"), NamesToJson(Candidate.AllowedStyles));
-		CandidateObject->SetObjectField(TEXT("allowed_modifiers"), Modifiers);
+		const TSharedRef<FJsonObject> CandidateObject =
+			RequestSchemaVersion == TEXT("llmnpc.turn_request.v3")
+			? BuildV3CandidateObject(Candidate)
+			: BuildV2CandidateObject(Candidate);
 		CandidateValues.Add(MakeShared<FJsonValueObject>(CandidateObject));
 	}
 	Root->SetArrayField(TEXT("candidate_templates"), CandidateValues);

@@ -1,0 +1,329 @@
+{
+	"schema_version": "llmnpc.action_vocabulary.v1",
+	"vocabulary_id": "llmnpc.manny_social_actions",
+	"semantic_version": "1.0.0",
+	"revision": 1,
+	"content_hash": "md5:7436981e5a19f58e41b430743a60ebb0",
+	"entries": [
+		{
+			"tag": "nod",
+			"display_name_en": "Nod",
+			"display_name_zh": "点头",
+			"synonyms": [],
+			"allowed_fields": [
+				"GestureFamily"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "wave",
+			"display_name_en": "Wave",
+			"display_name_zh": "挥手",
+			"synonyms": [],
+			"allowed_fields": [
+				"GestureFamily"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "point",
+			"display_name_en": "Point",
+			"display_name_zh": "指向",
+			"synonyms": [],
+			"allowed_fields": [
+				"GestureFamily"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "confirm",
+			"display_name_en": "Confirm",
+			"display_name_zh": "确认",
+			"synonyms": [
+				"confirmation"
+			],
+			"allowed_fields": [
+				"Intent"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "agree",
+			"display_name_en": "Agree",
+			"display_name_zh": "同意",
+			"synonyms": [],
+			"allowed_fields": [
+				"Intent",
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "acknowledge",
+			"display_name_en": "Acknowledge",
+			"display_name_zh": "回应",
+			"synonyms": [],
+			"allowed_fields": [
+				"Intent",
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "affirm",
+			"display_name_en": "Affirm",
+			"display_name_zh": "肯定",
+			"synonyms": [],
+			"allowed_fields": [
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "greet",
+			"display_name_en": "Greet",
+			"display_name_zh": "问候",
+			"synonyms": [],
+			"allowed_fields": [
+				"Intent",
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "farewell",
+			"display_name_en": "Farewell",
+			"display_name_zh": "道别",
+			"synonyms": [],
+			"allowed_fields": [
+				"Intent",
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "attract_attention",
+			"display_name_en": "Attract attention",
+			"display_name_zh": "吸引注意",
+			"synonyms": [],
+			"allowed_fields": [
+				"Intent",
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "indicate",
+			"display_name_en": "Indicate",
+			"display_name_zh": "指示",
+			"synonyms": [],
+			"allowed_fields": [
+				"Intent",
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "direct_attention",
+			"display_name_en": "Direct attention",
+			"display_name_zh": "引导注意",
+			"synonyms": [],
+			"allowed_fields": [
+				"Intent",
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "answer_where",
+			"display_name_en": "Answer where",
+			"display_name_zh": "回答位置",
+			"synonyms": [],
+			"allowed_fields": [
+				"Intent"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "neutral",
+			"display_name_en": "Neutral",
+			"display_name_zh": "中性",
+			"synonyms": [],
+			"allowed_fields": [
+				"Emotion",
+				"VariantStyle"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "friendly",
+			"display_name_en": "Friendly",
+			"display_name_zh": "友好",
+			"synonyms": [],
+			"allowed_fields": [
+				"Emotion",
+				"VariantStyle"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "excited",
+			"display_name_en": "Excited",
+			"display_name_zh": "兴奋",
+			"synonyms": [],
+			"allowed_fields": [
+				"Emotion",
+				"VariantStyle"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "helpful",
+			"display_name_en": "Helpful",
+			"display_name_zh": "热心",
+			"synonyms": [],
+			"allowed_fields": [
+				"Emotion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "subtle",
+			"display_name_en": "Subtle",
+			"display_name_zh": "轻微",
+			"synonyms": [],
+			"allowed_fields": [
+				"VariantStyle"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "shy",
+			"display_name_en": "Shy",
+			"display_name_zh": "害羞",
+			"synonyms": [],
+			"allowed_fields": [
+				"Personality"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "reserved",
+			"display_name_en": "Reserved",
+			"display_name_zh": "克制",
+			"synonyms": [],
+			"allowed_fields": [
+				"Personality"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "head",
+			"display_name_en": "Head",
+			"display_name_zh": "头部",
+			"synonyms": [],
+			"allowed_fields": [
+				"BodyRegion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "gaze",
+			"display_name_en": "Gaze",
+			"display_name_zh": "注视",
+			"synonyms": [],
+			"allowed_fields": [
+				"BodyRegion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "one_arm",
+			"display_name_en": "One arm",
+			"display_name_zh": "单臂",
+			"synonyms": [],
+			"allowed_fields": [
+				"BodyRegion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "hand",
+			"display_name_en": "Hand",
+			"display_name_zh": "手部",
+			"synonyms": [],
+			"allowed_fields": [
+				"BodyRegion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "fingers",
+			"display_name_en": "Fingers",
+			"display_name_zh": "手指",
+			"synonyms": [],
+			"allowed_fields": [
+				"BodyRegion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "target_independent",
+			"display_name_en": "Target independent",
+			"display_name_zh": "无目标",
+			"synonyms": [],
+			"allowed_fields": [
+				"SpatialRequirement"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "target_required",
+			"display_name_en": "Target required",
+			"display_name_zh": "需要目标",
+			"synonyms": [],
+			"allowed_fields": [
+				"SpatialRequirement"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "scene_target",
+			"display_name_en": "Any registered scene target",
+			"display_name_zh": "场景目标",
+			"synonyms": [],
+			"allowed_fields": [
+				"TargetCategory"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		}
+	]
+}

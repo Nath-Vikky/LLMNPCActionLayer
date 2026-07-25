@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Templates/LLMNPCTemplateCatalogTypes.h"
 #include "LLMNPCTemplateCandidate.generated.h"
 
 USTRUCT(BlueprintType)
@@ -15,6 +16,15 @@ struct FLLMNPCTemplateCandidate
 	FText Description;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	FString SelectionSummary;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FString> SuitableWhen;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FString> AvoidWhen;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	TArray<FName> IntentTags;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
@@ -22,6 +32,15 @@ struct FLLMNPCTemplateCandidate
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	TArray<FName> PersonalityTags;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FName> BodyRegionTags;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FName> SemanticEffectTags;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FName> TargetCategoryTags;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	TArray<FName> RequiredChannels;
@@ -43,6 +62,9 @@ struct FLLMNPCTemplateCandidate
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	TArray<FName> AllowedStyles;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	TArray<FLLMNPCCandidateStyleOption> StyleOptions;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	float CooldownSeconds = 0.0f;
@@ -70,6 +92,12 @@ struct FLLMNPCTemplateCandidate
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	bool bMirrorRecommended = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	int32 DefinitionRevision = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
+	FString CatalogHash;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Template Candidate")
 	float RelevanceScore = 0.0f;

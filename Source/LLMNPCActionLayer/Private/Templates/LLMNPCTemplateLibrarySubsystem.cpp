@@ -4,12 +4,26 @@
 #include "LLMNPCActionLayer.h"
 #include "LLMNPCSettings.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
+#include "Templates/LLMNPCActionVocabulary.h"
 #include "Templates/LLMNPCMotionTemplate.h"
+#include "Templates/LLMNPCPublicActionDefinition.h"
 
 namespace
 {
 const FPrimaryAssetType TemplateAssetType(TEXT("LLMNPCTemplate"));
+const FPrimaryAssetType PublicActionAssetType(TEXT("LLMNPCPublicAction"));
 const FPrimaryAssetType SkeletonProfileAssetType(TEXT("LLMNPCSkeletonProfile"));
+
+FString DiagnosticToString(const FLLMNPCCatalogDiagnostic& Diagnostic)
+{
+	return FString::Printf(
+		TEXT("%s:%s:%s:%s"),
+		*Diagnostic.Code.ToString(),
+		*Diagnostic.AssetPath,
+		*Diagnostic.FieldPath,
+		*Diagnostic.Message
+	);
+}
 }
 
 void ULLMNPCTemplateLibrarySubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -20,27 +34,29 @@ void ULLMNPCTemplateLibrarySubsystem::Initialize(FSubsystemCollectionBase& Colle
 
 void ULLMNPCTemplateLibrarySubsystem::Deinitialize()
 {
-	TemplateIndex.Reset();
+	LoadedTemplates.Reset();
+	LoadedPublicActions.Reset();
+	LoadedVocabulary = nullptr;
 	SkeletonProfileIndex.Reset();
-	PublicActionIndex.Reset();
+	CatalogIndex.Reset();
 	ScanErrors.Reset();
 	Super::Deinitialize();
 }
 
 void ULLMNPCTemplateLibrarySubsystem::RefreshLibrary()
 {
-	TemplateIndex.Reset();
-	SkeletonProfileIndex.Reset();
-	PublicActionIndex.Reset();
-	ScanErrors.Reset();
-
-	UAssetManager& AssetManager = UAssetManager::Get();
 	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
 	if (!Settings)
 	{
-		ScanErrors.Add(TEXT("LLMNPC_TEMPLATE_LIBRARY_SETTINGS_MISSING"));
+		ScanErrors = { TEXT("LLMNPC_TEMPLATE_LIBRARY_SETTINGS_MISSING") };
 		return;
 	}
+
+	UAssetManager& AssetManager = UAssetManager::Get();
+	TMap<FName, TObjectPtr<ULLMNPCSkeletonProfile>> NewProfiles;
+	TArray<TObjectPtr<ULLMNPCMotionTemplate>> NewTemplates;
+	TArray<TObjectPtr<ULLMNPCPublicActionDefinition>> NewDefinitions;
+	TArray<FString> NewErrors;
 
 	for (const FString& Path : Settings->SkeletonProfileScanPaths)
 	{
@@ -51,39 +67,32 @@ void ULLMNPCTemplateLibrarySubsystem::RefreshLibrary()
 			false
 		);
 	}
-
 	TArray<FPrimaryAssetId> ProfileIds;
 	AssetManager.GetPrimaryAssetIdList(SkeletonProfileAssetType, ProfileIds);
 	for (const FPrimaryAssetId& AssetId : ProfileIds)
 	{
 		const FSoftObjectPath AssetPath = AssetManager.GetPrimaryAssetPath(AssetId);
-		ULLMNPCSkeletonProfile* Profile = Cast<ULLMNPCSkeletonProfile>(AssetPath.TryLoad());
-		if (!Profile)
+		ULLMNPCSkeletonProfile* Profile =
+			Cast<ULLMNPCSkeletonProfile>(AssetPath.TryLoad());
+		FString Error;
+		if (!Profile || !Profile->ValidateProfile(Error))
 		{
-			ScanErrors.Add(FString::Printf(
-				TEXT("LLMNPC_TEMPLATE_LIBRARY_PROFILE_LOAD_FAILED:%s"),
-				*AssetPath.ToString()
+			NewErrors.Add(FString::Printf(
+				TEXT("LLMNPC_TEMPLATE_LIBRARY_PROFILE_INVALID:%s:%s"),
+				*AssetPath.ToString(),
+				*Error
 			));
 			continue;
 		}
-
-		FString ValidationError;
-		if (!Profile->ValidateProfile(ValidationError))
+		if (NewProfiles.Contains(Profile->ProfileId))
 		{
-			ScanErrors.Add(ValidationError);
-			continue;
-		}
-
-		if (SkeletonProfileIndex.Contains(Profile->ProfileId))
-		{
-			ScanErrors.Add(FString::Printf(
+			NewErrors.Add(FString::Printf(
 				TEXT("LLMNPC_TEMPLATE_LIBRARY_DUPLICATE_PROFILE_ID:%s"),
 				*Profile->ProfileId.ToString()
 			));
 			continue;
 		}
-
-		SkeletonProfileIndex.Add(Profile->ProfileId, Profile);
+		NewProfiles.Add(Profile->ProfileId, Profile);
 	}
 
 	for (const FString& Path : Settings->MotionTemplateScanPaths)
@@ -95,96 +104,128 @@ void ULLMNPCTemplateLibrarySubsystem::RefreshLibrary()
 			false
 		);
 	}
-
 	TArray<FPrimaryAssetId> TemplateIds;
 	AssetManager.GetPrimaryAssetIdList(TemplateAssetType, TemplateIds);
 	for (const FPrimaryAssetId& AssetId : TemplateIds)
 	{
 		const FSoftObjectPath AssetPath = AssetManager.GetPrimaryAssetPath(AssetId);
-		ULLMNPCMotionTemplate* MotionTemplate = Cast<ULLMNPCMotionTemplate>(AssetPath.TryLoad());
-		if (!MotionTemplate)
+		if (ULLMNPCMotionTemplate* Template =
+			Cast<ULLMNPCMotionTemplate>(AssetPath.TryLoad()))
 		{
-			ScanErrors.Add(FString::Printf(
+			NewTemplates.AddUnique(Template);
+		}
+		else
+		{
+			NewErrors.Add(FString::Printf(
 				TEXT("LLMNPC_TEMPLATE_LIBRARY_TEMPLATE_LOAD_FAILED:%s"),
 				*AssetPath.ToString()
 			));
-			continue;
-		}
-
-		FString ValidationError;
-		if (!MotionTemplate->ValidateTemplate(ValidationError))
-		{
-			ScanErrors.Add(ValidationError);
-			continue;
-		}
-
-		if (!MotionTemplate->IsPublished())
-		{
-			continue;
-		}
-
-		if (!SkeletonProfileIndex.Contains(MotionTemplate->Metadata.SkeletonProfileId))
-		{
-			ScanErrors.Add(FString::Printf(
-				TEXT("LLMNPC_TEMPLATE_LIBRARY_PROFILE_NOT_FOUND:%s"),
-				*MotionTemplate->Metadata.SkeletonProfileId.ToString()
-			));
-			continue;
-		}
-		bool bCompatibleProfilesFound = true;
-		for (const FName CompatibleProfileId : MotionTemplate->Metadata.CompatibleSkeletonProfileIds)
-		{
-			if (!SkeletonProfileIndex.Contains(CompatibleProfileId))
-			{
-				ScanErrors.Add(FString::Printf(
-					TEXT("LLMNPC_TEMPLATE_LIBRARY_COMPATIBLE_PROFILE_NOT_FOUND:%s:%s"),
-					*MotionTemplate->Metadata.TemplateId.ToString(),
-					*CompatibleProfileId.ToString()
-				));
-				bCompatibleProfilesFound = false;
-			}
-		}
-		if (!bCompatibleProfilesFound)
-		{
-			continue;
-		}
-
-		if (TemplateIndex.Contains(MotionTemplate->Metadata.TemplateId))
-		{
-			ScanErrors.Add(FString::Printf(
-				TEXT("LLMNPC_TEMPLATE_LIBRARY_DUPLICATE_TEMPLATE_ID:%s"),
-				*MotionTemplate->Metadata.TemplateId.ToString()
-			));
-			continue;
-		}
-
-		TemplateIndex.Add(MotionTemplate->Metadata.TemplateId, MotionTemplate);
-		if (MotionTemplate->Metadata.bAllowRuntimeModelSelection)
-		{
-			PublicActionIndex.FindOrAdd(MotionTemplate->Metadata.PublicActionId).Add(
-				MotionTemplate->Metadata.TemplateId
-			);
 		}
 	}
-	for (TPair<FName, TArray<FName>>& Pair : PublicActionIndex)
+
+	for (const FString& Path : Settings->PublicActionDefinitionScanPaths)
 	{
-		Pair.Value.Sort(FNameLexicalLess());
+		AssetManager.ScanPathForPrimaryAssets(
+			PublicActionAssetType,
+			Path,
+			ULLMNPCPublicActionDefinition::StaticClass(),
+			false
+		);
+	}
+	TArray<FPrimaryAssetId> DefinitionIds;
+	AssetManager.GetPrimaryAssetIdList(PublicActionAssetType, DefinitionIds);
+	for (const FPrimaryAssetId& AssetId : DefinitionIds)
+	{
+		const FSoftObjectPath AssetPath = AssetManager.GetPrimaryAssetPath(AssetId);
+		if (ULLMNPCPublicActionDefinition* Definition =
+			Cast<ULLMNPCPublicActionDefinition>(AssetPath.TryLoad()))
+		{
+			NewDefinitions.AddUnique(Definition);
+		}
+		else
+		{
+			NewErrors.Add(FString::Printf(
+				TEXT("LLMNPC_TEMPLATE_LIBRARY_PUBLIC_ACTION_LOAD_FAILED:%s"),
+				*AssetPath.ToString()
+			));
+		}
+	}
+
+	ULLMNPCActionVocabulary* NewVocabulary =
+		Cast<ULLMNPCActionVocabulary>(Settings->ActionVocabulary.LoadSynchronous());
+	FLLMNPCTemplateSearchIndex NewIndex;
+	TArray<ULLMNPCMotionTemplate*> RawTemplates;
+	TArray<ULLMNPCPublicActionDefinition*> RawDefinitions;
+	TSet<FName> ProfileNames;
+	for (const TObjectPtr<ULLMNPCMotionTemplate>& Template : NewTemplates)
+	{
+		RawTemplates.Add(Template.Get());
+	}
+	for (const TObjectPtr<ULLMNPCPublicActionDefinition>& Definition : NewDefinitions)
+	{
+		RawDefinitions.Add(Definition.Get());
+	}
+	NewProfiles.GetKeys(ProfileNames);
+	if (!NewIndex.Build(
+		RawTemplates,
+		RawDefinitions,
+		NewVocabulary,
+		ProfileNames
+	))
+	{
+		for (const FLLMNPCCatalogDiagnostic& Diagnostic : NewIndex.GetDiagnostics())
+		{
+			NewErrors.Add(DiagnosticToString(Diagnostic));
+		}
+		ScanErrors = MoveTemp(NewErrors);
+		return;
+	}
+	for (const FLLMNPCCatalogDiagnostic& Diagnostic : NewIndex.GetDiagnostics())
+	{
+		NewErrors.Add(DiagnosticToString(Diagnostic));
+	}
+
+	LoadedTemplates = MoveTemp(NewTemplates);
+	LoadedPublicActions = MoveTemp(NewDefinitions);
+	LoadedVocabulary = NewVocabulary;
+	SkeletonProfileIndex = MoveTemp(NewProfiles);
+	CatalogIndex = MoveTemp(NewIndex);
+	ScanErrors = MoveTemp(NewErrors);
+	for (const FString& ScanError : ScanErrors)
+	{
+		UE_LOG(
+			LogLLMNPCActionLayer,
+			Warning,
+			TEXT("LLMNPCTemplateLibrary catalog diagnostic: %s"),
+			*ScanError
+		);
 	}
 
 	UE_LOG(
 		LogLLMNPCActionLayer,
 		Log,
-		TEXT("LLMNPCTemplateLibrary: indexed %d published templates and %d skeleton profiles (%d errors)."),
-		TemplateIndex.Num(),
+		TEXT("LLMNPCTemplateLibrary: indexed %d templates, %d public actions, and %d skeleton profiles. Catalog=%s Errors=%d"),
+		CatalogIndex.GetTemplateCount(),
+		CatalogIndex.GetPublicActionCount(),
 		SkeletonProfileIndex.Num(),
+		*CatalogIndex.GetCatalogHash(),
 		ScanErrors.Num()
 	);
 }
 
-const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::FindPublishedTemplate(FName TemplateId) const
+const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::FindPublishedTemplate(
+	FName TemplateId
+) const
 {
-	const TObjectPtr<ULLMNPCMotionTemplate>* Found = TemplateIndex.Find(TemplateId);
-	return Found ? Found->Get() : nullptr;
+	return CatalogIndex.FindTemplate(TemplateId);
+}
+
+const ULLMNPCPublicActionDefinition*
+ULLMNPCTemplateLibrarySubsystem::FindPublishedPublicAction(
+	FName PublicActionId
+) const
+{
+	return CatalogIndex.FindDefinition(PublicActionId);
 }
 
 void ULLMNPCTemplateLibrarySubsystem::GetPublishedTemplateIdsForProfile(
@@ -193,19 +234,17 @@ void ULLMNPCTemplateLibrarySubsystem::GetPublishedTemplateIdsForProfile(
 ) const
 {
 	OutTemplateIds.Reset();
-	if (SkeletonProfileId.IsNone())
+	TArray<FName> TemplateIds;
+	CatalogIndex.GetTemplateIds(TemplateIds);
+	for (const FName TemplateId : TemplateIds)
 	{
-		return;
-	}
-
-	for (const TPair<FName, TObjectPtr<ULLMNPCMotionTemplate>>& Pair : TemplateIndex)
-	{
-		if (Pair.Value && Pair.Value->SupportsSkeletonProfile(SkeletonProfileId))
+		const ULLMNPCMotionTemplate* Template =
+			CatalogIndex.FindTemplate(TemplateId);
+		if (Template && Template->SupportsSkeletonProfile(SkeletonProfileId))
 		{
-			OutTemplateIds.Add(Pair.Key);
+			OutTemplateIds.Add(TemplateId);
 		}
 	}
-	OutTemplateIds.Sort(FNameLexicalLess());
 }
 
 const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::FindPublishedVariant(
@@ -213,7 +252,14 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::FindPublishedVaria
 	FName SkeletonProfileId
 ) const
 {
-	return ResolvePublishedVariant(PublicActionId, SkeletonProfileId, TEXT("neutral"), 0);
+	const ULLMNPCPublicActionDefinition* Definition =
+		FindPublishedPublicAction(PublicActionId);
+	return ResolvePublishedVariant(
+		PublicActionId,
+		SkeletonProfileId,
+		Definition ? Definition->DefaultStyle : FName(TEXT("neutral")),
+		0
+	);
 }
 
 const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolvePublishedVariant(
@@ -223,53 +269,53 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolvePublishedVa
 	int32 RandomSeed
 ) const
 {
-	const TArray<FName>* TemplateIds = PublicActionIndex.Find(PublicActionId);
+	const TArray<FName>* TemplateIds = CatalogIndex.FindVariants(PublicActionId);
 	if (!TemplateIds)
 	{
 		return nullptr;
 	}
 
-	TArray<const ULLMNPCMotionTemplate*> ExactGenericVariants;
 	TArray<const ULLMNPCMotionTemplate*> ExactStyleVariants;
-	TArray<const ULLMNPCMotionTemplate*> CompatibleGenericVariants;
 	TArray<const ULLMNPCMotionTemplate*> CompatibleStyleVariants;
 	for (const FName TemplateId : *TemplateIds)
 	{
-		const ULLMNPCMotionTemplate* MotionTemplate = FindPublishedTemplate(TemplateId);
-		if (MotionTemplate && MotionTemplate->SupportsSkeletonProfile(SkeletonProfileId))
+		const ULLMNPCMotionTemplate* Template = FindPublishedTemplate(TemplateId);
+		if (!Template || !Template->SupportsSkeletonProfile(SkeletonProfileId))
 		{
-			const bool bExactProfile = MotionTemplate->Metadata.SkeletonProfileId == SkeletonProfileId;
-			if (
-				!MotionTemplate->Metadata.VariantStyleTags.IsEmpty() &&
-				MotionTemplate->Metadata.VariantStyleTags.Contains(StyleTag)
-			)
-			{
-				(bExactProfile ? ExactStyleVariants : CompatibleStyleVariants).Add(MotionTemplate);
-			}
-			else if (MotionTemplate->Metadata.VariantStyleTags.IsEmpty())
-			{
-				(bExactProfile ? ExactGenericVariants : CompatibleGenericVariants).Add(MotionTemplate);
-			}
+			continue;
 		}
+		TArray<FName> Styles = Template->Metadata.VariantStyleTags;
+		if (Styles.IsEmpty())
+		{
+			Styles = Template->ModifierPolicy.AllowedStyleTags;
+		}
+		if (!Styles.Contains(StyleTag))
+		{
+			continue;
+		}
+		const bool bExactProfile =
+			Template->Metadata.SkeletonProfileId == SkeletonProfileId;
+		(bExactProfile ? ExactStyleVariants : CompatibleStyleVariants).Add(Template);
 	}
-	const TArray<const ULLMNPCMotionTemplate*>* Variants = !ExactStyleVariants.IsEmpty()
-		? &ExactStyleVariants
-		: (!ExactGenericVariants.IsEmpty()
-			? &ExactGenericVariants
-			: (!CompatibleStyleVariants.IsEmpty() ? &CompatibleStyleVariants : &CompatibleGenericVariants));
-	if (Variants->IsEmpty())
+	const TArray<const ULLMNPCMotionTemplate*>& Variants =
+		!ExactStyleVariants.IsEmpty()
+		? ExactStyleVariants
+		: CompatibleStyleVariants;
+	if (Variants.IsEmpty())
 	{
 		return nullptr;
 	}
 
 	float TotalWeight = 0.0f;
-	for (const ULLMNPCMotionTemplate* Variant : *Variants)
+	for (const ULLMNPCMotionTemplate* Variant : Variants)
 	{
 		TotalWeight += Variant->Metadata.VariantWeight;
 	}
 	FRandomStream Stream(RandomSeed);
-	float Choice = RandomSeed == 0 ? 0.0f : Stream.FRandRange(0.0f, TotalWeight);
-	for (const ULLMNPCMotionTemplate* Variant : *Variants)
+	float Choice = RandomSeed == 0
+		? 0.0f
+		: Stream.FRandRange(0.0f, TotalWeight);
+	for (const ULLMNPCMotionTemplate* Variant : Variants)
 	{
 		Choice -= Variant->Metadata.VariantWeight;
 		if (Choice <= 0.0f)
@@ -277,16 +323,20 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolvePublishedVa
 			return Variant;
 		}
 	}
-	return Variants->Last();
+	return Variants.Last();
 }
 
-const ULLMNPCSkeletonProfile* ULLMNPCTemplateLibrarySubsystem::FindSkeletonProfile(FName ProfileId) const
+const ULLMNPCSkeletonProfile* ULLMNPCTemplateLibrarySubsystem::FindSkeletonProfile(
+	FName ProfileId
+) const
 {
-	const TObjectPtr<ULLMNPCSkeletonProfile>* Found = SkeletonProfileIndex.Find(ProfileId);
+	const TObjectPtr<ULLMNPCSkeletonProfile>* Found =
+		SkeletonProfileIndex.Find(ProfileId);
 	return Found ? Found->Get() : nullptr;
 }
 
-const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolveRuntimeModelTemplate(
+const ULLMNPCMotionTemplate*
+ULLMNPCTemplateLibrarySubsystem::ResolveRuntimeModelTemplate(
 	FName SelectionId,
 	FName SkeletonProfileId
 ) const
@@ -295,8 +345,6 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolveRuntimeMode
 	{
 		return nullptr;
 	}
-
-	// Provider-facing resolution accepts only skeleton-independent public IDs.
 	return FindPublishedVariant(SelectionId, SkeletonProfileId);
 }
 
@@ -306,53 +354,15 @@ void ULLMNPCTemplateLibrarySubsystem::QueryRuntimeCandidates(
 ) const
 {
 	OutCandidates.Reset();
-	for (const TPair<FName, TArray<FName>>& Pair : PublicActionIndex)
+	TArray<FName> PublicActionIds;
+	CatalogIndex.GetPublicActionIds(PublicActionIds);
+	for (const FName PublicActionId : PublicActionIds)
 	{
-		const ULLMNPCMotionTemplate* MotionTemplate = FindPublishedVariant(
-			Pair.Key,
-			SkeletonProfileId
-		);
-		if (!MotionTemplate)
+		FLLMNPCTemplateCandidate Candidate;
+		if (CatalogIndex.BuildRuntimeCandidate(PublicActionId, SkeletonProfileId, Candidate))
 		{
-			continue;
+			OutCandidates.Add(MoveTemp(Candidate));
 		}
-
-		FLLMNPCTemplateCandidate& Candidate = OutCandidates.AddDefaulted_GetRef();
-		Candidate.SelectionId = MotionTemplate->Metadata.PublicActionId;
-		Candidate.Description = MotionTemplate->Metadata.Description;
-		Candidate.IntentTags = MotionTemplate->Metadata.IntentTags;
-		Candidate.EmotionTags = MotionTemplate->Metadata.EmotionTags;
-		Candidate.PersonalityTags = MotionTemplate->Metadata.PersonalityTags;
-		Candidate.RequiredChannels = MotionTemplate->Metadata.RequiredChannels;
-		Candidate.BlockedStates = MotionTemplate->Metadata.BlockedStates;
-		Candidate.bRequiresTarget = MotionTemplate->Metadata.bRequiresTarget;
-		Candidate.AmplitudeRange = MotionTemplate->ModifierPolicy.AmplitudeRange;
-		Candidate.SpeedRange = MotionTemplate->ModifierPolicy.SpeedRange;
-		Candidate.DurationRange = MotionTemplate->ModifierPolicy.DurationRange;
-		Candidate.AllowedStyles = MotionTemplate->ModifierPolicy.AllowedStyleTags;
-		Candidate.bAllowMirror = MotionTemplate->ModifierPolicy.bAllowMirror;
-		if (const TArray<FName>* VariantIds = PublicActionIndex.Find(Pair.Key))
-		{
-			for (const FName VariantId : *VariantIds)
-			{
-				const ULLMNPCMotionTemplate* Variant = FindPublishedTemplate(VariantId);
-				if (!Variant || !Variant->SupportsSkeletonProfile(SkeletonProfileId))
-				{
-					continue;
-				}
-				for (const FName AllowedStyle : Variant->ModifierPolicy.AllowedStyleTags)
-				{
-					Candidate.AllowedStyles.AddUnique(AllowedStyle);
-				}
-				Candidate.bAllowMirror |= Variant->ModifierPolicy.bAllowMirror;
-			}
-		}
-		Candidate.CooldownSeconds = MotionTemplate->Metadata.CooldownSeconds;
-		Candidate.RecommendedAmplitude = FMath::Clamp(
-			1.0f,
-			Candidate.AmplitudeRange.X,
-			Candidate.AmplitudeRange.Y
-		);
 	}
 
 	OutCandidates.Sort(

@@ -47,6 +47,14 @@ public:
 		const FString& PromptVersion
 	) const;
 
+	FString BuildContextualRequestJsonForSchema(
+		const FGuid& RequestId,
+		const TArray<FLLMNPCTemplateCandidate>& Candidates,
+		const FLLMNPCSelectionContextSnapshot& Context,
+		const FString& PromptVersion,
+		const FString& RequestSchemaVersion
+	) const;
+
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Conversation")
 	const TArray<FLLMNPCConversationMessage>& GetMessages() const { return Messages; }
 

@@ -198,6 +198,21 @@ bool FLLMNPCPhase4HistoryAndPolicyTest::RunTest(const FString& Parameters)
 	Request.ActionHistory.Reset();
 	Request.Context.Personality.Shyness = 1.0f;
 	Result = ULLMNPCCandidateRetriever::Retrieve(Request);
+	const FLLMNPCTemplateCandidate* Wave = FindCandidate(Result.Candidates, TEXT("gesture.wave.right"));
+	TestNotNull(TEXT("The shy Wave remains available"), Wave);
+	if (!Wave)
+	{
+		return false;
+	}
+	TestEqual(
+		TEXT("The shy Wave resolves its context-safe style"),
+		Wave->RecommendedStyle,
+		FName(TEXT("subtle"))
+	);
+	TestTrue(
+		TEXT("The friendly style remains available when it can honor the shy bound"),
+		Wave->AllowedStyles.Contains(TEXT("friendly"))
+	);
 	FLLMNPCModelTurnDecision Decision;
 	Decision.Action.Decision = TEXT("execute_template");
 	Decision.Action.TemplateId = TEXT("gesture.wave.right");
@@ -205,15 +220,11 @@ bool FLLMNPCPhase4HistoryAndPolicyTest::RunTest(const FString& Parameters)
 	Decision.Action.Amplitude = 99.0f;
 	FString Error;
 	TestTrue(TEXT("An offered action passes contextual policy"), ULLMNPCCandidateRetriever::ApplySelectionPolicy(Decision, Result.Candidates, Error));
-	const FLLMNPCTemplateCandidate* Wave = FindCandidate(Result.Candidates, TEXT("gesture.wave.right"));
-	if (Wave)
-	{
-		TestEqual(
-			TEXT("UE clamps model amplitude to the shy bound"),
-			Decision.Action.Amplitude,
-			static_cast<float>(Wave->AmplitudeRange.Y)
-		);
-	}
+	TestEqual(
+		TEXT("UE clamps model amplitude to the shy bound"),
+		Decision.Action.Amplitude,
+		static_cast<float>(Wave->AmplitudeRange.Y)
+	);
 
 	Decision.Action.TemplateId = TEXT("gesture.not_offered");
 	TestFalse(TEXT("A model cannot bypass the offered set"), ULLMNPCCandidateRetriever::ApplySelectionPolicy(Decision, Result.Candidates, Error));

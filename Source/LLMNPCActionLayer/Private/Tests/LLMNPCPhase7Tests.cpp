@@ -19,9 +19,22 @@ ULLMNPCMotionTemplate* MakeCompatibleProceduralTemplate()
 	ULLMNPCMotionTemplate* Template = NewObject<ULLMNPCMotionTemplate>();
 	Template->Metadata.TemplateId = TEXT("gesture.phase7.compatible.v1");
 	Template->Metadata.PublicActionId = TEXT("gesture.phase7.compatible");
+	Template->Metadata.CatalogSchemaVersion = LLMNPCCatalog::SchemaVersion;
+	Template->Metadata.CatalogRevision = 1;
+	Template->Metadata.VariantId = TEXT("compatible_profile");
+	Template->Metadata.VariantStyleTags = { TEXT("neutral") };
+	Template->Metadata.VisualDescription =
+		TEXT("The head performs one bounded nod on an explicitly compatible humanoid profile.");
+	Template->Metadata.IntentTags = { TEXT("confirm") };
+	Template->Metadata.BodyRegionTags = { TEXT("head") };
+	Template->Metadata.SpatialRequirementTags = { TEXT("target_independent") };
+	Template->Metadata.SemanticEffectTags = { TEXT("acknowledge") };
+	Template->Metadata.RequiredCapabilities = { TEXT("head.nod") };
+	Template->Metadata.RequiredChannels = { TEXT("head") };
 	Template->Metadata.SkeletonProfileId = TEXT("source_humanoid.v1");
 	Template->Metadata.CompatibleSkeletonProfileIds = {TEXT("target_humanoid.v1")};
 	Template->Metadata.ReviewState = ELLMNPCTemplateReviewState::Published;
+	Template->ModifierPolicy.AllowedStyleTags = { TEXT("neutral") };
 	Template->SourceProvenanceJson = TEXT("{\"source\":\"automation\"}");
 	Template->ValidationReportJson = TEXT("{\"status\":\"pass\"}");
 	Template->ProceduralClip.Duration = 1.0f;
@@ -31,6 +44,8 @@ ULLMNPCMotionTemplate* MakeCompatibleProceduralTemplate()
 	Track.StartTime = 0.0f;
 	Track.EndTime = 1.0f;
 	Track.Amplitude = 10.0f;
+	Template->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*Template);
 	return Template;
 }
 }

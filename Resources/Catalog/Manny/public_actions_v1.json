@@ -1,0 +1,107 @@
+{
+	"schema_version": "llmnpc.public_action_catalog.v1",
+	"catalog_hash": "md5:82c3270b3bc65bf0110c45a0ffb373df",
+	"public_actions": [
+		{
+			"schema_version": "llmnpc.public_action_definition.v1",
+			"public_action_id": "gesture.nod",
+			"semantic_version": "1.0.0",
+			"definition_revision": 1,
+			"display_name": "Nod",
+			"selection_summary": "Dip the head briefly to acknowledge, confirm, or agree without interrupting the conversation.",
+			"suitable_when": [
+				"acknowledging a statement",
+				"confirming understanding",
+				"quiet agreement"
+			],
+			"avoid_when": [
+				"clear disagreement",
+				"the character must remain completely still"
+			],
+			"semantic_effect_tags": [
+				"acknowledge",
+				"affirm"
+			],
+			"target_category_tags": [],
+			"gesture_family": "nod",
+			"default_style": "neutral",
+			"search_keywords": [
+				"yes",
+				"understood",
+				"agreement",
+				"acknowledgement"
+			],
+			"requires_target": false,
+			"content_hash": "md5:cc3ba9a53e097ec88c77534eb26f1407"
+		},
+		{
+			"schema_version": "llmnpc.public_action_definition.v1",
+			"public_action_id": "gesture.point.target",
+			"semantic_version": "1.0.0",
+			"definition_revision": 1,
+			"display_name": "Gaze And Point",
+			"selection_summary": "Look toward a registered scene target and point at it with one hand to direct attention or answer where it is.",
+			"suitable_when": [
+				"showing where something is",
+				"directing attention to a known target",
+				"answering a location question"
+			],
+			"avoid_when": [
+				"no legal target is available",
+				"the pointing hand is occupied"
+			],
+			"semantic_effect_tags": [
+				"indicate",
+				"direct_attention"
+			],
+			"target_category_tags": [
+				"scene_target"
+			],
+			"gesture_family": "point",
+			"default_style": "neutral",
+			"search_keywords": [
+				"where",
+				"there",
+				"look",
+				"point",
+				"location"
+			],
+			"requires_target": true,
+			"content_hash": "md5:71a458dbdf4cce4287db1604e9a01b59"
+		},
+		{
+			"schema_version": "llmnpc.public_action_definition.v1",
+			"public_action_id": "gesture.wave.right",
+			"semantic_version": "1.0.0",
+			"definition_revision": 1,
+			"display_name": "Right-Hand Wave",
+			"selection_summary": "Raise one open hand and wave for a greeting, farewell, or a polite attempt to attract attention.",
+			"suitable_when": [
+				"greeting someone",
+				"saying goodbye",
+				"attracting attention at a distance"
+			],
+			"avoid_when": [
+				"both hands are occupied",
+				"formal stillness is required",
+				"close two-hand interaction"
+			],
+			"semantic_effect_tags": [
+				"greet",
+				"farewell",
+				"attract_attention"
+			],
+			"target_category_tags": [],
+			"gesture_family": "wave",
+			"default_style": "friendly",
+			"search_keywords": [
+				"hello",
+				"goodbye",
+				"wave",
+				"attention"
+			],
+			"requires_target": false,
+			"content_hash": "md5:dec47288bdcd1af0f66f171bc9102209"
+		}
+	]
+}

@@ -6,6 +6,7 @@
 #include "LLMNPCSettings.generated.h"
 
 class UAnimInstance;
+class ULLMNPCActionVocabulary;
 class UUserWidget;
 
 UCLASS(Config=Game, DefaultConfig, meta=(DisplayName="LLM NPC Motion Layer"))
@@ -114,6 +115,26 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category="Runtime|Templates")
 	TArray<FString> MotionTemplateScanPaths;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Templates")
+	TArray<FString> PublicActionDefinitionScanPaths;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Templates")
+	TSoftObjectPtr<ULLMNPCActionVocabulary> ActionVocabulary;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Templates")
+	FName CanonicalModelLanguage = TEXT("en");
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Templates", meta=(ClampMin="256", ClampMax="32768"))
+	int32 CandidateTokenBudget = 4096;
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Templates")
+	FString ProjectPublishedTemplatePath =
+		TEXT("/Game/LLMNPCActionLayer/MotionTemplates/Published");
+
+	UPROPERTY(Config, EditAnywhere, Category="Runtime|Templates")
+	FString ProjectPublishedPublicActionPath =
+		TEXT("/Game/LLMNPCActionLayer/PublicActions/Published");
 
 	UPROPERTY(Config, EditAnywhere, Category="Runtime|Templates")
 	TArray<FString> SkeletonProfileScanPaths;
