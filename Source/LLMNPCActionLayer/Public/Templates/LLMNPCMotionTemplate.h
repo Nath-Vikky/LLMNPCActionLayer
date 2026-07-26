@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimationAsset.h"
+#include "Context/LLMNPCExecutionContextTypes.h"
 #include "Engine/DataAsset.h"
 #include "LLMNPCMotionTypes.h"
 #include "Templates/LLMNPCTemplateCatalogTypes.h"
@@ -21,6 +22,9 @@ struct FLLMNPCModifierPolicy
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
+	int32 PolicyVersion = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
 	FVector2D AmplitudeRange = FVector2D(0.8f, 1.2f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
@@ -34,6 +38,69 @@ struct FLLMNPCModifierPolicy
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template")
 	TArray<FName> AllowedStyleTags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FVector2D ReachScaleRange = FVector2D(1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FVector2D HeightScaleRange = FVector2D(1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FVector2D LateralScaleRange = FVector2D(1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FIntPoint CycleCountRange = FIntPoint::ZeroValue;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FVector2D GazeEngagementRange = FVector2D(1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FVector2D PalmOrientationWeightRange = FVector2D(1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FVector2D FingerPoseWeightRange = FVector2D(1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FVector2D TorsoParticipationRange = FVector2D(1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FVector2D BlendInScaleRange = FVector2D(1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	FVector2D BlendOutScaleRange = FVector2D(1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	bool bEnableDynamicTargetTracking = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context", meta=(EditCondition="bEnableDynamicTargetTracking", ClampMin="1.0", ClampMax="2000.0"))
+	float MaxTargetFollowSpeedCmPerSecond = 240.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context", meta=(EditCondition="bEnableDynamicTargetTracking", ClampMin="1.0", ClampMax="720.0"))
+	float MaxTargetAngularSpeedDegreesPerSecond = 180.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context", meta=(EditCondition="bEnableDynamicTargetTracking", ClampMin="0.1", ClampMax="40.0"))
+	float TargetInterpolationSpeed = 8.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context", meta=(EditCondition="bEnableDynamicTargetTracking", ClampMin="10.0", ClampMax="5000.0"))
+	float TargetTeleportThresholdCm = 250.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context", meta=(EditCondition="bEnableDynamicTargetTracking", ClampMin="0.01", ClampMax="5.0"))
+	float TargetLostFadeSeconds = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context", meta=(EditCondition="bEnableDynamicTargetTracking"))
+	ELLMNPCTargetLossPolicy TargetLossPolicy = ELLMNPCTargetLossPolicy::FadeOut;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context")
+	bool bEnableObstacleAdaptation = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context", meta=(EditCondition="bEnableObstacleAdaptation", ClampMin="0.1", ClampMax="1.0"))
+	float MinObstacleAmplitudeScale = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context", meta=(EditCondition="bEnableObstacleAdaptation", ClampMin="0.1", ClampMax="1.0"))
+	float MinObstacleReachScale = 0.65f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template|Context", meta=(EditCondition="bEnableObstacleAdaptation", ClampMin="0.0", ClampMax="1.0"))
+	float ObstacleCancelClearance = 0.2f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC|Template", meta=(ClampMin="0.0", ClampMax="0.25"))
 	float RandomAmplitudeJitter = 0.03f;

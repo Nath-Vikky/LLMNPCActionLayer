@@ -6,7 +6,7 @@
 
 namespace
 {
-TArray<TSharedPtr<FJsonValue>> NamesToJson(const TArray<FName>& Names)
+TArray<TSharedPtr<FJsonValue>> V3NamesToJson(const TArray<FName>& Names)
 {
 	TArray<TSharedPtr<FJsonValue>> Values;
 	for (const FName Name : Names)
@@ -16,7 +16,7 @@ TArray<TSharedPtr<FJsonValue>> NamesToJson(const TArray<FName>& Names)
 	return Values;
 }
 
-TArray<TSharedPtr<FJsonValue>> StringsToJson(const TArray<FString>& Strings)
+TArray<TSharedPtr<FJsonValue>> V3StringsToJson(const TArray<FString>& Strings)
 {
 	TArray<TSharedPtr<FJsonValue>> Values;
 	for (const FString& Value : Strings)
@@ -26,7 +26,7 @@ TArray<TSharedPtr<FJsonValue>> StringsToJson(const TArray<FString>& Strings)
 	return Values;
 }
 
-TArray<TSharedPtr<FJsonValue>> RangeToJson(const FVector2D& Range)
+TArray<TSharedPtr<FJsonValue>> V3RangeToJson(const FVector2D& Range)
 {
 	return {
 		MakeShared<FJsonValueNumber>(Range.X),
@@ -34,26 +34,26 @@ TArray<TSharedPtr<FJsonValue>> RangeToJson(const FVector2D& Range)
 	};
 }
 
-TSharedRef<FJsonObject> BuildV3CandidateObject(
+TSharedRef<FJsonObject> BuildV3CandidateJsonObject(
 	const FLLMNPCTemplateCandidate& Candidate
 )
 {
 	TSharedRef<FJsonObject> Object = MakeShared<FJsonObject>();
 	Object->SetStringField(TEXT("selection_id"), Candidate.SelectionId.ToString());
 	Object->SetStringField(TEXT("selection_summary"), Candidate.SelectionSummary);
-	Object->SetArrayField(TEXT("suitable_when"), StringsToJson(Candidate.SuitableWhen));
-	Object->SetArrayField(TEXT("avoid_when"), StringsToJson(Candidate.AvoidWhen));
-	Object->SetArrayField(TEXT("body_regions"), NamesToJson(Candidate.BodyRegionTags));
+	Object->SetArrayField(TEXT("suitable_when"), V3StringsToJson(Candidate.SuitableWhen));
+	Object->SetArrayField(TEXT("avoid_when"), V3StringsToJson(Candidate.AvoidWhen));
+	Object->SetArrayField(TEXT("body_regions"), V3NamesToJson(Candidate.BodyRegionTags));
 	Object->SetArrayField(
 		TEXT("semantic_effects"),
-		NamesToJson(Candidate.SemanticEffectTags)
+		V3NamesToJson(Candidate.SemanticEffectTags)
 	);
 
 	TSharedRef<FJsonObject> TargetContract = MakeShared<FJsonObject>();
 	TargetContract->SetBoolField(TEXT("requires_target"), Candidate.bRequiresTarget);
 	TargetContract->SetArrayField(
 		TEXT("allowed_categories"),
-		NamesToJson(Candidate.TargetCategoryTags)
+		V3NamesToJson(Candidate.TargetCategoryTags)
 	);
 	Object->SetObjectField(TEXT("target_contract"), TargetContract);
 
@@ -64,15 +64,15 @@ TSharedRef<FJsonObject> BuildV3CandidateObject(
 		StyleObject->SetStringField(TEXT("style"), Style.Style.ToString());
 		StyleObject->SetArrayField(
 			TEXT("amplitude"),
-			RangeToJson(Style.AmplitudeRange)
+			V3RangeToJson(Style.AmplitudeRange)
 		);
 		StyleObject->SetArrayField(
 			TEXT("speed_scale"),
-			RangeToJson(Style.SpeedRange)
+			V3RangeToJson(Style.SpeedRange)
 		);
 		StyleObject->SetArrayField(
 			TEXT("duration_scale"),
-			RangeToJson(Style.DurationRange)
+			V3RangeToJson(Style.DurationRange)
 		);
 		StyleObject->SetBoolField(TEXT("mirror_allowed"), Style.bMirrorAllowed);
 		StyleValues.Add(MakeShared<FJsonValueObject>(StyleObject));
@@ -84,7 +84,7 @@ TSharedRef<FJsonObject> BuildV3CandidateObject(
 	);
 	Object->SetArrayField(
 		TEXT("allowed_target_refs"),
-		StringsToJson(Candidate.AllowedTargetRefs)
+		V3StringsToJson(Candidate.AllowedTargetRefs)
 	);
 	Object->SetStringField(TEXT("default_target_ref"), Candidate.DefaultTargetRef);
 	Object->SetBoolField(TEXT("mirror_recommended"), Candidate.bMirrorRecommended);
@@ -220,6 +220,6 @@ FString FLLMNPCTurnRequestV3Adapter::BuildCandidateCardPreviewJson(
 {
 	FString Json;
 	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Json);
-	FJsonSerializer::Serialize(BuildV3CandidateObject(Candidate), Writer);
+	FJsonSerializer::Serialize(BuildV3CandidateJsonObject(Candidate), Writer);
 	return Json;
 }

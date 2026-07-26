@@ -1,6 +1,9 @@
 #include "LLMNPCMotionComponent.h"
 
 #include "Animation/LLMNPCAnimationAssetPlayer.h"
+#include "Context/LLMNPCContextModifierResolver.h"
+#include "Context/LLMNPCModifierMappingProfile.h"
+#include "Context/LLMNPCSceneContextComponent.h"
 #include "Dialogue/LLMNPCDialogueComponent.h"
 #include "LLMNPCAPIClient.h"
 #include "LLMNPCActionLayer.h"
@@ -19,6 +22,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformTime.h"
@@ -43,6 +47,10 @@ ULLMNPCMotionComponent::ULLMNPCMotionComponent()
 	SkeletonProfile = TSoftObjectPtr<ULLMNPCSkeletonProfile>(FSoftObjectPath(
 		TEXT("/LLMNPCActionLayer/LLMNPC/SkeletonProfiles/SP_UE5_Manny_v1.SP_UE5_Manny_v1")
 	));
+	ModifierMappingProfile =
+		TSoftObjectPtr<ULLMNPCModifierMappingProfile>(FSoftObjectPath(
+			TEXT("/LLMNPCActionLayer/LLMNPC/Context/MP_Manny_Default_v1.MP_Manny_Default_v1")
+		));
 }
 
 void ULLMNPCMotionComponent::BeginPlay()
@@ -142,6 +150,9 @@ bool ULLMNPCMotionComponent::SubmitMotionPlan(FLLMMotionPlan Plan)
 	LastResolvedTemplateId = NAME_None;
 	LastRequestedTemplateModifiers = FLLMNPCTemplateModifiers();
 	LastResolvedTemplateModifiers = FLLMNPCTemplateResolvedModifiers();
+	LastContextResolvedModifiers = FLLMNPCResolvedMotionModifiers();
+	LastModifierResolutionTrace = FLLMNPCModifierResolutionTrace();
+	LastExecutionContext = FLLMNPCExecutionContextSnapshot();
 	return SubmitMotionPlanWithSource(
 		MoveTemp(Plan),
 		ELLMNPCMotionValidationSource::RuntimeModel
@@ -154,6 +165,9 @@ bool ULLMNPCMotionComponent::SubmitCompiledTemplatePlan(FLLMMotionPlan Plan)
 	LastResolvedTemplateId = NAME_None;
 	LastRequestedTemplateModifiers = FLLMNPCTemplateModifiers();
 	LastResolvedTemplateModifiers = FLLMNPCTemplateResolvedModifiers();
+	LastContextResolvedModifiers = FLLMNPCResolvedMotionModifiers();
+	LastModifierResolutionTrace = FLLMNPCModifierResolutionTrace();
+	LastExecutionContext = FLLMNPCExecutionContextSnapshot();
 	return SubmitMotionPlanWithSource(
 		MoveTemp(Plan),
 		ELLMNPCMotionValidationSource::PublishedTemplate
@@ -169,6 +183,9 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 	LastResolvedTemplateId = NAME_None;
 	LastRequestedTemplateModifiers = Modifiers;
 	LastResolvedTemplateModifiers = FLLMNPCTemplateResolvedModifiers();
+	LastContextResolvedModifiers = FLLMNPCResolvedMotionModifiers();
+	LastModifierResolutionTrace = FLLMNPCModifierResolutionTrace();
+	LastExecutionContext = FLLMNPCExecutionContextSnapshot();
 	LastValidationSource = TEXT("PublishedTemplate");
 	bLastSubmissionAccepted = false;
 
@@ -213,17 +230,43 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 		return false;
 	}
 
+	const FLLMNPCSelectionContextSnapshot SelectionContext =
+		BuildSelectionContextSnapshot();
+	const bool bRightHandOccupied =
+		SelectionContext.ActiveStates.Contains(TEXT("right_hand_busy")) ||
+		SelectionContext.ActiveStates.Contains(TEXT("right_hand_occupied"));
+	const bool bLeftHandOccupied =
+		SelectionContext.ActiveStates.Contains(TEXT("left_hand_busy")) ||
+		SelectionContext.ActiveStates.Contains(TEXT("left_hand_occupied"));
+	const bool bPreferMirror =
+		Modifiers.bMirror ||
+		(bRightHandOccupied && !bLeftHandOccupied);
+	const FName RequestedStyle = Modifiers.Style.IsNone()
+		? FName(TEXT("neutral"))
+		: Modifiers.Style;
+	const bool bPublicActionRequest =
+		Library->FindPublishedPublicAction(TemplateOrPublicActionId) != nullptr;
 	const ULLMNPCMotionTemplate* MotionTemplate = Library->FindPublishedTemplate(
 		TemplateOrPublicActionId
 	);
 	if (!MotionTemplate)
 	{
-		MotionTemplate = Library->ResolvePublishedVariant(
+		MotionTemplate = Library->ResolvePublishedVariantWithConstraints(
 			TemplateOrPublicActionId,
 			ResolvedProfile->ProfileId,
-			Modifiers.Style,
-			Modifiers.RandomSeed
+			RequestedStyle,
+			Modifiers.RandomSeed,
+			bPreferMirror
 		);
+		if (!MotionTemplate && bPreferMirror)
+		{
+			MotionTemplate = Library->ResolvePublishedVariant(
+				TemplateOrPublicActionId,
+				ResolvedProfile->ProfileId,
+				RequestedStyle,
+				Modifiers.RandomSeed
+			);
+		}
 	}
 
 	if (!MotionTemplate)
@@ -231,30 +274,122 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 		LastValidationError = TEXT("LLMNPC_TEMPLATE_NOT_FOUND_OR_NOT_PUBLISHED");
 		return false;
 	}
+
+	FLLMNPCExecutionContextSnapshot ExecutionContext =
+		BuildExecutionContextSnapshot(
+			*MotionTemplate,
+			Modifiers,
+			SelectionContext
+		);
+	const FString CleanTargetRef = Modifiers.TargetRef.TrimStartAndEnd();
+	if (!CleanTargetRef.IsEmpty() && !TargetMap.Contains(CleanTargetRef))
+	{
+		if (AActor* SceneTarget = ResolveTargetActor(CleanTargetRef))
+		{
+			TargetMap.Add(CleanTargetRef, SceneTarget);
+		}
+	}
+	if (
+		bPreferMirror &&
+		FLLMNPCContextModifierResolver::UsesRightArm(*MotionTemplate) &&
+		!MotionTemplate->ModifierPolicy.bAllowMirror
+	)
+	{
+		const FName PublicActionId = bPublicActionRequest
+			? TemplateOrPublicActionId
+			: MotionTemplate->Metadata.PublicActionId;
+		if (!PublicActionId.IsNone())
+		{
+			if (const ULLMNPCMotionTemplate* MirroredVariant =
+				Library->ResolvePublishedVariantWithConstraints(
+					PublicActionId,
+					ResolvedProfile->ProfileId,
+					RequestedStyle,
+					Modifiers.RandomSeed,
+					true
+				))
+			{
+				MotionTemplate = MirroredVariant;
+				ExecutionContext = BuildExecutionContextSnapshot(
+					*MotionTemplate,
+					Modifiers,
+					SelectionContext
+				);
+			}
+		}
+	}
 	LastResolvedTemplateId = MotionTemplate->Metadata.TemplateId;
+	LastExecutionContext = ExecutionContext;
+
+	FLLMNPCResolvedMotionModifiers ContextResolvedModifiers;
+	FLLMNPCModifierResolutionTrace ResolutionTrace;
+	FString ResolutionError;
+	const ULLMNPCModifierMappingProfile* MappingProfile =
+		ModifierMappingProfile.IsNull()
+		? nullptr
+		: ModifierMappingProfile.LoadSynchronous();
+	if (!FLLMNPCContextModifierResolver::Resolve(
+		*MotionTemplate,
+		Modifiers,
+		SelectionContext,
+		ExecutionContext,
+		MappingProfile,
+		ResolvedProfile,
+		ContextResolvedModifiers,
+		ResolutionTrace,
+		ResolutionError
+	))
+	{
+		LastModifierResolutionTrace = ResolutionTrace;
+		LastValidationError = ResolutionError;
+		return false;
+	}
+	LastContextResolvedModifiers = ContextResolvedModifiers;
+	LastModifierResolutionTrace = ResolutionTrace;
+	if (ContextResolvedModifiers.bNeedsFallbackSelection)
+	{
+		LastValidationError = ContextResolvedModifiers.ResultCode.ToString();
+		return false;
+	}
+
+	FLLMNPCTemplateModifiers EffectiveModifiers =
+		ContextResolvedModifiers.ToLegacyModifiers();
+	EffectiveModifiers.ContextAmplitudeRange = Modifiers.ContextAmplitudeRange;
+	EffectiveModifiers.ContextSpeedRange = Modifiers.ContextSpeedRange;
+	EffectiveModifiers.ContextDurationRange = Modifiers.ContextDurationRange;
 
 	if (MotionTemplate->Kind == ELLMNPCTemplateKind::AnimationAsset)
 	{
-		const bool bAccepted = SubmitAnimationAssetTemplate(*MotionTemplate, Modifiers);
+		const bool bAccepted = SubmitAnimationAssetTemplate(
+			*MotionTemplate,
+			EffectiveModifiers
+		);
 		if (bAccepted)
 		{
-			LastResolvedTemplateModifiers.TargetRef = Modifiers.TargetRef.TrimStartAndEnd();
-			LastResolvedTemplateModifiers.Amplitude = 1.0f;
+			LastResolvedTemplateModifiers.TargetRef =
+				ContextResolvedModifiers.TargetRef;
+			LastResolvedTemplateModifiers.Amplitude =
+				ContextResolvedModifiers.Amplitude;
 			LastResolvedTemplateModifiers.SpeedScale = FMath::Clamp(
-				Modifiers.SpeedScale,
+				ContextResolvedModifiers.SpeedScale,
 				MotionTemplate->ModifierPolicy.SpeedRange.X,
 				MotionTemplate->ModifierPolicy.SpeedRange.Y
 			);
 			LastResolvedTemplateModifiers.DurationScale = FMath::Clamp(
-				Modifiers.DurationScale,
+				ContextResolvedModifiers.DurationScale,
 				MotionTemplate->ModifierPolicy.DurationRange.X,
 				MotionTemplate->ModifierPolicy.DurationRange.Y
 			);
-			LastResolvedTemplateModifiers.Style = Modifiers.Style.IsNone()
-				? FName(TEXT("neutral"))
-				: Modifiers.Style;
-			LastResolvedTemplateModifiers.bMirror = false;
-			LastResolvedTemplateModifiers.RandomSeed = Modifiers.RandomSeed;
+			LastResolvedTemplateModifiers.Style =
+				ContextResolvedModifiers.Style;
+			LastResolvedTemplateModifiers.bMirror =
+				ContextResolvedModifiers.bMirror;
+			LastResolvedTemplateModifiers.RandomSeed =
+				ContextResolvedModifiers.RandomSeed;
+			LastContextResolvedModifiers.SpeedScale =
+				LastResolvedTemplateModifiers.SpeedScale;
+			LastContextResolvedModifiers.DurationScale =
+				LastResolvedTemplateModifiers.DurationScale;
 		}
 		bLastSubmissionAccepted = bAccepted;
 		return bAccepted;
@@ -270,7 +405,7 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 	FLLMNPCTemplateResolvedModifiers ResolvedModifiers;
 	if (!FLLMNPCTemplateCompiler::Compile(
 		*MotionTemplate,
-		Modifiers,
+		EffectiveModifiers,
 		*ResolvedProfile,
 		CompiledPlan,
 		CompileError,
@@ -281,12 +416,26 @@ bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 		return false;
 	}
 
+	ContextResolvedModifiers.Amplitude = ResolvedModifiers.Amplitude;
+	ContextResolvedModifiers.SpeedScale = ResolvedModifiers.SpeedScale;
+	ContextResolvedModifiers.DurationScale = ResolvedModifiers.DurationScale;
+	ContextResolvedModifiers.TargetRef = ResolvedModifiers.TargetRef;
+	ContextResolvedModifiers.Style = ResolvedModifiers.Style;
+	ContextResolvedModifiers.bMirror = ResolvedModifiers.bMirror;
+	ContextResolvedModifiers.RandomSeed = ResolvedModifiers.RandomSeed;
+	FLLMNPCContextModifierResolver::ApplyToCompiledPlan(
+		*MotionTemplate,
+		ContextResolvedModifiers,
+		CompiledPlan
+	);
 	LastResolvedTemplateModifiers = ResolvedModifiers;
+	LastContextResolvedModifiers = ContextResolvedModifiers;
 	const bool bAccepted = SubmitMotionPlanWithSource(
 		MoveTemp(CompiledPlan),
 		ELLMNPCMotionValidationSource::PublishedTemplate,
 		MotionTemplate,
-		PendingReplicatedStartOffsetSeconds
+		PendingReplicatedStartOffsetSeconds,
+		&ContextResolvedModifiers
 	);
 	bLastSubmissionAccepted = bAccepted;
 	return bAccepted;
@@ -296,7 +445,8 @@ bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
 	FLLMMotionPlan Plan,
 	ELLMNPCMotionValidationSource Source,
 	const ULLMNPCMotionTemplate* SourceTemplate,
-	float InitialTimeSeconds
+	float InitialTimeSeconds,
+	const FLLMNPCResolvedMotionModifiers* ResolvedModifiers
 )
 {
 	LastValidationSource = StaticEnum<ELLMNPCMotionValidationSource>()->GetNameStringByValue(
@@ -340,6 +490,23 @@ bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
 
 	FLLMNPCQueuedMotionPlan Request;
 	Request.Plan = MoveTemp(Plan);
+	if (ResolvedModifiers)
+	{
+		Request.ResolvedModifiers = *ResolvedModifiers;
+	}
+	for (const FLLMMotionTrack& Track : Request.Plan.Clip.Tracks)
+	{
+		if (
+			!Track.TargetRef.IsEmpty() &&
+			!Request.TargetActors.Contains(Track.TargetRef)
+		)
+		{
+			Request.TargetActors.Add(
+				Track.TargetRef,
+				ResolveTargetActor(Track.TargetRef)
+			);
+		}
+	}
 	Request.InitialTimeSeconds = FMath::Max(InitialTimeSeconds, 0.0f);
 	if (Request.InitialTimeSeconds >= Request.Plan.Clip.Duration)
 	{
@@ -358,6 +525,7 @@ bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
 	{
 		Request.SourceTemplateId = SourceTemplate->Metadata.TemplateId;
 		Request.CooldownSeconds = SourceTemplate->Metadata.CooldownSeconds;
+		Request.ModifierPolicy = SourceTemplate->ModifierPolicy;
 		for (const FName Channel : SourceTemplate->Metadata.RequiredChannels)
 		{
 			Request.Channels.AddUnique(Channel);
@@ -465,6 +633,9 @@ void ULLMNPCMotionComponent::ResetMotionTestState()
 	LastTemplateStartTimes.Reset();
 	LastValidationError.Reset();
 	LastValidationSource.Reset();
+	LastContextResolvedModifiers = FLLMNPCResolvedMotionModifiers();
+	LastModifierResolutionTrace = FLLMNPCModifierResolutionTrace();
+	LastExecutionContext = FLLMNPCExecutionContextSnapshot();
 	bLastSubmissionAccepted = false;
 }
 #endif
@@ -653,6 +824,35 @@ FLLMNPCMotionDebugState ULLMNPCMotionComponent::GetDebugState() const
 	State.ResolvedStyle = LastResolvedTemplateModifiers.Style;
 	State.bResolvedMirror = LastResolvedTemplateModifiers.bMirror;
 	State.ResolvedRandomSeed = LastResolvedTemplateModifiers.RandomSeed;
+	State.ResolvedReachScale = LastContextResolvedModifiers.ReachScale;
+	State.ResolvedHeightScale = LastContextResolvedModifiers.HeightScale;
+	State.ResolvedLateralScale = LastContextResolvedModifiers.LateralScale;
+	State.ResolvedCycleCount = LastContextResolvedModifiers.CycleCount;
+	State.ResolvedGazeEngagement =
+		LastContextResolvedModifiers.GazeEngagement;
+	State.ResolvedPalmOrientationWeight =
+		LastContextResolvedModifiers.PalmOrientationWeight;
+	State.ResolvedFingerPoseWeight =
+		LastContextResolvedModifiers.FingerPoseWeight;
+	State.ResolvedTorsoParticipation =
+		LastContextResolvedModifiers.TorsoParticipation;
+	State.ResolvedBlendInScale =
+		LastContextResolvedModifiers.BlendInScale;
+	State.ResolvedBlendOutScale =
+		LastContextResolvedModifiers.BlendOutScale;
+	State.ModifierResultCode = LastContextResolvedModifiers.ResultCode;
+	State.bModifierFallbackRequired =
+		LastContextResolvedModifiers.bNeedsFallbackSelection;
+	State.ExecutionMovementMode =
+		StaticEnum<ELLMNPCExecutionMovementMode>()->GetNameStringByValue(
+			static_cast<int64>(LastExecutionContext.MovementMode)
+		);
+	State.TargetDistanceCm = LastExecutionContext.Target.DistanceCm;
+	State.TargetHeightRelativeCm =
+		LastExecutionContext.Target.HeightRelativeCm;
+	State.AvailableSpace = LastExecutionContext.AvailableSpace;
+	State.bRightHandOccupied = LastExecutionContext.bRightHandOccupied;
+	State.bLeftHandOccupied = LastExecutionContext.bLeftHandOccupied;
 	TArray<FString> ModifierAdjustments;
 	if (!LastResolvedTemplateId.IsNone())
 	{
@@ -687,6 +887,41 @@ FLLMNPCMotionDebugState ULLMNPCMotionComponent::GetDebugState() const
 			State.RequestedDurationScale,
 			State.ResolvedDurationScale
 		);
+		AddFloatAdjustment(
+			TEXT("reach"),
+			1.0f,
+			State.ResolvedReachScale
+		);
+		AddFloatAdjustment(
+			TEXT("height"),
+			1.0f,
+			State.ResolvedHeightScale
+		);
+		AddFloatAdjustment(
+			TEXT("lateral"),
+			1.0f,
+			State.ResolvedLateralScale
+		);
+		AddFloatAdjustment(
+			TEXT("gaze"),
+			1.0f,
+			State.ResolvedGazeEngagement
+		);
+		AddFloatAdjustment(
+			TEXT("palm"),
+			1.0f,
+			State.ResolvedPalmOrientationWeight
+		);
+		AddFloatAdjustment(
+			TEXT("fingers"),
+			1.0f,
+			State.ResolvedFingerPoseWeight
+		);
+		AddFloatAdjustment(
+			TEXT("torso"),
+			1.0f,
+			State.ResolvedTorsoParticipation
+		);
 		if (State.RequestedStyle != State.ResolvedStyle)
 		{
 			ModifierAdjustments.Add(FString::Printf(
@@ -703,11 +938,23 @@ FLLMNPCMotionDebugState ULLMNPCMotionComponent::GetDebugState() const
 				State.bResolvedMirror ? TEXT("true") : TEXT("false")
 			));
 		}
+		if (State.ResolvedCycleCount > 0)
+		{
+			ModifierAdjustments.Add(FString::Printf(
+				TEXT("cycles %d"),
+				State.ResolvedCycleCount
+			));
+		}
 	}
 	State.bModifiersClamped = !ModifierAdjustments.IsEmpty();
-	State.ModifierResolutionTrace = State.bModifiersClamped
-		? FString::Join(ModifierAdjustments, TEXT(", "))
-		: TEXT("unchanged");
+	State.ModifierResolutionTrace =
+		!LastModifierResolutionTrace.Steps.IsEmpty()
+		? LastModifierResolutionTrace.ToSummary()
+		: (
+			State.bModifiersClamped
+				? FString::Join(ModifierAdjustments, TEXT(", "))
+				: TEXT("unchanged")
+		);
 	State.LastValidationSource = LastValidationSource;
 	State.bLastSubmissionAccepted = bLastSubmissionAccepted;
 	if (!ActiveMotions.IsEmpty())
@@ -787,6 +1034,8 @@ void ULLMNPCMotionComponent::DrawRuntimeDebugOverlay() const
 	const FString Message = FString::Printf(
 		TEXT("%sLLM NPC: %s\nRequested: %s -> Resolved: %s\n")
 		TEXT("Modifiers req %.2f/%.2f/%.2f  res %.2f/%.2f/%.2f\n")
+		TEXT("Context: %s  target %.0fcm/%.0fcm  space %.2f  busy R/L %s/%s\n")
+		TEXT("Extended: reach %.2f  height %.2f  gaze %.2f  palm %.2f  fingers %.2f\n")
 		TEXT("Modifier trace: %s  Clamped: %s\n")
 		TEXT("Target: %s  Channels: %s\nValidator: %s (%s)\n")
 		TEXT("Pose: %s  %.2f/%.2f  Queue: %d  Alpha: %.2f\n")
@@ -801,6 +1050,17 @@ void ULLMNPCMotionComponent::DrawRuntimeDebugOverlay() const
 		State.ResolvedAmplitude,
 		State.ResolvedSpeedScale,
 		State.ResolvedDurationScale,
+		*State.ExecutionMovementMode,
+		State.TargetDistanceCm,
+		State.TargetHeightRelativeCm,
+		State.AvailableSpace,
+		State.bRightHandOccupied ? TEXT("yes") : TEXT("no"),
+		State.bLeftHandOccupied ? TEXT("yes") : TEXT("no"),
+		State.ResolvedReachScale,
+		State.ResolvedHeightScale,
+		State.ResolvedGazeEngagement,
+		State.ResolvedPalmOrientationWeight,
+		State.ResolvedFingerPoseWeight,
 		*State.ModifierResolutionTrace,
 		State.bModifiersClamped ? TEXT("yes") : TEXT("no"),
 		State.LastTargetRef.IsEmpty() ? TEXT("none") : *State.LastTargetRef,
@@ -934,7 +1194,7 @@ bool ULLMNPCMotionComponent::ValidateTargetRefs(const FLLMMotionPlan& Plan, FStr
 			continue;
 		}
 
-		const TObjectPtr<AActor>* Target = TargetMap.Find(Track.TargetRef);
+		AActor* Target = ResolveTargetActor(Track.TargetRef);
 		if (!Target)
 		{
 			OutError = FString::Printf(
@@ -944,7 +1204,7 @@ bool ULLMNPCMotionComponent::ValidateTargetRefs(const FLLMMotionPlan& Plan, FStr
 			return false;
 		}
 
-		if (!IsValid(Target->Get()))
+		if (!IsValid(Target))
 		{
 			OutError = FString::Printf(
 				TEXT("LLMNPC_TARGET_INVALID:%s"),
@@ -970,6 +1230,12 @@ void ULLMNPCMotionComponent::UpdateActivePlans(float DeltaTime)
 	for (int32 ActiveIndex = ActiveMotions.Num() - 1; ActiveIndex >= 0; --ActiveIndex)
 	{
 		FLLMNPCActiveMotionPlan& Active = ActiveMotions[ActiveIndex];
+		if (!UpdateActiveTargetSamples(Active, DeltaTime))
+		{
+			LastValidationError = TEXT("LLMNPC_DYNAMIC_TARGET_LOST");
+			ActiveMotions.RemoveAt(ActiveIndex);
+			continue;
+		}
 		Active.Time += DeltaTime;
 		if (Active.Time >= Active.Request.Plan.Clip.Duration)
 		{
@@ -986,7 +1252,11 @@ void ULLMNPCMotionComponent::UpdateActivePlans(float DeltaTime)
 				Mesh,
 				TargetMap,
 				Active.Time,
-				SampledSnapshot
+				SampledSnapshot,
+				Active.Request.ModifierPolicy.bEnableDynamicTargetTracking
+					? &Active.Request.TargetSamples
+					: nullptr,
+				&Active.Request.ResolvedModifiers
 			);
 			MergeSnapshot(CurrentSnapshot, SampledSnapshot);
 		}
@@ -1003,6 +1273,471 @@ void ULLMNPCMotionComponent::UpdateActivePlans(float DeltaTime)
 		ActiveTime = 0.0f;
 		ActiveClipId.Reset();
 	}
+}
+
+bool ULLMNPCMotionComponent::UpdateActiveTargetSamples(
+	FLLMNPCActiveMotionPlan& Active,
+	float DeltaTime
+)
+{
+	const FLLMNPCModifierPolicy& Policy = Active.Request.ModifierPolicy;
+	if (!Policy.bEnableDynamicTargetTracking)
+	{
+		Active.Request.TargetSamples.Reset();
+		return true;
+	}
+
+	TSet<FString> TargetRefs;
+	for (const FLLMMotionTrack& Track : Active.Request.Plan.Clip.Tracks)
+	{
+		if (!Track.TargetRef.IsEmpty())
+		{
+			TargetRefs.Add(Track.TargetRef);
+		}
+	}
+
+	for (const FString& TargetRef : TargetRefs)
+	{
+		FLLMNPCTargetRuntimeSample* ExistingSample =
+			Active.Request.TargetSamples.Find(TargetRef);
+		TWeakObjectPtr<AActor>* TargetActorRef =
+			Active.Request.TargetActors.Find(TargetRef);
+		if (!TargetActorRef)
+		{
+			TargetActorRef = &Active.Request.TargetActors.Add(
+				TargetRef,
+				ResolveTargetActor(TargetRef)
+			);
+		}
+		AActor* TargetActor = TargetActorRef->Get();
+		if (!IsValid(TargetActor))
+		{
+			if (!ExistingSample)
+			{
+				if (Policy.TargetLossPolicy == ELLMNPCTargetLossPolicy::CancelMotion)
+				{
+					return false;
+				}
+				continue;
+			}
+			switch (Policy.TargetLossPolicy)
+			{
+			case ELLMNPCTargetLossPolicy::CancelMotion:
+				return false;
+			case ELLMNPCTargetLossPolicy::HoldLast:
+				ExistingSample->bValid = true;
+				ExistingSample->Alpha = 1.0f;
+				break;
+			case ELLMNPCTargetLossPolicy::FadeOut:
+			default:
+				ExistingSample->Alpha = FMath::Max(
+					0.0f,
+					ExistingSample->Alpha -
+						DeltaTime / FMath::Max(
+							Policy.TargetLostFadeSeconds,
+							0.01f
+						)
+				);
+				ExistingSample->bValid =
+					ExistingSample->Alpha > KINDA_SMALL_NUMBER;
+				break;
+			}
+			continue;
+		}
+
+		const FVector ObservedLocation = TargetActor->GetActorLocation();
+		if (!ExistingSample)
+		{
+			FLLMNPCTargetRuntimeSample& NewSample =
+				Active.Request.TargetSamples.Add(TargetRef);
+			NewSample.LocationWS = ObservedLocation;
+			NewSample.LastObservedLocationWS = ObservedLocation;
+			NewSample.Alpha = 1.0f;
+			NewSample.bValid = true;
+			NewSample.bHasObservedLocation = true;
+			continue;
+		}
+
+		const bool bNewTeleport =
+			ExistingSample->bHasObservedLocation &&
+			FVector::Dist(
+				ObservedLocation,
+				ExistingSample->LastObservedLocationWS
+			) > Policy.TargetTeleportThresholdCm;
+		ExistingSample->LastObservedLocationWS = ObservedLocation;
+		ExistingSample->bHasObservedLocation = true;
+		ExistingSample->bTeleported =
+			ExistingSample->bTeleported || bNewTeleport;
+		if (ExistingSample->bTeleported)
+		{
+			switch (Policy.TargetLossPolicy)
+			{
+			case ELLMNPCTargetLossPolicy::CancelMotion:
+				return false;
+			case ELLMNPCTargetLossPolicy::HoldLast:
+				ExistingSample->bValid = true;
+				ExistingSample->Alpha = 1.0f;
+				continue;
+			case ELLMNPCTargetLossPolicy::FadeOut:
+			default:
+				ExistingSample->Alpha = FMath::Max(
+					0.0f,
+					ExistingSample->Alpha -
+						DeltaTime / FMath::Max(
+							Policy.TargetLostFadeSeconds,
+							0.01f
+						)
+				);
+				if (ExistingSample->Alpha <= KINDA_SMALL_NUMBER)
+				{
+					ExistingSample->LocationWS = ObservedLocation;
+					ExistingSample->bValid = true;
+					ExistingSample->bTeleported = false;
+				}
+				continue;
+			}
+		}
+
+		if (!ExistingSample->bValid)
+		{
+			ExistingSample->LocationWS = ObservedLocation;
+			ExistingSample->Alpha = 0.0f;
+			ExistingSample->bValid = true;
+		}
+		const FVector PreviousLocation = ExistingSample->LocationWS;
+		FVector SmoothedLocation = FMath::VInterpTo(
+			PreviousLocation,
+			ObservedLocation,
+			DeltaTime,
+			Policy.TargetInterpolationSpeed
+		);
+		const FVector FollowDelta = SmoothedLocation - PreviousLocation;
+		const float MaximumStep =
+			Policy.MaxTargetFollowSpeedCmPerSecond * DeltaTime;
+		if (FollowDelta.SizeSquared() > FMath::Square(MaximumStep))
+		{
+			SmoothedLocation =
+				PreviousLocation +
+				FollowDelta.GetSafeNormal() * MaximumStep;
+		}
+		if (const AActor* Owner = GetOwner())
+		{
+			const FVector Pivot = Owner->GetActorLocation();
+			const FVector CurrentOffset = PreviousLocation - Pivot;
+			const FVector SmoothedOffset = SmoothedLocation - Pivot;
+			if (
+				!CurrentOffset.IsNearlyZero() &&
+				!SmoothedOffset.IsNearlyZero()
+			)
+			{
+				const FVector CurrentDirection =
+					CurrentOffset.GetSafeNormal();
+				const FVector DesiredDirection =
+					SmoothedOffset.GetSafeNormal();
+				const float AngleRadians = FMath::Acos(
+					FMath::Clamp(
+						FVector::DotProduct(
+							CurrentDirection,
+							DesiredDirection
+						),
+						-1.0f,
+						1.0f
+					)
+				);
+				const float MaximumAngleRadians = FMath::DegreesToRadians(
+					Policy.MaxTargetAngularSpeedDegreesPerSecond * DeltaTime
+				);
+				if (AngleRadians > MaximumAngleRadians + KINDA_SMALL_NUMBER)
+				{
+					const FQuat DeltaRotation =
+						FQuat::FindBetweenNormals(
+							CurrentDirection,
+							DesiredDirection
+						);
+					const FQuat LimitedRotation = FQuat::Slerp(
+						FQuat::Identity,
+						DeltaRotation,
+						MaximumAngleRadians / AngleRadians
+					);
+					SmoothedLocation =
+						Pivot +
+						LimitedRotation.RotateVector(CurrentDirection) *
+							SmoothedOffset.Size();
+					const FVector AngularLimitedDelta =
+						SmoothedLocation - PreviousLocation;
+					if (
+						AngularLimitedDelta.SizeSquared() >
+						FMath::Square(MaximumStep)
+					)
+					{
+						SmoothedLocation =
+							PreviousLocation +
+							AngularLimitedDelta.GetSafeNormal() *
+								MaximumStep;
+					}
+				}
+			}
+		}
+		ExistingSample->LocationWS = SmoothedLocation;
+		ExistingSample->Alpha = FMath::Min(
+			1.0f,
+			ExistingSample->Alpha +
+				DeltaTime / FMath::Max(Policy.TargetLostFadeSeconds, 0.01f)
+		);
+	}
+	return true;
+}
+
+FLLMNPCSelectionContextSnapshot
+ULLMNPCMotionComponent::BuildSelectionContextSnapshot() const
+{
+	if (const AActor* Owner = GetOwner())
+	{
+		if (const ULLMNPCDialogueComponent* Dialogue =
+			Owner->FindComponentByClass<ULLMNPCDialogueComponent>())
+		{
+			return Dialogue->GetSelectionContextSnapshot();
+		}
+		if (const ULLMNPCSceneContextComponent* Scene =
+			Owner->FindComponentByClass<ULLMNPCSceneContextComponent>())
+		{
+			return Scene->AppendToSnapshot(
+				FLLMNPCSelectionContextSnapshot()
+			);
+		}
+	}
+	return FLLMNPCSelectionContextSnapshot();
+}
+
+AActor* ULLMNPCMotionComponent::ResolveTargetActor(
+	const FString& TargetRef
+) const
+{
+	const FString CleanRef = TargetRef.TrimStartAndEnd();
+	if (const TObjectPtr<AActor>* Target = TargetMap.Find(CleanRef))
+	{
+		if (IsValid(Target->Get()))
+		{
+			return Target->Get();
+		}
+	}
+	if (const AActor* Owner = GetOwner())
+	{
+		if (const ULLMNPCSceneContextComponent* Scene =
+			Owner->FindComponentByClass<ULLMNPCSceneContextComponent>())
+		{
+			return Scene->ResolveSceneTarget(CleanRef);
+		}
+	}
+	return nullptr;
+}
+
+FLLMNPCExecutionContextSnapshot
+ULLMNPCMotionComponent::BuildExecutionContextSnapshot(
+	const ULLMNPCMotionTemplate& MotionTemplate,
+	const FLLMNPCTemplateModifiers& Modifiers,
+	const FLLMNPCSelectionContextSnapshot& SelectionContext
+) const
+{
+	FLLMNPCExecutionContextSnapshot Result;
+	const AActor* Owner = GetOwner();
+	USkeletalMeshComponent* Mesh = GetOwnerMesh();
+	const FTransform ReferenceTransform = Mesh
+		? Mesh->GetComponentTransform()
+		: (Owner ? Owner->GetActorTransform() : FTransform::Identity);
+	const auto HasState = [&SelectionContext](const TCHAR* State)
+	{
+		return SelectionContext.ActiveStates.Contains(FName(State));
+	};
+
+	const FVector OwnerVelocity = Owner
+		? Owner->GetVelocity()
+		: FVector::ZeroVector;
+	Result.OwnerVelocityCS =
+		ReferenceTransform.InverseTransformVectorNoScale(OwnerVelocity);
+	Result.OwnerSpeedCmPerSecond = OwnerVelocity.Size2D();
+	Result.bRightHandOccupied =
+		HasState(TEXT("right_hand_busy")) ||
+		HasState(TEXT("right_hand_occupied"));
+	Result.bLeftHandOccupied =
+		HasState(TEXT("left_hand_busy")) ||
+		HasState(TEXT("left_hand_occupied"));
+	Result.bUpperBodyOccupied =
+		HasState(TEXT("upper_body_busy")) ||
+		HasState(TEXT("upper_body_occupied")) ||
+		HasState(TEXT("two_hand_interaction"));
+
+	if (HasState(TEXT("turning")))
+	{
+		Result.MovementMode = ELLMNPCExecutionMovementMode::Turning;
+	}
+	else if (HasState(TEXT("falling")))
+	{
+		Result.MovementMode = ELLMNPCExecutionMovementMode::Falling;
+	}
+	else if (
+		HasState(TEXT("running")) ||
+		HasState(TEXT("sprinting"))
+	)
+	{
+		Result.MovementMode = ELLMNPCExecutionMovementMode::Running;
+	}
+	else if (HasState(TEXT("walking")))
+	{
+		Result.MovementMode = ELLMNPCExecutionMovementMode::Walking;
+	}
+	else if (const ACharacter* Character = Cast<ACharacter>(Owner))
+	{
+		const UCharacterMovementComponent* Movement =
+			Character->GetCharacterMovement();
+		if (Movement && Movement->IsFalling())
+		{
+			Result.MovementMode = ELLMNPCExecutionMovementMode::Falling;
+		}
+		else if (Result.OwnerSpeedCmPerSecond >= 420.0f)
+		{
+			Result.MovementMode = ELLMNPCExecutionMovementMode::Running;
+		}
+		else if (Result.OwnerSpeedCmPerSecond >= 10.0f)
+		{
+			Result.MovementMode = ELLMNPCExecutionMovementMode::Walking;
+		}
+	}
+	else if (Result.OwnerSpeedCmPerSecond >= 10.0f)
+	{
+		Result.MovementMode = ELLMNPCExecutionMovementMode::Walking;
+	}
+
+	Result.BasePoseTag =
+		Result.MovementMode == ELLMNPCExecutionMovementMode::Walking
+			? FName(TEXT("walking"))
+			: (
+				Result.MovementMode == ELLMNPCExecutionMovementMode::Running
+					? FName(TEXT("running"))
+					: (
+						Result.MovementMode == ELLMNPCExecutionMovementMode::Falling
+							? FName(TEXT("falling"))
+							: FName(TEXT("idle"))
+					)
+			);
+	Result.CurrentLOD = static_cast<int32>(CurrentMotionLOD);
+
+	Result.Target.TargetRef = Modifiers.TargetRef.TrimStartAndEnd();
+	AActor* TargetActor = ResolveTargetActor(Result.Target.TargetRef);
+	if (IsValid(TargetActor))
+	{
+		Result.Target.bValid = true;
+		const FVector TargetLocation = TargetActor->GetActorLocation();
+		Result.Target.LocationCS =
+			ReferenceTransform.InverseTransformPosition(TargetLocation);
+		Result.Target.DirectionCS =
+			Result.Target.LocationCS.GetSafeNormal(
+				SMALL_NUMBER,
+				FVector::ForwardVector
+			);
+		Result.Target.VelocityCS =
+			ReferenceTransform.InverseTransformVectorNoScale(
+				TargetActor->GetVelocity()
+			);
+		Result.Target.DistanceCm = FVector::Dist(
+			ReferenceTransform.GetLocation(),
+			TargetLocation
+		);
+		Result.Target.HeightRelativeCm = Result.Target.LocationCS.Z;
+	}
+
+	if (
+		MotionTemplate.ModifierPolicy.bEnableObstacleAdaptation &&
+		Owner &&
+		GetWorld()
+	)
+	{
+		const FVector Forward = Owner->GetActorForwardVector();
+		const FVector Right = Owner->GetActorRightVector();
+		const auto SweepArm = [&](
+			bool bLeftHand,
+			FLLMNPCObstacleSweepResult& OutSweep
+		)
+		{
+			const FName ShoulderBone =
+				bLeftHand ? FName(TEXT("upperarm_l")) : FName(TEXT("upperarm_r"));
+			const float SideSign = bLeftHand ? -1.0f : 1.0f;
+			const FVector Start =
+				Mesh &&
+				(
+					Mesh->DoesSocketExist(ShoulderBone) ||
+					Mesh->GetBoneIndex(ShoulderBone) != INDEX_NONE
+				)
+				? Mesh->GetSocketLocation(ShoulderBone)
+				: Owner->GetActorLocation() +
+					FVector::UpVector * 90.0f +
+					Right * SideSign * 22.0f;
+			FVector ReachDirection = Result.Target.bValid
+				? (
+					TargetActor->GetActorLocation() +
+					FVector::UpVector * 60.0f -
+					Start
+				).GetSafeNormal()
+				: (Forward + Right * SideSign * 0.3f).GetSafeNormal();
+			if (ReachDirection.IsNearlyZero())
+			{
+				ReachDirection = Forward;
+			}
+			const FVector End = Start + ReachDirection * 95.0f;
+			FCollisionQueryParams QueryParams(
+				SCENE_QUERY_STAT(LLMNPCArmObstacleSweep),
+				false,
+				Owner
+			);
+			if (TargetActor)
+			{
+				QueryParams.AddIgnoredActor(TargetActor);
+			}
+			FHitResult Hit;
+			OutSweep.bTested = true;
+			OutSweep.bBlockingHit = GetWorld()->SweepSingleByChannel(
+				Hit,
+				Start,
+				End,
+				FQuat::Identity,
+				ECC_Visibility,
+				FCollisionShape::MakeSphere(10.0f),
+				QueryParams
+			);
+			OutSweep.Clearance = OutSweep.bBlockingHit
+				? FMath::Clamp(Hit.Time, 0.0f, 1.0f)
+				: 1.0f;
+			if (OutSweep.bBlockingHit)
+			{
+				OutSweep.ImpactNormalCS =
+					ReferenceTransform.InverseTransformVectorNoScale(
+						Hit.ImpactNormal
+					);
+			}
+		};
+		SweepArm(false, Result.RightObstacle);
+		SweepArm(true, Result.LeftObstacle);
+		const bool bUsesRight =
+			FLLMNPCContextModifierResolver::UsesRightArm(MotionTemplate);
+		const bool bUsesLeft =
+			FLLMNPCContextModifierResolver::UsesLeftArm(MotionTemplate);
+		if (bUsesRight && bUsesLeft)
+		{
+			Result.AvailableSpace = FMath::Max(
+				Result.RightObstacle.Clearance,
+				Result.LeftObstacle.Clearance
+			);
+		}
+		else if (bUsesLeft)
+		{
+			Result.AvailableSpace = Result.LeftObstacle.Clearance;
+		}
+		else if (bUsesRight)
+		{
+			Result.AvailableSpace = Result.RightObstacle.Clearance;
+		}
+	}
+	return Result;
 }
 
 void ULLMNPCMotionComponent::RefreshPoseBoneBindings()

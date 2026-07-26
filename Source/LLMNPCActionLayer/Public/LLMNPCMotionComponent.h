@@ -2,9 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Context/LLMNPCContextTypes.h"
+#include "Context/LLMNPCExecutionContextTypes.h"
+#include "Context/LLMNPCResolvedMotionModifiers.h"
 #include "LLMNPCControlManifest.h"
 #include "LLMNPCMotionTypes.h"
 #include "MicroMotion/LLMNPCMicroMotionScheduler.h"
+#include "Templates/LLMNPCMotionTemplate.h"
 #include "Templates/LLMNPCTemplateCompiler.h"
 #include "LLMNPCMotionComponent.generated.h"
 
@@ -12,6 +16,7 @@ class UAnimInstance;
 class AActor;
 class ULLMNPCAnimationAssetPlayer;
 class ULLMNPCAPIClient;
+class ULLMNPCModifierMappingProfile;
 class ULLMNPCMotionValidator;
 class ULLMNPCSkeletonProfile;
 class ULLMNPCMotionTemplate;
@@ -94,6 +99,10 @@ struct FLLMNPCQueuedMotionPlan
 	double QueuedAtSeconds = 0.0;
 	float InitialTimeSeconds = 0.0f;
 	bool bReplicateOnStart = false;
+	FLLMNPCResolvedMotionModifiers ResolvedModifiers;
+	FLLMNPCModifierPolicy ModifierPolicy;
+	TMap<FString, TWeakObjectPtr<AActor>> TargetActors;
+	TMap<FString, FLLMNPCTargetRuntimeSample> TargetSamples;
 };
 
 struct FLLMNPCActiveMotionPlan
@@ -189,6 +198,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Templates")
 	TSoftObjectPtr<ULLMNPCSkeletonProfile> SkeletonProfile;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion|Context")
+	TSoftObjectPtr<ULLMNPCModifierMappingProfile> ModifierMappingProfile;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
 	TSubclassOf<UAnimInstance> PostProcessAnimClass;
@@ -322,12 +334,16 @@ private:
 	FName LastResolvedTemplateId = NAME_None;
 	FLLMNPCTemplateModifiers LastRequestedTemplateModifiers;
 	FLLMNPCTemplateResolvedModifiers LastResolvedTemplateModifiers;
+	FLLMNPCResolvedMotionModifiers LastContextResolvedModifiers;
+	FLLMNPCModifierResolutionTrace LastModifierResolutionTrace;
+	FLLMNPCExecutionContextSnapshot LastExecutionContext;
 	FString LastValidationSource;
 	bool bLastSubmissionAccepted = false;
 
 private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FLLMNPCMotionSchedulerTest;
+	friend class FLLMNPCForwardN3DynamicTargetTest;
 #endif
 
 	void StartEligiblePlans();
@@ -335,7 +351,8 @@ private:
 		FLLMMotionPlan Plan,
 		ELLMNPCMotionValidationSource Source,
 		const ULLMNPCMotionTemplate* SourceTemplate = nullptr,
-		float InitialTimeSeconds = 0.0f
+		float InitialTimeSeconds = 0.0f,
+		const FLLMNPCResolvedMotionModifiers* ResolvedModifiers = nullptr
 	);
 	bool ValidateTargetRefs(const FLLMMotionPlan& Plan, FString& OutError) const;
 	bool SubmitAnimationAssetTemplate(
@@ -343,6 +360,17 @@ private:
 		const FLLMNPCTemplateModifiers& Modifiers
 	);
 	void UpdateActivePlans(float DeltaTime);
+	bool UpdateActiveTargetSamples(
+		FLLMNPCActiveMotionPlan& Active,
+		float DeltaTime
+	);
+	FLLMNPCExecutionContextSnapshot BuildExecutionContextSnapshot(
+		const ULLMNPCMotionTemplate& MotionTemplate,
+		const FLLMNPCTemplateModifiers& Modifiers,
+		const FLLMNPCSelectionContextSnapshot& SelectionContext
+	) const;
+	FLLMNPCSelectionContextSnapshot BuildSelectionContextSnapshot() const;
+	AActor* ResolveTargetActor(const FString& TargetRef) const;
 	void RefreshPoseBoneBindings();
 	void UpdateMicroMotion(float DeltaTime);
 	bool ShouldRunMotionUpdate(float DeltaTime, float& OutUpdateDeltaSeconds);

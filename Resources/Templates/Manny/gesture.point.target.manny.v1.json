@@ -3,7 +3,7 @@
 	"asset_name": "MT_Point_Target_Manny_v1",
 	"template_id": "gesture.point.target.manny.v1",
 	"public_action_id": "gesture.point.target",
-	"semantic_version": "1.0.0",
+	"semantic_version": "1.1.0",
 	"kind": "procedural_motion",
 	"review_state": "published",
 	"display_name": "Manny Gaze And Point",
@@ -69,12 +69,34 @@
 		"amplitude": [ 0.69999999999999996, 1.1499999999999999 ],
 		"speed": [ 0.84999999999999998, 1.2 ],
 		"duration": [ 1, 1 ],
-		"allow_mirror": false,
+		"allow_mirror": true,
 		"allowed_styles": [
 			"neutral",
 			"friendly",
 			"subtle"
-		]
+		],
+		"policy_version": 2,
+		"reach_scale": [ 0.69999998807907104, 1.0800000429153442 ],
+		"height_scale": [ 0.55000001192092896, 1 ],
+		"lateral_scale": [ 0.75, 1 ],
+		"cycle_count": [ 0, 0 ],
+		"gaze_engagement": [ 0.20000000298023224, 1 ],
+		"palm_orientation_weight": [ 0.69999998807907104, 1 ],
+		"finger_pose_weight": [ 0.75, 1 ],
+		"torso_participation": [ 0.80000001192092896, 1 ],
+		"blend_in_scale": [ 0.85000002384185791, 1.2000000476837158 ],
+		"blend_out_scale": [ 0.85000002384185791, 1.2000000476837158 ],
+		"enable_dynamic_target_tracking": true,
+		"max_target_follow_speed_cm_per_second": 260,
+		"max_target_angular_speed_degrees_per_second": 160,
+		"target_interpolation_speed": 8,
+		"target_teleport_threshold_cm": 250,
+		"target_lost_fade_seconds": 0.20000000298023224,
+		"target_loss_policy": "fade_out",
+		"enable_obstacle_adaptation": true,
+		"min_obstacle_amplitude_scale": 0.60000002384185791,
+		"min_obstacle_reach_scale": 0.64999997615814209,
+		"obstacle_cancel_clearance": 0.20000000298023224
 	},
 	"clip":
 	{
@@ -144,7 +166,7 @@
 		"manual_review": "phase4_target_context_acceptance"
 	},
 	"catalog_schema_version": "llmnpc.template_catalog.v1",
-	"catalog_revision": 1,
+	"catalog_revision": 2,
 	"variant_id": "right_hand",
 	"variant_weight": 1,
 	"variant_style_tags": [
@@ -153,5 +175,5 @@
 		"subtle"
 	],
 	"visual_description": "The gaze turns toward a registered target while the right arm reaches toward it, the palm follows the target, and the index finger forms a pointing hand.",
-	"catalog_content_hash": "md5:c200247104c642c5112d4078d5d3c5cf"
+	"catalog_content_hash": "md5:85324613df1477eefcb6e3784e1bce75"
 }

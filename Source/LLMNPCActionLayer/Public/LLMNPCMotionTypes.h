@@ -595,6 +595,60 @@ struct FLLMNPCMotionDebugState
 	int32 ResolvedRandomSeed = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedReachScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedHeightScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedLateralScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	int32 ResolvedCycleCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedGazeEngagement = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedPalmOrientationWeight = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedFingerPoseWeight = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedTorsoParticipation = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedBlendInScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float ResolvedBlendOutScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FName ModifierResultCode = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bModifierFallbackRequired = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	FString ExecutionMovementMode;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float TargetDistanceCm = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float TargetHeightRelativeCm = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	float AvailableSpace = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bRightHandOccupied = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
+	bool bLeftHandOccupied = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")
 	bool bModifiersClamped = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC Motion|Debug")

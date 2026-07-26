@@ -152,6 +152,18 @@ bool GetOptionalNumber(
 	return !Object->HasField(Field) || GetNumber(Object, Field, OutValue, OutError);
 }
 
+bool GetOptionalBool(
+	const TSharedPtr<FJsonObject>& Object,
+	const TCHAR* Field,
+	bool DefaultValue,
+	bool& OutValue,
+	FString& OutError
+)
+{
+	OutValue = DefaultValue;
+	return !Object->HasField(Field) || GetBool(Object, Field, OutValue, OutError);
+}
+
 bool GetNameArray(
 	const TSharedPtr<FJsonObject>& Object,
 	const TCHAR* Field,
@@ -208,6 +220,160 @@ bool GetRange(
 	}
 	OutRange = FVector2D(Min, Max);
 	return true;
+}
+
+bool GetOptionalRange(
+	const TSharedPtr<FJsonObject>& Object,
+	const TCHAR* Field,
+	const FVector2D& DefaultValue,
+	FVector2D& OutRange,
+	FString& OutError
+)
+{
+	OutRange = DefaultValue;
+	return !Object->HasField(Field) || GetRange(Object, Field, OutRange, OutError);
+}
+
+bool GetOptionalNonNegativeRange(
+	const TSharedPtr<FJsonObject>& Object,
+	const TCHAR* Field,
+	const FVector2D& DefaultValue,
+	FVector2D& OutRange,
+	FString& OutError
+)
+{
+	OutRange = DefaultValue;
+	if (!Object->HasField(Field))
+	{
+		return true;
+	}
+	const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+	if (
+		!Object.IsValid() ||
+		!Object->TryGetArrayField(Field, Values) ||
+		!Values ||
+		Values->Num() != 2
+	)
+	{
+		OutError = FString::Printf(TEXT("LLMNPC_DRAFT_RANGE_INVALID:%s"), Field);
+		return false;
+	}
+	double Min = 0.0;
+	double Max = 0.0;
+	if (
+		!(*Values)[0]->TryGetNumber(Min) ||
+		!(*Values)[1]->TryGetNumber(Max) ||
+		!FMath::IsFinite(Min) ||
+		!FMath::IsFinite(Max) ||
+		Min < 0.0 ||
+		Max < Min
+	)
+	{
+		OutError = FString::Printf(TEXT("LLMNPC_DRAFT_RANGE_INVALID:%s"), Field);
+		return false;
+	}
+	OutRange = FVector2D(Min, Max);
+	return true;
+}
+
+bool GetOptionalIntRange(
+	const TSharedPtr<FJsonObject>& Object,
+	const TCHAR* Field,
+	const FIntPoint& DefaultValue,
+	FIntPoint& OutRange,
+	FString& OutError
+)
+{
+	OutRange = DefaultValue;
+	if (!Object->HasField(Field))
+	{
+		return true;
+	}
+	const TArray<TSharedPtr<FJsonValue>>* Values = nullptr;
+	if (
+		!Object.IsValid() ||
+		!Object->TryGetArrayField(Field, Values) ||
+		!Values ||
+		Values->Num() != 2
+	)
+	{
+		OutError = FString::Printf(
+			TEXT("LLMNPC_DRAFT_INT_RANGE_INVALID:%s"),
+			Field
+		);
+		return false;
+	}
+	double Minimum = 0.0;
+	double Maximum = 0.0;
+	if (
+		!(*Values)[0]->TryGetNumber(Minimum) ||
+		!(*Values)[1]->TryGetNumber(Maximum) ||
+		!FMath::IsFinite(Minimum) ||
+		!FMath::IsFinite(Maximum) ||
+		Minimum < 0.0 ||
+		Maximum < Minimum ||
+		!FMath::IsNearlyEqual(
+			Minimum,
+			static_cast<double>(FMath::RoundToInt(Minimum))
+		) ||
+		!FMath::IsNearlyEqual(
+			Maximum,
+			static_cast<double>(FMath::RoundToInt(Maximum))
+		) ||
+		Maximum > 32.0
+	)
+	{
+		OutError = FString::Printf(
+			TEXT("LLMNPC_DRAFT_INT_RANGE_INVALID:%s"),
+			Field
+		);
+		return false;
+	}
+	OutRange = FIntPoint(
+		static_cast<int32>(Minimum),
+		static_cast<int32>(Maximum)
+	);
+	return true;
+}
+
+bool GetOptionalTargetLossPolicy(
+	const TSharedPtr<FJsonObject>& Object,
+	const TCHAR* Field,
+	ELLMNPCTargetLossPolicy DefaultValue,
+	ELLMNPCTargetLossPolicy& OutValue,
+	FString& OutError
+)
+{
+	OutValue = DefaultValue;
+	if (!Object->HasField(Field))
+	{
+		return true;
+	}
+	FString Value;
+	if (!GetString(Object, Field, Value, OutError))
+	{
+		return false;
+	}
+	if (Value == TEXT("cancel"))
+	{
+		OutValue = ELLMNPCTargetLossPolicy::CancelMotion;
+		return true;
+	}
+	if (Value == TEXT("hold_last"))
+	{
+		OutValue = ELLMNPCTargetLossPolicy::HoldLast;
+		return true;
+	}
+	if (Value == TEXT("fade_out"))
+	{
+		OutValue = ELLMNPCTargetLossPolicy::FadeOut;
+		return true;
+	}
+	OutError = FString::Printf(
+		TEXT("LLMNPC_DRAFT_TARGET_LOSS_POLICY_INVALID:%s"),
+		Field
+	);
+	return false;
 }
 
 bool ParseTrackType(const FString& Value, ELLMMotionTrackType& OutType)
@@ -720,12 +886,28 @@ bool FLLMNPCTemplateDraftImporter::ParseDraftJson(
 		TEXT("amplitude"), TEXT("speed"), TEXT("duration"),
 		TEXT("allow_mirror"), TEXT("allowed_styles"),
 		TEXT("random_amplitude_jitter"), TEXT("random_speed_jitter"),
-		TEXT("random_frequency_jitter"), TEXT("random_phase_jitter_radians")
+		TEXT("random_frequency_jitter"), TEXT("random_phase_jitter_radians"),
+		TEXT("policy_version"), TEXT("reach_scale"), TEXT("height_scale"),
+		TEXT("lateral_scale"), TEXT("cycle_count"),
+		TEXT("gaze_engagement"), TEXT("palm_orientation_weight"),
+		TEXT("finger_pose_weight"), TEXT("torso_participation"),
+		TEXT("blend_in_scale"), TEXT("blend_out_scale"),
+		TEXT("enable_dynamic_target_tracking"),
+		TEXT("max_target_follow_speed_cm_per_second"),
+		TEXT("max_target_angular_speed_degrees_per_second"),
+		TEXT("target_interpolation_speed"),
+		TEXT("target_teleport_threshold_cm"),
+		TEXT("target_lost_fade_seconds"), TEXT("target_loss_policy"),
+		TEXT("enable_obstacle_adaptation"),
+		TEXT("min_obstacle_amplitude_scale"),
+		TEXT("min_obstacle_reach_scale"),
+		TEXT("obstacle_cancel_clearance")
 	};
 	if (!ValidateFields(*ModifierPolicy, ModifierFields, TEXT("LLMNPC_DRAFT_MODIFIER"), OutError))
 	{
 		return false;
 	}
+	float PolicyVersion = 2.0f;
 	if (
 		!GetRange(*ModifierPolicy, TEXT("amplitude"), OutTemplate.ModifierPolicy.AmplitudeRange, OutError) ||
 		!GetRange(*ModifierPolicy, TEXT("speed"), OutTemplate.ModifierPolicy.SpeedRange, OutError) ||
@@ -735,11 +917,46 @@ bool FLLMNPCTemplateDraftImporter::ParseDraftJson(
 		!GetOptionalNumber(*ModifierPolicy, TEXT("random_amplitude_jitter"), 0.03f, OutTemplate.ModifierPolicy.RandomAmplitudeJitter, OutError) ||
 		!GetOptionalNumber(*ModifierPolicy, TEXT("random_speed_jitter"), 0.025f, OutTemplate.ModifierPolicy.RandomSpeedJitter, OutError) ||
 		!GetOptionalNumber(*ModifierPolicy, TEXT("random_frequency_jitter"), 0.04f, OutTemplate.ModifierPolicy.RandomFrequencyJitter, OutError) ||
-		!GetOptionalNumber(*ModifierPolicy, TEXT("random_phase_jitter_radians"), 0.08f, OutTemplate.ModifierPolicy.RandomPhaseJitterRadians, OutError)
+		!GetOptionalNumber(*ModifierPolicy, TEXT("random_phase_jitter_radians"), 0.08f, OutTemplate.ModifierPolicy.RandomPhaseJitterRadians, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("policy_version"), 2.0f, PolicyVersion, OutError) ||
+		!GetOptionalRange(*ModifierPolicy, TEXT("reach_scale"), FVector2D(1.0f, 1.0f), OutTemplate.ModifierPolicy.ReachScaleRange, OutError) ||
+		!GetOptionalRange(*ModifierPolicy, TEXT("height_scale"), FVector2D(1.0f, 1.0f), OutTemplate.ModifierPolicy.HeightScaleRange, OutError) ||
+		!GetOptionalRange(*ModifierPolicy, TEXT("lateral_scale"), FVector2D(1.0f, 1.0f), OutTemplate.ModifierPolicy.LateralScaleRange, OutError) ||
+		!GetOptionalIntRange(*ModifierPolicy, TEXT("cycle_count"), FIntPoint::ZeroValue, OutTemplate.ModifierPolicy.CycleCountRange, OutError) ||
+		!GetOptionalNonNegativeRange(*ModifierPolicy, TEXT("gaze_engagement"), FVector2D(1.0f, 1.0f), OutTemplate.ModifierPolicy.GazeEngagementRange, OutError) ||
+		!GetOptionalNonNegativeRange(*ModifierPolicy, TEXT("palm_orientation_weight"), FVector2D(1.0f, 1.0f), OutTemplate.ModifierPolicy.PalmOrientationWeightRange, OutError) ||
+		!GetOptionalNonNegativeRange(*ModifierPolicy, TEXT("finger_pose_weight"), FVector2D(1.0f, 1.0f), OutTemplate.ModifierPolicy.FingerPoseWeightRange, OutError) ||
+		!GetOptionalNonNegativeRange(*ModifierPolicy, TEXT("torso_participation"), FVector2D(1.0f, 1.0f), OutTemplate.ModifierPolicy.TorsoParticipationRange, OutError) ||
+		!GetOptionalRange(*ModifierPolicy, TEXT("blend_in_scale"), FVector2D(1.0f, 1.0f), OutTemplate.ModifierPolicy.BlendInScaleRange, OutError) ||
+		!GetOptionalRange(*ModifierPolicy, TEXT("blend_out_scale"), FVector2D(1.0f, 1.0f), OutTemplate.ModifierPolicy.BlendOutScaleRange, OutError) ||
+		!GetOptionalBool(*ModifierPolicy, TEXT("enable_dynamic_target_tracking"), false, OutTemplate.ModifierPolicy.bEnableDynamicTargetTracking, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("max_target_follow_speed_cm_per_second"), 240.0f, OutTemplate.ModifierPolicy.MaxTargetFollowSpeedCmPerSecond, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("max_target_angular_speed_degrees_per_second"), 180.0f, OutTemplate.ModifierPolicy.MaxTargetAngularSpeedDegreesPerSecond, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("target_interpolation_speed"), 8.0f, OutTemplate.ModifierPolicy.TargetInterpolationSpeed, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("target_teleport_threshold_cm"), 250.0f, OutTemplate.ModifierPolicy.TargetTeleportThresholdCm, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("target_lost_fade_seconds"), 0.18f, OutTemplate.ModifierPolicy.TargetLostFadeSeconds, OutError) ||
+		!GetOptionalTargetLossPolicy(*ModifierPolicy, TEXT("target_loss_policy"), ELLMNPCTargetLossPolicy::FadeOut, OutTemplate.ModifierPolicy.TargetLossPolicy, OutError) ||
+		!GetOptionalBool(*ModifierPolicy, TEXT("enable_obstacle_adaptation"), false, OutTemplate.ModifierPolicy.bEnableObstacleAdaptation, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("min_obstacle_amplitude_scale"), 0.6f, OutTemplate.ModifierPolicy.MinObstacleAmplitudeScale, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("min_obstacle_reach_scale"), 0.65f, OutTemplate.ModifierPolicy.MinObstacleReachScale, OutError) ||
+		!GetOptionalNumber(*ModifierPolicy, TEXT("obstacle_cancel_clearance"), 0.2f, OutTemplate.ModifierPolicy.ObstacleCancelClearance, OutError)
 	)
 	{
 		return false;
 	}
+	if (
+		!FMath::IsNearlyEqual(PolicyVersion, 2.0f) ||
+		!FMath::IsNearlyEqual(
+			PolicyVersion,
+			static_cast<float>(FMath::RoundToInt(PolicyVersion))
+		)
+	)
+	{
+		OutError = TEXT("LLMNPC_DRAFT_MODIFIER_POLICY_VERSION_INVALID");
+		return false;
+	}
+	OutTemplate.ModifierPolicy.PolicyVersion =
+		FMath::RoundToInt(PolicyVersion);
 
 	const TSharedPtr<FJsonObject>* Clip = nullptr;
 	if (!Root->TryGetObjectField(TEXT("clip"), Clip) || !Clip || !Clip->IsValid())

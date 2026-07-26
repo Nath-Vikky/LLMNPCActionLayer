@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Context/LLMNPCExecutionContextTypes.h"
+#include "Context/LLMNPCResolvedMotionModifiers.h"
 #include "LLMNPCControlManifest.h"
 #include "LLMNPCMotionTypes.h"
 
@@ -15,7 +17,9 @@ public:
 		USkeletalMeshComponent* Mesh,
 		const TMap<FString, TObjectPtr<AActor>>& TargetMap,
 		float Time,
-		FLLMProceduralPoseSnapshot& OutSnapshot
+		FLLMProceduralPoseSnapshot& OutSnapshot,
+		const TMap<FString, FLLMNPCTargetRuntimeSample>* RuntimeTargetSamples = nullptr,
+		const FLLMNPCResolvedMotionModifiers* ResolvedModifiers = nullptr
 	);
 
 	static float EvaluateFloatTrack(const FLLMMotionTrack& Track, float Time);
@@ -33,6 +37,17 @@ private:
 		const FLLMMotionTrack& Track,
 		USkeletalMeshComponent* Mesh,
 		const TMap<FString, TObjectPtr<AActor>>& TargetMap,
+		const TMap<FString, FLLMNPCTargetRuntimeSample>* RuntimeTargetSamples,
+		const FLLMNPCResolvedMotionModifiers* ResolvedModifiers,
+		float& OutTargetAlpha,
 		bool bLeftHand
+	);
+
+	static bool ResolveTargetLocationWS(
+		const FString& TargetRef,
+		const TMap<FString, TObjectPtr<AActor>>& TargetMap,
+		const TMap<FString, FLLMNPCTargetRuntimeSample>* RuntimeTargetSamples,
+		FVector& OutLocationWS,
+		float& OutTargetAlpha
 	);
 };

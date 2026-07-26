@@ -6,6 +6,7 @@
 #include "Widgets/SCompoundWidget.h"
 
 class SEditableTextBox;
+class AActor;
 class ULLMNPCDialogueComponent;
 class ULLMNPCMotionComponent;
 class ULLMNPCTemplateLibrarySubsystem;
@@ -41,6 +42,14 @@ enum class ELLMNPCTestParameterPreset : uint8
 	Maximum
 };
 
+enum class ELLMNPCTestContextPreset : uint8
+{
+	Neutral,
+	Excited,
+	RightHandOccupied,
+	Walking
+};
+
 struct FLLMNPCTestExecutionRecord
 {
 	FDateTime TimestampUtc;
@@ -52,6 +61,21 @@ struct FLLMNPCTestExecutionRecord
 	float ResolvedAmplitude = 1.0f;
 	float ResolvedSpeedScale = 1.0f;
 	float ResolvedDurationScale = 1.0f;
+	float ResolvedReachScale = 1.0f;
+	float ResolvedHeightScale = 1.0f;
+	float ResolvedGazeEngagement = 1.0f;
+	float ResolvedPalmOrientationWeight = 1.0f;
+	float ResolvedFingerPoseWeight = 1.0f;
+	float ResolvedTorsoParticipation = 1.0f;
+	bool bResolvedMirror = false;
+	FString ExecutionMovementMode;
+	float TargetDistanceCm = 0.0f;
+	float TargetHeightRelativeCm = 0.0f;
+	float AvailableSpace = 1.0f;
+	bool bRightHandOccupied = false;
+	bool bLeftHandOccupied = false;
+	FName ModifierResultCode = NAME_None;
+	FString ModifierResolutionTrace;
 	bool bAccepted = false;
 	FString ValidationError;
 	TArray<FName> ActiveChannels;
@@ -133,6 +157,8 @@ private:
 	float Amplitude = 1.0f;
 	float SpeedScale = 1.0f;
 	float DurationScale = 1.0f;
+	float TestTargetDistanceCm = 240.0f;
+	float TestTargetHeightCm = 0.0f;
 	int32 RandomSeed = 0;
 	bool bMirror = false;
 	bool bSweepRunning = false;
@@ -143,6 +169,7 @@ private:
 	double OnlineRequestStartedAt = 0.0;
 	float RuntimeRefreshAccumulator = 0.0f;
 	FGuid ActiveOnlineRequestId;
+	TWeakObjectPtr<AActor> N3TestTargetActor;
 	TWeakObjectPtr<ULLMNPCDialogueComponent> ActiveOnlineDialogue;
 	ELLMNPCModelProviderKind PreviousProviderKind =
 		ELLMNPCModelProviderKind::UseProjectSettings;
@@ -171,6 +198,8 @@ private:
 	ULLMNPCTemplateLibrarySubsystem* GetTemplateLibrary() const;
 	const ULLMNPCMotionTemplate* GetSelectedMotionTemplate() const;
 	bool ApplyPreset(ELLMNPCTestParameterPreset Preset);
+	bool ApplyContextPreset(ELLMNPCTestContextPreset Preset);
+	bool PlaceN3TestTarget();
 	bool ExecuteCurrent(const FString& PresetLabel);
 	void ExecuteForwardN1ReviewSample(
 		ELLMNPCMotionDebugSample Sample,
@@ -199,6 +228,11 @@ private:
 	FReply HandleDefault();
 	FReply HandleMaximum();
 	FReply HandleRunSweep();
+	FReply HandleContextNeutral();
+	FReply HandleContextExcited();
+	FReply HandleContextRightBusy();
+	FReply HandleContextWalking();
+	FReply HandlePlaceN3TestTarget();
 	FReply HandleForwardN1ShoulderReview();
 	FReply HandleForwardN1RelaxedReview();
 	FReply HandleForwardN1CurlReview();

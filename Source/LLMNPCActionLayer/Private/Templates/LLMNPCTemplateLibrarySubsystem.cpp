@@ -269,6 +269,24 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolvePublishedVa
 	int32 RandomSeed
 ) const
 {
+	return ResolvePublishedVariantWithConstraints(
+		PublicActionId,
+		SkeletonProfileId,
+		StyleTag,
+		RandomSeed,
+		false
+	);
+}
+
+const ULLMNPCMotionTemplate*
+ULLMNPCTemplateLibrarySubsystem::ResolvePublishedVariantWithConstraints(
+	FName PublicActionId,
+	FName SkeletonProfileId,
+	FName StyleTag,
+	int32 RandomSeed,
+	bool bRequireMirror
+) const
+{
 	const TArray<FName>* TemplateIds = CatalogIndex.FindVariants(PublicActionId);
 	if (!TemplateIds)
 	{
@@ -281,6 +299,10 @@ const ULLMNPCMotionTemplate* ULLMNPCTemplateLibrarySubsystem::ResolvePublishedVa
 	{
 		const ULLMNPCMotionTemplate* Template = FindPublishedTemplate(TemplateId);
 		if (!Template || !Template->SupportsSkeletonProfile(SkeletonProfileId))
+		{
+			continue;
+		}
+		if (bRequireMirror && !Template->ModifierPolicy.bAllowMirror)
 		{
 			continue;
 		}

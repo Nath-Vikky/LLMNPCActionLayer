@@ -3,7 +3,7 @@
 	"asset_name": "MT_Wave_Right_Manny_FK_v1",
 	"template_id": "gesture.wave.right.manny.fk.v1",
 	"public_action_id": "gesture.wave.right",
-	"semantic_version": "1.0.0",
+	"semantic_version": "1.1.0",
 	"variant_id": "faithful_fk",
 	"variant_weight": 1,
 	"variant_style_tags": [
@@ -81,7 +81,29 @@
 		"random_amplitude_jitter": 0.025000000000000001,
 		"random_speed_jitter": 0.02,
 		"random_frequency_jitter": 0,
-		"random_phase_jitter_radians": 0
+		"random_phase_jitter_radians": 0,
+		"policy_version": 2,
+		"reach_scale": [ 0.75, 1 ],
+		"height_scale": [ 0.80000001192092896, 1.0499999523162842 ],
+		"lateral_scale": [ 0.69999998807907104, 1 ],
+		"cycle_count": [ 0, 0 ],
+		"gaze_engagement": [ 1, 1 ],
+		"palm_orientation_weight": [ 0.75, 1 ],
+		"finger_pose_weight": [ 0.69999998807907104, 1 ],
+		"torso_participation": [ 0.80000001192092896, 1 ],
+		"blend_in_scale": [ 0.85000002384185791, 1.1499999761581421 ],
+		"blend_out_scale": [ 0.85000002384185791, 1.1499999761581421 ],
+		"enable_dynamic_target_tracking": false,
+		"max_target_follow_speed_cm_per_second": 240,
+		"max_target_angular_speed_degrees_per_second": 180,
+		"target_interpolation_speed": 8,
+		"target_teleport_threshold_cm": 250,
+		"target_lost_fade_seconds": 0.18000000715255737,
+		"target_loss_policy": "fade_out",
+		"enable_obstacle_adaptation": true,
+		"min_obstacle_amplitude_scale": 0.60000002384185791,
+		"min_obstacle_reach_scale": 0.64999997615814209,
+		"obstacle_cancel_clearance": 0.20000000298023224
 	},
 	"clip":
 	{
@@ -306,7 +328,7 @@
 		"manual_review": "accepted_in_llmnpcdemo"
 	},
 	"catalog_schema_version": "llmnpc.template_catalog.v1",
-	"catalog_revision": 1,
+	"catalog_revision": 2,
 	"visual_description": "The right arm rises beside the upper body, the open palm faces outward, and the forearm, wrist, and fingers follow the reconstructed Waving reference motion.",
-	"catalog_content_hash": "md5:6777c910fb58c3f86e1a5168fba589ae"
+	"catalog_content_hash": "md5:0a060d6dd2f1c9a6d0777b2f1ec222da"
 }

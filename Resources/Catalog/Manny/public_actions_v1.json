@@ -1,6 +1,6 @@
 {
 	"schema_version": "llmnpc.public_action_catalog.v1",
-	"catalog_hash": "md5:82c3270b3bc65bf0110c45a0ffb373df",
+	"catalog_hash": "md5:8a9297fc3b842642c8c5a3211064caf6",
 	"public_actions": [
 		{
 			"schema_version": "llmnpc.public_action_definition.v1",

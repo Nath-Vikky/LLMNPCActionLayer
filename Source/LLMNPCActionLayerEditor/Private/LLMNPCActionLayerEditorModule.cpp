@@ -4,6 +4,7 @@
 #include "Authoring/LLMNPCSkeletonProfileAuthoringSubsystem.h"
 #include "Authoring/LLMNPCMannyValidationBaselineExporter.h"
 #include "Authoring/LLMNPCMannyN2CatalogMigration.h"
+#include "Authoring/LLMNPCMannyN3ContextMigration.h"
 #include "Editor.h"
 #include "Framework/Docking/TabManager.h"
 #include "HAL/IConsoleManager.h"
@@ -12,6 +13,7 @@
 #include "Misc/Parse.h"
 #include "Online/LLMNPCCapabilitySmokeRunner.h"
 #include "Online/LLMNPCCatalogSelectionSmokeRunner.h"
+#include "Online/LLMNPCContextModifierSmokeRunner.h"
 #include "Online/LLMNPCOnlineTestConfigLoader.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
 #include "Styling/AppStyle.h"
@@ -390,6 +392,34 @@ FAutoConsoleCommand RunMannyN2CatalogSelectionSmokeCommand(
 	FConsoleCommandDelegate::CreateStatic(&RunMannyN2CatalogSelectionSmoke)
 );
 
+void RunMannyN3ContextModifierSmoke()
+{
+	const bool bExitWhenComplete = FParse::Param(
+		FCommandLine::Get(),
+		TEXT("LLMNPCContextSmokeExit")
+	);
+	FString Error;
+	if (!FLLMNPCContextModifierSmokeRunner::Start(bExitWhenComplete, Error))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC Forward N3 Context Modifier could not start: %s"),
+			*Error
+		);
+		if (bExitWhenComplete)
+		{
+			FPlatformMisc::RequestExit(false);
+		}
+	}
+}
+
+FAutoConsoleCommand RunMannyN3ContextModifierSmokeCommand(
+	TEXT("LLMNPC.RunMannyN3ContextModifierSmoke"),
+	TEXT("Run the real-model Manny N3 context adaptation suite and write a sanitized trace report."),
+	FConsoleCommandDelegate::CreateStatic(&RunMannyN3ContextModifierSmoke)
+);
+
 void MigrateMannyN2Catalog()
 {
 	FString CatalogHash;
@@ -416,6 +446,34 @@ FAutoConsoleCommand MigrateMannyN2CatalogCommand(
 	TEXT("LLMNPC.MigrateMannyN2Catalog"),
 	TEXT("Idempotently create the Manny Forward N2 vocabulary, Public Actions, and Catalog metadata."),
 	FConsoleCommandDelegate::CreateStatic(&MigrateMannyN2Catalog)
+);
+
+void MigrateMannyN3Context()
+{
+	FString CatalogHash;
+	FString Error;
+	if (!FLLMNPCMannyN3ContextMigration::Run(CatalogHash, Error))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("LLMNPC Forward N3 Manny Context migration failed: %s"),
+			*Error
+		);
+		return;
+	}
+	UE_LOG(
+		LogLLMNPCActionLayerEditor,
+		Display,
+		TEXT("LLMNPC Forward N3 Manny Context migrated. CatalogHash=%s"),
+		*CatalogHash
+	);
+}
+
+FAutoConsoleCommand MigrateMannyN3ContextCommand(
+	TEXT("LLMNPC.MigrateMannyN3Context"),
+	TEXT("Idempotently upgrade Manny policies and create the Forward N3 modifier mapping profile."),
+	FConsoleCommandDelegate::CreateStatic(&MigrateMannyN3Context)
 );
 }
 
@@ -467,6 +525,7 @@ void FLLMNPCActionLayerEditorModule::ShutdownModule()
 {
 	FLLMNPCCapabilitySmokeRunner::Cancel();
 	FLLMNPCCatalogSelectionSmokeRunner::Cancel();
+	FLLMNPCContextModifierSmokeRunner::Cancel();
 	FLLMNPCOnlineTestConfigLoader::ClearSession();
 	if (UToolMenus::IsToolMenuUIEnabled())
 	{

@@ -85,6 +85,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue|Context")
 	void SetSceneStateActive(FName StateName, bool bActive);
 
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue|Context")
+	void SetEmotionContext(
+		FName Emotion,
+		float Intensity,
+		float Valence = 0.0f,
+		float Arousal = 0.0f
+	);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue|Context")
+	void ResetEmotionContext();
+
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Dialogue|UI")
 	ULLMNPCChatWidget* CreateChatWidget(APlayerController* PlayerController, int32 ZOrder = 10);
 

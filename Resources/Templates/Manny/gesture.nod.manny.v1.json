@@ -3,7 +3,7 @@
 	"asset_name": "MT_Nod_Manny_v1",
 	"template_id": "gesture.nod.manny.v1",
 	"public_action_id": "gesture.nod",
-	"semantic_version": "1.0.0",
+	"semantic_version": "1.1.0",
 	"kind": "procedural_motion",
 	"review_state": "published",
 	"display_name": "Manny Neutral Nod",
@@ -63,7 +63,29 @@
 			"neutral",
 			"friendly",
 			"subtle"
-		]
+		],
+		"policy_version": 2,
+		"reach_scale": [ 1, 1 ],
+		"height_scale": [ 1, 1 ],
+		"lateral_scale": [ 1, 1 ],
+		"cycle_count": [ 0, 0 ],
+		"gaze_engagement": [ 1, 1 ],
+		"palm_orientation_weight": [ 1, 1 ],
+		"finger_pose_weight": [ 1, 1 ],
+		"torso_participation": [ 1, 1 ],
+		"blend_in_scale": [ 0.85000002384185791, 1.1499999761581421 ],
+		"blend_out_scale": [ 0.85000002384185791, 1.1499999761581421 ],
+		"enable_dynamic_target_tracking": false,
+		"max_target_follow_speed_cm_per_second": 240,
+		"max_target_angular_speed_degrees_per_second": 180,
+		"target_interpolation_speed": 8,
+		"target_teleport_threshold_cm": 250,
+		"target_lost_fade_seconds": 0.18000000715255737,
+		"target_loss_policy": "fade_out",
+		"enable_obstacle_adaptation": false,
+		"min_obstacle_amplitude_scale": 0.60000002384185791,
+		"min_obstacle_reach_scale": 0.64999997615814209,
+		"obstacle_cancel_clearance": 0.20000000298023224
 	},
 	"clip":
 	{
@@ -103,7 +125,7 @@
 		"manual_review": "accepted_in_llmnpcdemo"
 	},
 	"catalog_schema_version": "llmnpc.template_catalog.v1",
-	"catalog_revision": 1,
+	"catalog_revision": 2,
 	"variant_id": "neutral",
 	"variant_weight": 1,
 	"variant_style_tags": [
@@ -112,5 +134,5 @@
 		"subtle"
 	],
 	"visual_description": "The head pitches down and returns once while the chest, arms, hands, and lower body remain under their existing animation.",
-	"catalog_content_hash": "md5:d6858c8a984018d7e13a7f911e2d288f"
+	"catalog_content_hash": "md5:b0b41a7ca8bc0102faa3b6d5c803b18a"
 }

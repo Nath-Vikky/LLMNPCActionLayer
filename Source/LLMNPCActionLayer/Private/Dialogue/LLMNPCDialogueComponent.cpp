@@ -381,6 +381,44 @@ void ULLMNPCDialogueComponent::SetSceneStateActive(FName StateName, bool bActive
 	}
 }
 
+void ULLMNPCDialogueComponent::SetEmotionContext(
+	FName Emotion,
+	float Intensity,
+	float Valence,
+	float Arousal
+)
+{
+	EnsureRuntimeObjects();
+	if (!EmotionComponent && GetOwner())
+	{
+		EmotionComponent = NewObject<ULLMNPCEmotionComponent>(
+			GetOwner(),
+			NAME_None,
+			RF_Transient
+		);
+		GetOwner()->AddInstanceComponent(EmotionComponent);
+		EmotionComponent->RegisterComponent();
+	}
+	if (EmotionComponent)
+	{
+		EmotionComponent->SetEmotion(
+			Emotion,
+			Intensity,
+			Valence,
+			Arousal
+		);
+	}
+}
+
+void ULLMNPCDialogueComponent::ResetEmotionContext()
+{
+	EnsureRuntimeObjects();
+	if (EmotionComponent)
+	{
+		EmotionComponent->ResetEmotion();
+	}
+}
+
 ULLMNPCChatWidget* ULLMNPCDialogueComponent::CreateChatWidget(
 	APlayerController* PlayerController,
 	int32 ZOrder

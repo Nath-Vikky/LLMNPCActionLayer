@@ -78,7 +78,38 @@
         "random_amplitude_jitter": { "type": "number", "minimum": 0, "maximum": 0.25 },
         "random_speed_jitter": { "type": "number", "minimum": 0, "maximum": 0.25 },
         "random_frequency_jitter": { "type": "number", "minimum": 0, "maximum": 0.25 },
-        "random_phase_jitter_radians": { "type": "number", "minimum": 0, "maximum": 0.5 }
+        "random_phase_jitter_radians": { "type": "number", "minimum": 0, "maximum": 0.5 },
+        "policy_version": { "const": 2 },
+        "reach_scale": { "$ref": "#/$defs/positive_range" },
+        "height_scale": { "$ref": "#/$defs/positive_range" },
+        "lateral_scale": { "$ref": "#/$defs/positive_range" },
+        "cycle_count": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "integer", "minimum": 0, "maximum": 32 },
+            { "type": "integer", "minimum": 0, "maximum": 32 }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "gaze_engagement": { "$ref": "#/$defs/nonnegative_range" },
+        "palm_orientation_weight": { "$ref": "#/$defs/nonnegative_range" },
+        "finger_pose_weight": { "$ref": "#/$defs/nonnegative_range" },
+        "torso_participation": { "$ref": "#/$defs/nonnegative_range" },
+        "blend_in_scale": { "$ref": "#/$defs/positive_range" },
+        "blend_out_scale": { "$ref": "#/$defs/positive_range" },
+        "enable_dynamic_target_tracking": { "type": "boolean" },
+        "max_target_follow_speed_cm_per_second": { "type": "number", "minimum": 1, "maximum": 2000 },
+        "max_target_angular_speed_degrees_per_second": { "type": "number", "minimum": 1, "maximum": 720 },
+        "target_interpolation_speed": { "type": "number", "minimum": 0.1, "maximum": 40 },
+        "target_teleport_threshold_cm": { "type": "number", "minimum": 10, "maximum": 5000 },
+        "target_lost_fade_seconds": { "type": "number", "minimum": 0.01, "maximum": 5 },
+        "target_loss_policy": { "enum": ["cancel", "hold_last", "fade_out"] },
+        "enable_obstacle_adaptation": { "type": "boolean" },
+        "min_obstacle_amplitude_scale": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "min_obstacle_reach_scale": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "obstacle_cancel_clearance": { "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
     "clip": {
@@ -143,6 +174,16 @@
       "prefixItems": [
         { "type": "number", "exclusiveMinimum": 0 },
         { "type": "number", "exclusiveMinimum": 0 }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "nonnegative_range": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number", "minimum": 0 },
+        { "type": "number", "minimum": 0 }
       ],
       "items": false,
       "minItems": 2,

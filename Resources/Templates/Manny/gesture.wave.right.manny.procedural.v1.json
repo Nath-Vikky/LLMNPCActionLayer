@@ -3,7 +3,7 @@
 	"asset_name": "MT_Wave_Right_Manny_Procedural_v1",
 	"template_id": "gesture.wave.right.manny.procedural.v1",
 	"public_action_id": "gesture.wave.right",
-	"semantic_version": "1.0.0",
+	"semantic_version": "1.1.0",
 	"variant_id": "procedural",
 	"variant_weight": 1,
 	"variant_style_tags": [
@@ -72,7 +72,7 @@
 		"amplitude": [ 0.75, 1.2 ],
 		"speed": [ 0.84999999999999998, 1.25 ],
 		"duration": [ 1, 1 ],
-		"allow_mirror": false,
+		"allow_mirror": true,
 		"allowed_styles": [
 			"neutral",
 			"friendly",
@@ -82,7 +82,29 @@
 		"random_amplitude_jitter": 0.029999999999999999,
 		"random_speed_jitter": 0.025000000000000001,
 		"random_frequency_jitter": 0.040000000000000001,
-		"random_phase_jitter_radians": 0.080000000000000002
+		"random_phase_jitter_radians": 0.080000000000000002,
+		"policy_version": 2,
+		"reach_scale": [ 0.75, 1 ],
+		"height_scale": [ 0.80000001192092896, 1.0499999523162842 ],
+		"lateral_scale": [ 0.69999998807907104, 1 ],
+		"cycle_count": [ 0, 0 ],
+		"gaze_engagement": [ 1, 1 ],
+		"palm_orientation_weight": [ 0.75, 1 ],
+		"finger_pose_weight": [ 0.69999998807907104, 1 ],
+		"torso_participation": [ 0.80000001192092896, 1 ],
+		"blend_in_scale": [ 0.85000002384185791, 1.1499999761581421 ],
+		"blend_out_scale": [ 0.85000002384185791, 1.1499999761581421 ],
+		"enable_dynamic_target_tracking": false,
+		"max_target_follow_speed_cm_per_second": 240,
+		"max_target_angular_speed_degrees_per_second": 180,
+		"target_interpolation_speed": 8,
+		"target_teleport_threshold_cm": 250,
+		"target_lost_fade_seconds": 0.18000000715255737,
+		"target_loss_policy": "fade_out",
+		"enable_obstacle_adaptation": true,
+		"min_obstacle_amplitude_scale": 0.60000002384185791,
+		"min_obstacle_reach_scale": 0.64999997615814209,
+		"obstacle_cancel_clearance": 0.20000000298023224
 	},
 	"clip":
 	{
@@ -220,7 +242,7 @@
 		"manual_review": "pending_forward_n0_visual_recheck"
 	},
 	"catalog_schema_version": "llmnpc.template_catalog.v1",
-	"catalog_revision": 1,
+	"catalog_revision": 2,
 	"visual_description": "The right hand follows a semantic wave anchor and a bounded lateral arc while wrist keyframes and an open-hand pose maintain the visible wave shape.",
-	"catalog_content_hash": "md5:d60ebad5ce53d845b6eb27221ad3c2f0"
+	"catalog_content_hash": "md5:e5d5d9c36f5168ca6dda64b33fbfd6d6"
 }

@@ -3,8 +3,10 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Dialogue/LLMNPCDialogueComponent.h"
+#include "DrawDebugHelpers.h"
 #include "Editor.h"
 #include "Engine/GameInstance.h"
+#include "Engine/TargetPoint.h"
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformTime.h"
@@ -231,6 +233,98 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 						.OnCheckStateChanged(this, &SLLMNPCMotionTestConsole::HandleOverlayChanged)
 					)
 				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 14.0f, 0.0f, 8.0f)
+				[
+					MakeSectionHeader(LOCTEXT("ForwardN3ContextSection", "Forward N3 Context"))
+				]
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					MakeFormRow(
+						LOCTEXT("ForwardN3ContextPreset", "Context Preset"),
+						SNew(SUniformGridPanel)
+						.SlotPadding(FMargin(4.0f, 0.0f))
+						+ SUniformGridPanel::Slot(0, 0)
+						[
+							SNew(SButton)
+								.OnClicked(this, &SLLMNPCMotionTestConsole::HandleContextNeutral)
+								[
+									SNew(STextBlock).Text(LOCTEXT("ContextNeutral", "Neutral"))
+								]
+						]
+						+ SUniformGridPanel::Slot(1, 0)
+						[
+							SNew(SButton)
+								.OnClicked(this, &SLLMNPCMotionTestConsole::HandleContextExcited)
+								[
+									SNew(STextBlock).Text(LOCTEXT("ContextExcited", "Excited"))
+								]
+						]
+						+ SUniformGridPanel::Slot(2, 0)
+						[
+							SNew(SButton)
+								.OnClicked(this, &SLLMNPCMotionTestConsole::HandleContextRightBusy)
+								[
+									SNew(STextBlock).Text(LOCTEXT("ContextRightBusy", "Right Busy"))
+								]
+						]
+						+ SUniformGridPanel::Slot(3, 0)
+						[
+							SNew(SButton)
+								.OnClicked(this, &SLLMNPCMotionTestConsole::HandleContextWalking)
+								[
+									SNew(STextBlock).Text(LOCTEXT("ContextWalking", "Walking"))
+								]
+						]
+					)
+				]
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					MakeFormRow(
+						LOCTEXT("ForwardN3TargetDistance", "Test Target Distance"),
+						SNew(SNumericEntryBox<float>)
+						.MinValue(30.0f)
+						.MaxValue(1000.0f)
+						.Value_Lambda([this]()
+						{
+							return TOptional<float>(TestTargetDistanceCm);
+						})
+						.OnValueChanged_Lambda([this](float Value)
+						{
+							TestTargetDistanceCm = Value;
+						})
+					)
+				]
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					MakeFormRow(
+						LOCTEXT("ForwardN3TargetHeight", "Test Target Height"),
+						SNew(SNumericEntryBox<float>)
+						.MinValue(-250.0f)
+						.MaxValue(250.0f)
+						.Value_Lambda([this]()
+						{
+							return TOptional<float>(TestTargetHeightCm);
+						})
+						.OnValueChanged_Lambda([this](float Value)
+						{
+							TestTargetHeightCm = Value;
+						})
+					)
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(188.0f, 3.0f, 0.0f, 4.0f)
+				[
+					SNew(SButton)
+						.ToolTipText(LOCTEXT(
+							"ForwardN3PlaceTargetTooltip",
+							"Place or move a transient PIE target relative to the selected NPC."
+						))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandlePlaceN3TestTarget)
+						[
+							SNew(STextBlock)
+								.Text(LOCTEXT("ForwardN3PlaceTarget", "Place / Move Target"))
+								.Justification(ETextJustify::Center)
+						]
+				]
 				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 18.0f, 0.0f, 8.0f)
 				[
 					SNew(SSeparator)
@@ -419,6 +513,10 @@ SLLMNPCMotionTestConsole::~SLLMNPCMotionTestConsole()
 		}
 	}
 	RestoreOnlineDialogueSettings();
+	if (AActor* TestTarget = N3TestTargetActor.Get())
+	{
+		TestTarget->Destroy();
+	}
 }
 
 void SLLMNPCMotionTestConsole::Tick(
@@ -439,6 +537,44 @@ void SLLMNPCMotionTestConsole::Tick(
 		else if ((!GEditor || !GEditor->PlayWorld) && !ActorOptions.IsEmpty())
 		{
 			RefreshRuntimeTargets(false);
+		}
+	}
+
+	if (AActor* TestTarget = N3TestTargetActor.Get())
+	{
+		UWorld* TargetWorld = TestTarget->GetWorld();
+		if (TargetWorld && GEditor && TargetWorld == GEditor->PlayWorld)
+		{
+			DrawDebugSphere(
+				TargetWorld,
+				TestTarget->GetActorLocation(),
+				12.0f,
+				12,
+				FColor::Green,
+				false,
+				0.0f,
+				0,
+				1.5f
+			);
+			if (
+				const ULLMNPCMotionComponent* Motion =
+					GetSelectedMotionComponent()
+			)
+			{
+				if (const AActor* Owner = Motion->GetOwner())
+				{
+					DrawDebugLine(
+						TargetWorld,
+						Owner->GetActorLocation(),
+						TestTarget->GetActorLocation(),
+						FColor::Cyan,
+						false,
+						0.0f,
+						0,
+						0.75f
+					);
+				}
+			}
 		}
 	}
 
@@ -558,8 +694,11 @@ FText SLLMNPCMotionTestConsole::GetDebugStateText() const
 	return FText::FromString(FString::Printf(
 		TEXT("Requested: %s\nResolved: %s\nActive source: %s\n")
 		TEXT("Requested modifiers: amplitude %.3f, speed %.3f, duration %.3f, style %s, mirror %s, seed %d\n")
-		TEXT("Resolved modifiers: amplitude %.3f, speed %.3f, duration %.3f, style %s, mirror %s, seed %d\n")
-		TEXT("Target: %s\nChannels: %s\nValidator: %s (%s)\n")
+		TEXT("Resolved core: amplitude %.3f, speed %.3f, duration %.3f, style %s, mirror %s, seed %d\n")
+		TEXT("Resolved body: reach %.3f, height %.3f, lateral %.3f, cycles %d, gaze %.3f, palm %.3f, fingers %.3f, torso %.3f, blend %.3f / %.3f\n")
+		TEXT("Execution: movement %s, target %s, distance %.1f, height %.1f, space %.2f, right busy %s, left busy %s\n")
+		TEXT("Modifier result: %s, fallback %s\nTrace: %s\n")
+		TEXT("Channels: %s\nValidator: %s (%s)\n")
 		TEXT("Clip: %s  Time: %.3f / %.3f  Queue: %d  Active plans: %d\n")
 		TEXT("Animation: %s  Template: %s  Slot: %s  Play rate: %.3f\n")
 		TEXT("Pose alpha: %.3f  LOD: %s  Post Process: %s"),
@@ -578,7 +717,30 @@ FText SLLMNPCMotionTestConsole::GetDebugStateText() const
 		*Debug.ResolvedStyle.ToString(),
 		Debug.bResolvedMirror ? TEXT("true") : TEXT("false"),
 		Debug.ResolvedRandomSeed,
+		Debug.ResolvedReachScale,
+		Debug.ResolvedHeightScale,
+		Debug.ResolvedLateralScale,
+		Debug.ResolvedCycleCount,
+		Debug.ResolvedGazeEngagement,
+		Debug.ResolvedPalmOrientationWeight,
+		Debug.ResolvedFingerPoseWeight,
+		Debug.ResolvedTorsoParticipation,
+		Debug.ResolvedBlendInScale,
+		Debug.ResolvedBlendOutScale,
+		Debug.ExecutionMovementMode.IsEmpty()
+			? TEXT("unknown")
+			: *Debug.ExecutionMovementMode,
 		Debug.LastTargetRef.IsEmpty() ? TEXT("none") : *Debug.LastTargetRef,
+		Debug.TargetDistanceCm,
+		Debug.TargetHeightRelativeCm,
+		Debug.AvailableSpace,
+		Debug.bRightHandOccupied ? TEXT("yes") : TEXT("no"),
+		Debug.bLeftHandOccupied ? TEXT("yes") : TEXT("no"),
+		*Debug.ModifierResultCode.ToString(),
+		Debug.bModifierFallbackRequired ? TEXT("yes") : TEXT("no"),
+		Debug.ModifierResolutionTrace.IsEmpty()
+			? TEXT("none")
+			: *Debug.ModifierResolutionTrace,
 		Debug.ActiveChannels.IsEmpty() ? TEXT("none") : *JoinNames(Debug.ActiveChannels),
 		*Validation,
 		Debug.LastValidationSource.IsEmpty() ? TEXT("none") : *Debug.LastValidationSource,
@@ -875,6 +1037,154 @@ bool SLLMNPCMotionTestConsole::ApplyPreset(ELLMNPCTestParameterPreset Preset)
 	return true;
 }
 
+bool SLLMNPCMotionTestConsole::ApplyContextPreset(
+	ELLMNPCTestContextPreset Preset
+)
+{
+	ULLMNPCDialogueComponent* Dialogue = GetSelectedDialogueComponent();
+	if (!Dialogue)
+	{
+		SetStatus(
+			LOCTEXT(
+				"ForwardN3ContextUnavailable",
+				"The selected PIE NPC has no dialogue context component"
+			),
+			true
+		);
+		return false;
+	}
+
+	for (const FName State : {
+		FName(TEXT("right_hand_busy")),
+		FName(TEXT("right_hand_occupied")),
+		FName(TEXT("left_hand_busy")),
+		FName(TEXT("left_hand_occupied")),
+		FName(TEXT("upper_body_busy")),
+		FName(TEXT("upper_body_occupied")),
+		FName(TEXT("walking")),
+		FName(TEXT("running")),
+		FName(TEXT("sprinting")),
+		FName(TEXT("turning")),
+		FName(TEXT("falling"))
+	})
+	{
+		Dialogue->SetSceneStateActive(State, false);
+	}
+	Dialogue->ResetEmotionContext();
+
+	FText Label = LOCTEXT("ForwardN3NeutralLabel", "Neutral");
+	switch (Preset)
+	{
+	case ELLMNPCTestContextPreset::Excited:
+		Dialogue->SetEmotionContext(TEXT("excited"), 0.9f, 0.8f, 0.9f);
+		Label = LOCTEXT("ForwardN3ExcitedLabel", "Excited");
+		break;
+	case ELLMNPCTestContextPreset::RightHandOccupied:
+		Dialogue->SetSceneStateActive(TEXT("right_hand_busy"), true);
+		Label = LOCTEXT("ForwardN3RightBusyLabel", "Right Busy");
+		break;
+	case ELLMNPCTestContextPreset::Walking:
+		Dialogue->SetSceneStateActive(TEXT("walking"), true);
+		Label = LOCTEXT("ForwardN3WalkingLabel", "Walking");
+		break;
+	case ELLMNPCTestContextPreset::Neutral:
+	default:
+		break;
+	}
+	SetStatus(
+		FText::Format(
+			LOCTEXT("ForwardN3ContextApplied", "N3 context applied: {0}"),
+			Label
+		),
+		false
+	);
+	return true;
+}
+
+bool SLLMNPCMotionTestConsole::PlaceN3TestTarget()
+{
+	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
+	AActor* Owner = Motion ? Motion->GetOwner() : nullptr;
+	UWorld* World = Motion ? Motion->GetWorld() : nullptr;
+	if (!Motion || !Owner || !World || !GEditor || World != GEditor->PlayWorld)
+	{
+		SetStatus(
+			LOCTEXT(
+				"ForwardN3TargetUnavailable",
+				"Start PIE and select an NPC before placing the N3 target"
+			),
+			true
+		);
+		return false;
+	}
+
+	AActor* TestTarget = N3TestTargetActor.Get();
+	if (!TestTarget || TestTarget->GetWorld() != World)
+	{
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.ObjectFlags |= RF_Transient;
+		SpawnParameters.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		TestTarget = World->SpawnActor<ATargetPoint>(
+			Owner->GetActorLocation(),
+			FRotator::ZeroRotator,
+			SpawnParameters
+		);
+		N3TestTargetActor = TestTarget;
+	}
+	if (!TestTarget)
+	{
+		SetStatus(
+			LOCTEXT(
+				"ForwardN3TargetSpawnFailed",
+				"Could not create the transient N3 test target"
+			),
+			true
+		);
+		return false;
+	}
+
+	FVector Forward = Owner->GetActorForwardVector().GetSafeNormal2D();
+	if (Forward.IsNearlyZero())
+	{
+		Forward = FVector::ForwardVector;
+	}
+	const FVector Location =
+		Owner->GetActorLocation() +
+		Forward * TestTargetDistanceCm +
+		FVector::UpVector * TestTargetHeightCm;
+	TestTarget->SetActorLocation(
+		Location,
+		false,
+		nullptr,
+		ETeleportType::TeleportPhysics
+	);
+	TargetRef = TEXT("n3_test_target");
+	Motion->RegisterTarget(TargetRef, TestTarget);
+	if (ULLMNPCDialogueComponent* Dialogue = GetSelectedDialogueComponent())
+	{
+		Dialogue->RegisterSceneTarget(
+			TargetRef,
+			TestTarget,
+			TEXT("scene_target"),
+			{ TEXT("test_target"), TEXT("location") },
+			1.0f
+		);
+	}
+	SetStatus(
+		FText::Format(
+			LOCTEXT(
+				"ForwardN3TargetPlaced",
+				"N3 target placed: distance {0}, height {1}"
+			),
+			FText::AsNumber(TestTargetDistanceCm),
+			FText::AsNumber(TestTargetHeightCm)
+		),
+		false
+	);
+	return true;
+}
+
 bool SLLMNPCMotionTestConsole::ExecuteCurrent(const FString& PresetLabel)
 {
 	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
@@ -894,9 +1204,22 @@ bool SLLMNPCMotionTestConsole::ExecuteCurrent(const FString& PresetLabel)
 	Modifiers.RandomSeed = RandomSeed;
 	if (!Modifiers.TargetRef.IsEmpty())
 	{
-		if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(Motion->GetWorld(), 0))
+		AActor* ExecutionTarget = nullptr;
+		if (
+			Modifiers.TargetRef == TEXT("n3_test_target") &&
+			N3TestTargetActor.IsValid()
+		)
 		{
-			Motion->RegisterTarget(Modifiers.TargetRef, PlayerPawn);
+			ExecutionTarget = N3TestTargetActor.Get();
+		}
+		else
+		{
+			ExecutionTarget =
+				UGameplayStatics::GetPlayerPawn(Motion->GetWorld(), 0);
+		}
+		if (ExecutionTarget)
+		{
+			Motion->RegisterTarget(Modifiers.TargetRef, ExecutionTarget);
 		}
 	}
 
@@ -916,6 +1239,22 @@ bool SLLMNPCMotionTestConsole::ExecuteCurrent(const FString& PresetLabel)
 	Record.ResolvedAmplitude = Debug.ResolvedAmplitude;
 	Record.ResolvedSpeedScale = Debug.ResolvedSpeedScale;
 	Record.ResolvedDurationScale = Debug.ResolvedDurationScale;
+	Record.ResolvedReachScale = Debug.ResolvedReachScale;
+	Record.ResolvedHeightScale = Debug.ResolvedHeightScale;
+	Record.ResolvedGazeEngagement = Debug.ResolvedGazeEngagement;
+	Record.ResolvedPalmOrientationWeight =
+		Debug.ResolvedPalmOrientationWeight;
+	Record.ResolvedFingerPoseWeight = Debug.ResolvedFingerPoseWeight;
+	Record.ResolvedTorsoParticipation = Debug.ResolvedTorsoParticipation;
+	Record.bResolvedMirror = Debug.bResolvedMirror;
+	Record.ExecutionMovementMode = Debug.ExecutionMovementMode;
+	Record.TargetDistanceCm = Debug.TargetDistanceCm;
+	Record.TargetHeightRelativeCm = Debug.TargetHeightRelativeCm;
+	Record.AvailableSpace = Debug.AvailableSpace;
+	Record.bRightHandOccupied = Debug.bRightHandOccupied;
+	Record.bLeftHandOccupied = Debug.bLeftHandOccupied;
+	Record.ModifierResultCode = Debug.ModifierResultCode;
+	Record.ModifierResolutionTrace = Debug.ModifierResolutionTrace;
 	Record.bAccepted = bAccepted;
 	Record.ValidationError = Debug.LastValidationError;
 	Record.ActiveChannels = Debug.ActiveChannels.IsEmpty()
@@ -1239,6 +1578,36 @@ FReply SLLMNPCMotionTestConsole::HandleRunSweep()
 	return FReply::Handled();
 }
 
+FReply SLLMNPCMotionTestConsole::HandleContextNeutral()
+{
+	ApplyContextPreset(ELLMNPCTestContextPreset::Neutral);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleContextExcited()
+{
+	ApplyContextPreset(ELLMNPCTestContextPreset::Excited);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleContextRightBusy()
+{
+	ApplyContextPreset(ELLMNPCTestContextPreset::RightHandOccupied);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleContextWalking()
+{
+	ApplyContextPreset(ELLMNPCTestContextPreset::Walking);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandlePlaceN3TestTarget()
+{
+	PlaceN3TestTarget();
+	return FReply::Handled();
+}
+
 void SLLMNPCMotionTestConsole::ExecuteForwardN1ReviewSample(
 	ELLMNPCMotionDebugSample Sample,
 	const FText& Label
@@ -1503,6 +1872,63 @@ FReply SLLMNPCMotionTestConsole::HandleSaveReport()
 		Event->SetNumberField(TEXT("resolved_amplitude"), Record.ResolvedAmplitude);
 		Event->SetNumberField(TEXT("resolved_speed_scale"), Record.ResolvedSpeedScale);
 		Event->SetNumberField(TEXT("resolved_duration_scale"), Record.ResolvedDurationScale);
+		Event->SetNumberField(
+			TEXT("resolved_reach_scale"),
+			Record.ResolvedReachScale
+		);
+		Event->SetNumberField(
+			TEXT("resolved_height_scale"),
+			Record.ResolvedHeightScale
+		);
+		Event->SetNumberField(
+			TEXT("resolved_gaze_engagement"),
+			Record.ResolvedGazeEngagement
+		);
+		Event->SetNumberField(
+			TEXT("resolved_palm_orientation_weight"),
+			Record.ResolvedPalmOrientationWeight
+		);
+		Event->SetNumberField(
+			TEXT("resolved_finger_pose_weight"),
+			Record.ResolvedFingerPoseWeight
+		);
+		Event->SetNumberField(
+			TEXT("resolved_torso_participation"),
+			Record.ResolvedTorsoParticipation
+		);
+		Event->SetBoolField(TEXT("resolved_mirror"), Record.bResolvedMirror);
+		Event->SetStringField(
+			TEXT("execution_movement_mode"),
+			Record.ExecutionMovementMode
+		);
+		Event->SetNumberField(
+			TEXT("target_distance_cm"),
+			Record.TargetDistanceCm
+		);
+		Event->SetNumberField(
+			TEXT("target_height_relative_cm"),
+			Record.TargetHeightRelativeCm
+		);
+		Event->SetNumberField(
+			TEXT("available_space"),
+			Record.AvailableSpace
+		);
+		Event->SetBoolField(
+			TEXT("right_hand_occupied"),
+			Record.bRightHandOccupied
+		);
+		Event->SetBoolField(
+			TEXT("left_hand_occupied"),
+			Record.bLeftHandOccupied
+		);
+		Event->SetStringField(
+			TEXT("modifier_result_code"),
+			Record.ModifierResultCode.ToString()
+		);
+		Event->SetStringField(
+			TEXT("modifier_resolution_trace"),
+			Record.ModifierResolutionTrace
+		);
 		TArray<TSharedPtr<FJsonValue>> Channels;
 		for (const FName Channel : Record.ActiveChannels)
 		{

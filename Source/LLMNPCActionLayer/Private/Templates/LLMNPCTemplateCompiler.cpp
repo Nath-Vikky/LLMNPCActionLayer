@@ -17,6 +17,10 @@ bool TrackAcceptsResolvedTarget(const FLLMMotionTrack& Track)
 
 bool MirrorTrack(FLLMMotionTrack& Track)
 {
+	if (Track.ControlId == TEXT("gaze.target"))
+	{
+		return true;
+	}
 	static const TMap<FName, FName> ControlMap = {
 		{TEXT("right_shoulder.pitch"), TEXT("left_shoulder.pitch")},
 		{TEXT("right_shoulder.yaw"), TEXT("left_shoulder.yaw")},

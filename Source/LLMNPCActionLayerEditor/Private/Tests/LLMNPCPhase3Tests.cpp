@@ -169,6 +169,53 @@ bool FLLMNPCTemplateDraftParserTest::RunTest(const FString& Parameters)
 		CompatibleTemplate->Metadata.CompatibleSkeletonProfileIds.Contains(TEXT("custom_humanoid.v1"))
 	);
 
+	const FString N3PolicyDraft = DraftJson.Replace(
+		TEXT("\"allowed_styles\": [\"neutral\", \"faithful\"]"),
+		TEXT(
+			"\"allowed_styles\": [\"neutral\", \"faithful\"],\n"
+			"    \"policy_version\": 2,\n"
+			"    \"gaze_engagement\": [0.0, 1.0],\n"
+			"    \"palm_orientation_weight\": [0.0, 1.0],\n"
+			"    \"finger_pose_weight\": [0.0, 1.0],\n"
+			"    \"torso_participation\": [0.0, 1.0]"
+		)
+	);
+	ULLMNPCMotionTemplate* N3PolicyTemplate =
+		NewObject<ULLMNPCMotionTemplate>();
+	TestTrue(
+		TEXT("N3 weight ranges accept a zero lower bound"),
+		FLLMNPCTemplateDraftImporter::ParseDraftJson(
+			N3PolicyDraft,
+			*N3PolicyTemplate,
+			Info,
+			Error
+		)
+	);
+	TestTrue(
+		TEXT("The zero gaze lower bound reaches the template policy"),
+		FMath::IsNearlyZero(
+			N3PolicyTemplate->ModifierPolicy.GazeEngagementRange.X
+		)
+	);
+	const FString NegativeN3PolicyDraft = N3PolicyDraft.Replace(
+		TEXT("\"gaze_engagement\": [0.0, 1.0]"),
+		TEXT("\"gaze_engagement\": [-0.1, 1.0]")
+	);
+	TestFalse(
+		TEXT("N3 weight ranges still reject negative values"),
+		FLLMNPCTemplateDraftImporter::ParseDraftJson(
+			NegativeN3PolicyDraft,
+			*NewObject<ULLMNPCMotionTemplate>(),
+			Info,
+			Error
+		)
+	);
+	TestEqual(
+		TEXT("Negative N3 ranges have a stable rejection"),
+		Error,
+		FString(TEXT("LLMNPC_DRAFT_RANGE_INVALID:gaze_engagement"))
+	);
+
 	const FString SelfPublished = DraftJson.Replace(
 		TEXT("\"review_state\": \"generated\""),
 		TEXT("\"review_state\": \"published\"")

@@ -7,6 +7,9 @@
 #include "Dialogue/LLMNPCModelTurnContract.h"
 #include "Dom/JsonObject.h"
 #include "Engine/GameInstance.h"
+#include "Interfaces/IPluginManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Protocol/LLMNPCTurnRequestV3Adapter.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -173,10 +176,43 @@ bool FLLMNPCForwardN2CatalogBaselineTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("The Published catalog has no diagnostics"), Index.GetDiagnostics().IsEmpty());
 	TestEqual(TEXT("The catalog indexes all six variants"), Index.GetTemplateCount(), 6);
 	TestEqual(TEXT("The catalog indexes three Public Actions"), Index.GetPublicActionCount(), 3);
+	const TSharedPtr<IPlugin> Plugin =
+		IPluginManager::Get().FindPlugin(TEXT("LLMNPCActionLayer"));
+	TestTrue(TEXT("The plugin descriptor is discoverable"), Plugin.IsValid());
+	FString CatalogArtifactJson;
+	TSharedPtr<FJsonObject> CatalogArtifact;
+	if (Plugin.IsValid())
+	{
+		TestTrue(
+			TEXT("The current catalog artifact is readable"),
+			FFileHelper::LoadFileToString(
+				CatalogArtifactJson,
+				*FPaths::Combine(
+					Plugin->GetBaseDir(),
+					TEXT("Resources"),
+					TEXT("Catalog"),
+					TEXT("Manny"),
+					TEXT("public_actions_v1.json")
+				)
+			)
+		);
+		TestTrue(
+			TEXT("The current catalog artifact is valid JSON"),
+			ForwardN2ParseObject(CatalogArtifactJson, CatalogArtifact)
+		);
+	}
+	FString ArtifactCatalogHash;
+	if (CatalogArtifact.IsValid())
+	{
+		CatalogArtifact->TryGetStringField(
+			TEXT("catalog_hash"),
+			ArtifactCatalogHash
+		);
+	}
 	TestEqual(
-		TEXT("The migrated catalog hash is deterministic"),
+		TEXT("The runtime catalog matches the current versioned artifact"),
 		Index.GetCatalogHash(),
-		FString(TEXT("md5:82c3270b3bc65bf0110c45a0ffb373df"))
+		ArtifactCatalogHash
 	);
 
 	ULLMNPCMotionTemplate* Generated = DuplicateObject<ULLMNPCMotionTemplate>(

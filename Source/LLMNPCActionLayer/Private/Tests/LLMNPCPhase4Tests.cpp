@@ -128,6 +128,16 @@ bool FLLMNPCPhase4CandidateRetrieverTest::RunTest(const FString& Parameters)
 	TArray<FLLMNPCTemplateCandidate> SourceCandidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), SourceCandidates);
 	TestEqual(TEXT("Phase 4 library exposes nod, wave, and point"), SourceCandidates.Num(), 3);
+	const FLLMNPCTemplateCandidate* SourcePoint =
+		FindCandidate(SourceCandidates, TEXT("gesture.point.target"));
+	TestNotNull(TEXT("The point source candidate exists"), SourcePoint);
+	if (SourcePoint)
+	{
+		FLLMNPCTemplateCandidate NonMirrorPoint = *SourcePoint;
+		NonMirrorPoint.SelectionId = TEXT("fixture.point.non_mirrorable");
+		NonMirrorPoint.bAllowMirror = false;
+		SourceCandidates.Add(NonMirrorPoint);
+	}
 
 	FLLMNPCCandidateRetrievalRequest Request;
 	Request.UserMessage = MakeText({ 0x4F60, 0x597D });
@@ -151,7 +161,20 @@ bool FLLMNPCPhase4CandidateRetrieverTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("The wave is marked for UE-side mirroring"), MirroredWave->bMirrorRecommended);
 	}
-	TestNull(TEXT("Non-mirrorable point remains blocked"), FindCandidate(Result.Candidates, TEXT("gesture.point.target")));
+	const FLLMNPCTemplateCandidate* MirroredPoint =
+		FindCandidate(Result.Candidates, TEXT("gesture.point.target"));
+	TestNotNull(TEXT("The N3 mirror-capable point remains available"), MirroredPoint);
+	if (MirroredPoint)
+	{
+		TestTrue(
+			TEXT("The point is marked for UE-side mirroring"),
+			MirroredPoint->bMirrorRecommended
+		);
+	}
+	TestNull(
+		TEXT("An explicitly non-mirrorable point remains blocked"),
+		FindCandidate(Result.Candidates, TEXT("fixture.point.non_mirrorable"))
+	);
 
 	Request.Context.ActiveStates.Reset();
 	Result = ULLMNPCCandidateRetriever::Retrieve(Request);

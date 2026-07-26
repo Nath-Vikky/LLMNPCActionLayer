@@ -46,7 +46,9 @@ void FLLMNPCMotionSampler::SampleClip(
 	USkeletalMeshComponent* Mesh,
 	const TMap<FString, TObjectPtr<AActor>>& TargetMap,
 	float Time,
-	FLLMProceduralPoseSnapshot& OutSnapshot
+	FLLMProceduralPoseSnapshot& OutSnapshot,
+	const TMap<FString, FLLMNPCTargetRuntimeSample>* RuntimeTargetSamples,
+	const FLLMNPCResolvedMotionModifiers* ResolvedModifiers
 )
 {
 	OutSnapshot = FLLMProceduralPoseSnapshot();
@@ -62,7 +64,10 @@ void FLLMNPCMotionSampler::SampleClip(
 
 	for (const FLLMMotionTrack& Track : Clip.Tracks)
 	{
-		const float TrackAlpha = EvaluateEnvelope(Track, Time) * OutSnapshot.GlobalAlpha * Track.Strength;
+		const float TrackAlpha =
+			EvaluateEnvelope(Track, Time) *
+			OutSnapshot.GlobalAlpha *
+			Track.Strength;
 		if (TrackAlpha <= KINDA_SMALL_NUMBER)
 		{
 			continue;
@@ -253,65 +258,133 @@ void FLLMNPCMotionSampler::SampleClip(
 		}
 		else if (Control == TEXT("right_hand.ik"))
 		{
-			OutSnapshot.RightHandIKAlpha = FMath::Max(OutSnapshot.RightHandIKAlpha, TrackAlpha);
 			if (Track.TrackType == ELLMMotionTrackType::Anchor)
 			{
+				OutSnapshot.RightHandIKAlpha = FMath::Max(
+					OutSnapshot.RightHandIKAlpha,
+					TrackAlpha
+				);
 				OutSnapshot.RightHandIKTargetCS = BuildAnchorTargetCS(Track, Manifest, Mesh);
 			}
 			else if (Track.TrackType == ELLMMotionTrackType::IKReach)
 			{
-				OutSnapshot.RightHandIKTargetCS = BuildReachTargetCS(Track, Mesh, TargetMap, false);
+				float TargetAlpha = 0.0f;
+				OutSnapshot.RightHandIKTargetCS = BuildReachTargetCS(
+					Track,
+					Mesh,
+					TargetMap,
+					RuntimeTargetSamples,
+					ResolvedModifiers,
+					TargetAlpha,
+					false
+				);
+				OutSnapshot.RightHandIKAlpha = FMath::Max(
+					OutSnapshot.RightHandIKAlpha,
+					TrackAlpha * TargetAlpha
+				);
 			}
 		}
 		else if (Control == TEXT("left_hand.ik"))
 		{
-			OutSnapshot.LeftHandIKAlpha = FMath::Max(OutSnapshot.LeftHandIKAlpha, TrackAlpha);
 			if (Track.TrackType == ELLMMotionTrackType::Anchor)
 			{
+				OutSnapshot.LeftHandIKAlpha = FMath::Max(
+					OutSnapshot.LeftHandIKAlpha,
+					TrackAlpha
+				);
 				OutSnapshot.LeftHandIKTargetCS = BuildAnchorTargetCS(Track, Manifest, Mesh);
 			}
 			else if (Track.TrackType == ELLMMotionTrackType::IKReach)
 			{
-				OutSnapshot.LeftHandIKTargetCS = BuildReachTargetCS(Track, Mesh, TargetMap, true);
+				float TargetAlpha = 0.0f;
+				OutSnapshot.LeftHandIKTargetCS = BuildReachTargetCS(
+					Track,
+					Mesh,
+					TargetMap,
+					RuntimeTargetSamples,
+					ResolvedModifiers,
+					TargetAlpha,
+					true
+				);
+				OutSnapshot.LeftHandIKAlpha = FMath::Max(
+					OutSnapshot.LeftHandIKAlpha,
+					TrackAlpha * TargetAlpha
+				);
 			}
 		}
 		else if (Control == TEXT("gaze.target"))
 		{
-			if (const TObjectPtr<AActor>* Target = TargetMap.Find(Track.TargetRef))
+			FVector TargetLocationWS;
+			float TargetAlpha = 0.0f;
+			if (
+				Mesh &&
+				ResolveTargetLocationWS(
+					Track.TargetRef,
+					TargetMap,
+					RuntimeTargetSamples,
+					TargetLocationWS,
+					TargetAlpha
+				)
+			)
 			{
-				if (Mesh && IsValid(Target->Get()))
-				{
-					OutSnapshot.GazeTargetCS = Mesh->GetComponentTransform().InverseTransformPosition(
-						Target->Get()->GetActorLocation() + FVector(0.0f, 0.0f, 80.0f)
+				OutSnapshot.GazeTargetCS =
+					Mesh->GetComponentTransform().InverseTransformPosition(
+						TargetLocationWS + FVector(0.0f, 0.0f, 80.0f)
 					);
-					OutSnapshot.GazeAlpha = FMath::Max(OutSnapshot.GazeAlpha, TrackAlpha);
-				}
+				OutSnapshot.GazeAlpha = FMath::Max(
+					OutSnapshot.GazeAlpha,
+					TrackAlpha * TargetAlpha
+				);
 			}
 		}
 		else if (Control == TEXT("right_hand.palm_target"))
 		{
-			if (const TObjectPtr<AActor>* Target = TargetMap.Find(Track.TargetRef))
+			FVector TargetLocationWS;
+			float TargetAlpha = 0.0f;
+			if (
+				Mesh &&
+				ResolveTargetLocationWS(
+					Track.TargetRef,
+					TargetMap,
+					RuntimeTargetSamples,
+					TargetLocationWS,
+					TargetAlpha
+				)
+			)
 			{
-				if (Mesh && IsValid(Target->Get()))
-				{
-					OutSnapshot.RightHandPalmTargetCS = Mesh->GetComponentTransform().InverseTransformPosition(
-						Target->Get()->GetActorLocation() + FVector(0.0f, 0.0f, 70.0f)
+				OutSnapshot.RightHandPalmTargetCS =
+					Mesh->GetComponentTransform().InverseTransformPosition(
+						TargetLocationWS + FVector(0.0f, 0.0f, 70.0f)
 					);
-					OutSnapshot.RightHandPalmAlpha = FMath::Max(OutSnapshot.RightHandPalmAlpha, TrackAlpha);
-				}
+				OutSnapshot.RightHandPalmAlpha = FMath::Max(
+					OutSnapshot.RightHandPalmAlpha,
+					TrackAlpha * TargetAlpha
+				);
 			}
 		}
 		else if (Control == TEXT("left_hand.palm_target"))
 		{
-			if (const TObjectPtr<AActor>* Target = TargetMap.Find(Track.TargetRef))
+			FVector TargetLocationWS;
+			float TargetAlpha = 0.0f;
+			if (
+				Mesh &&
+				ResolveTargetLocationWS(
+					Track.TargetRef,
+					TargetMap,
+					RuntimeTargetSamples,
+					TargetLocationWS,
+					TargetAlpha
+				)
+			)
 			{
-				if (Mesh && IsValid(Target->Get()))
-				{
-					OutSnapshot.LeftHandPalmTargetCS = Mesh->GetComponentTransform().InverseTransformPosition(
-						Target->Get()->GetActorLocation() + FVector(0.0f, 0.0f, 70.0f)
+				OutSnapshot.LeftHandPalmTargetCS =
+					Mesh->GetComponentTransform().InverseTransformPosition(
+						TargetLocationWS + FVector(0.0f, 0.0f, 70.0f)
 					);
-					OutSnapshot.LeftHandPalmAlpha = FMath::Max(OutSnapshot.LeftHandPalmAlpha, TrackAlpha);
-				}
+				OutSnapshot.LeftHandPalmAlpha = FMath::Max(
+					OutSnapshot.LeftHandPalmAlpha,
+					TrackAlpha * TargetAlpha
+				);
 			}
 		}
 	}
@@ -423,22 +496,32 @@ FVector FLLMNPCMotionSampler::BuildReachTargetCS(
 	const FLLMMotionTrack& Track,
 	USkeletalMeshComponent* Mesh,
 	const TMap<FString, TObjectPtr<AActor>>& TargetMap,
+	const TMap<FString, FLLMNPCTargetRuntimeSample>* RuntimeTargetSamples,
+	const FLLMNPCResolvedMotionModifiers* ResolvedModifiers,
+	float& OutTargetAlpha,
 	bool bLeftHand
 )
 {
+	OutTargetAlpha = 0.0f;
 	if (!Mesh)
 	{
 		return FVector::ZeroVector;
 	}
 
-	const TObjectPtr<AActor>* Target = TargetMap.Find(Track.TargetRef);
-	if (!Target || !IsValid(Target->Get()))
+	FVector TargetLocationWS;
+	if (!ResolveTargetLocationWS(
+		Track.TargetRef,
+		TargetMap,
+		RuntimeTargetSamples,
+		TargetLocationWS,
+		OutTargetAlpha
+	))
 	{
 		return FVector::ZeroVector;
 	}
 
-	const FVector TargetCS = Mesh->GetComponentTransform().InverseTransformPosition(
-		Target->Get()->GetActorLocation() + FVector(0.0f, 0.0f, 60.0f)
+	FVector TargetCS = Mesh->GetComponentTransform().InverseTransformPosition(
+		TargetLocationWS + FVector(0.0f, 0.0f, 60.0f)
 	);
 
 	const FVector ShoulderCS = GetBoneLocationCS(
@@ -446,7 +529,53 @@ FVector FLLMNPCMotionSampler::BuildReachTargetCS(
 		bLeftHand ? FName(TEXT("upperarm_l")) : FName(TEXT("upperarm_r")),
 		FVector(0.0f, bLeftHand ? -25.0f : 25.0f, 80.0f)
 	);
+	if (ResolvedModifiers)
+	{
+		TargetCS.Z =
+			ShoulderCS.Z +
+			(TargetCS.Z - ShoulderCS.Z) *
+				ResolvedModifiers->HeightScale;
+		TargetCS.Y =
+			ShoulderCS.Y +
+			(TargetCS.Y - ShoulderCS.Y) *
+				ResolvedModifiers->LateralScale;
+	}
 	const FVector Direction = (TargetCS - ShoulderCS).GetSafeNormal();
 	const float ReachDistance = FMath::Lerp(35.0f, 90.0f, Track.Reach);
 	return ShoulderCS + Direction * ReachDistance + Track.Offset;
+}
+
+bool FLLMNPCMotionSampler::ResolveTargetLocationWS(
+	const FString& TargetRef,
+	const TMap<FString, TObjectPtr<AActor>>& TargetMap,
+	const TMap<FString, FLLMNPCTargetRuntimeSample>* RuntimeTargetSamples,
+	FVector& OutLocationWS,
+	float& OutTargetAlpha
+)
+{
+	OutLocationWS = FVector::ZeroVector;
+	OutTargetAlpha = 0.0f;
+	if (RuntimeTargetSamples)
+	{
+		if (const FLLMNPCTargetRuntimeSample* Sample =
+			RuntimeTargetSamples->Find(TargetRef))
+		{
+			if (!Sample->bValid || Sample->Alpha <= KINDA_SMALL_NUMBER)
+			{
+				return false;
+			}
+			OutLocationWS = Sample->LocationWS;
+			OutTargetAlpha = FMath::Clamp(Sample->Alpha, 0.0f, 1.0f);
+			return true;
+		}
+	}
+
+	const TObjectPtr<AActor>* Target = TargetMap.Find(TargetRef);
+	if (!Target || !IsValid(Target->Get()))
+	{
+		return false;
+	}
+	OutLocationWS = Target->Get()->GetActorLocation();
+	OutTargetAlpha = 1.0f;
+	return true;
 }

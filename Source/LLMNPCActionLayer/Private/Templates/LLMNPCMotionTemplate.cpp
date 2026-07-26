@@ -13,6 +13,15 @@ bool IsOrderedPositiveRange(const FVector2D& Range)
 		Range.Y >= Range.X;
 }
 
+bool IsOrderedNonNegativeRange(const FVector2D& Range)
+{
+	return
+		FMath::IsFinite(Range.X) &&
+		FMath::IsFinite(Range.Y) &&
+		Range.X >= 0.0f &&
+		Range.Y >= Range.X;
+}
+
 bool IsValidAnimationPlaybackPolicy(const FLLMNPCAnimationPlaybackPolicy& Policy)
 {
 	return
@@ -125,12 +134,50 @@ bool ULLMNPCMotionTemplate::ValidateTemplate(FString& OutError) const
 	}
 
 	if (
+		ModifierPolicy.PolicyVersion < 1 ||
+		ModifierPolicy.PolicyVersion > 2 ||
 		!IsOrderedPositiveRange(ModifierPolicy.AmplitudeRange) ||
 		!IsOrderedPositiveRange(ModifierPolicy.SpeedRange) ||
-		!IsOrderedPositiveRange(ModifierPolicy.DurationRange)
+		!IsOrderedPositiveRange(ModifierPolicy.DurationRange) ||
+		!IsOrderedPositiveRange(ModifierPolicy.ReachScaleRange) ||
+		!IsOrderedPositiveRange(ModifierPolicy.HeightScaleRange) ||
+		!IsOrderedPositiveRange(ModifierPolicy.LateralScaleRange) ||
+		ModifierPolicy.CycleCountRange.X < 0 ||
+		ModifierPolicy.CycleCountRange.Y < ModifierPolicy.CycleCountRange.X ||
+		!IsOrderedNonNegativeRange(ModifierPolicy.GazeEngagementRange) ||
+		!IsOrderedNonNegativeRange(ModifierPolicy.PalmOrientationWeightRange) ||
+		!IsOrderedNonNegativeRange(ModifierPolicy.FingerPoseWeightRange) ||
+		!IsOrderedNonNegativeRange(ModifierPolicy.TorsoParticipationRange) ||
+		!IsOrderedPositiveRange(ModifierPolicy.BlendInScaleRange) ||
+		!IsOrderedPositiveRange(ModifierPolicy.BlendOutScaleRange)
 	)
 	{
 		OutError = TEXT("LLMNPC_TEMPLATE_MODIFIER_RANGE_INVALID");
+		return false;
+	}
+	if (
+		!FMath::IsFinite(ModifierPolicy.MaxTargetFollowSpeedCmPerSecond) ||
+		!FMath::IsFinite(ModifierPolicy.MaxTargetAngularSpeedDegreesPerSecond) ||
+		!FMath::IsFinite(ModifierPolicy.TargetInterpolationSpeed) ||
+		!FMath::IsFinite(ModifierPolicy.TargetTeleportThresholdCm) ||
+		!FMath::IsFinite(ModifierPolicy.TargetLostFadeSeconds) ||
+		ModifierPolicy.MaxTargetFollowSpeedCmPerSecond <= 0.0f ||
+		ModifierPolicy.MaxTargetAngularSpeedDegreesPerSecond <= 0.0f ||
+		ModifierPolicy.TargetInterpolationSpeed <= 0.0f ||
+		ModifierPolicy.TargetTeleportThresholdCm <= 0.0f ||
+		ModifierPolicy.TargetLostFadeSeconds <= 0.0f ||
+		!FMath::IsFinite(ModifierPolicy.MinObstacleAmplitudeScale) ||
+		!FMath::IsFinite(ModifierPolicy.MinObstacleReachScale) ||
+		!FMath::IsFinite(ModifierPolicy.ObstacleCancelClearance) ||
+		ModifierPolicy.MinObstacleAmplitudeScale <= 0.0f ||
+		ModifierPolicy.MinObstacleAmplitudeScale > 1.0f ||
+		ModifierPolicy.MinObstacleReachScale <= 0.0f ||
+		ModifierPolicy.MinObstacleReachScale > 1.0f ||
+		ModifierPolicy.ObstacleCancelClearance < 0.0f ||
+		ModifierPolicy.ObstacleCancelClearance > 1.0f
+	)
+	{
+		OutError = TEXT("LLMNPC_TEMPLATE_CONTEXT_POLICY_INVALID");
 		return false;
 	}
 	if (
@@ -302,6 +349,28 @@ FString ULLMNPCMotionTemplate::BuildCatalogContentHash(
 		FString::Printf(TEXT("%.6f,%.6f"), Policy.DurationRange.X, Policy.DurationRange.Y),
 		Policy.bAllowMirror ? TEXT("1") : TEXT("0"),
 		JoinNames(Policy.AllowedStyleTags),
+		FString::FromInt(Policy.PolicyVersion),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.ReachScaleRange.X, Policy.ReachScaleRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.HeightScaleRange.X, Policy.HeightScaleRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.LateralScaleRange.X, Policy.LateralScaleRange.Y),
+		FString::Printf(TEXT("%d,%d"), Policy.CycleCountRange.X, Policy.CycleCountRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.GazeEngagementRange.X, Policy.GazeEngagementRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.PalmOrientationWeightRange.X, Policy.PalmOrientationWeightRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.FingerPoseWeightRange.X, Policy.FingerPoseWeightRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.TorsoParticipationRange.X, Policy.TorsoParticipationRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.BlendInScaleRange.X, Policy.BlendInScaleRange.Y),
+		FString::Printf(TEXT("%.6f,%.6f"), Policy.BlendOutScaleRange.X, Policy.BlendOutScaleRange.Y),
+		Policy.bEnableDynamicTargetTracking ? TEXT("1") : TEXT("0"),
+		FString::Printf(TEXT("%.6f"), Policy.MaxTargetFollowSpeedCmPerSecond),
+		FString::Printf(TEXT("%.6f"), Policy.MaxTargetAngularSpeedDegreesPerSecond),
+		FString::Printf(TEXT("%.6f"), Policy.TargetInterpolationSpeed),
+		FString::Printf(TEXT("%.6f"), Policy.TargetTeleportThresholdCm),
+		FString::Printf(TEXT("%.6f"), Policy.TargetLostFadeSeconds),
+		FString::FromInt(static_cast<int32>(Policy.TargetLossPolicy)),
+		Policy.bEnableObstacleAdaptation ? TEXT("1") : TEXT("0"),
+		FString::Printf(TEXT("%.6f"), Policy.MinObstacleAmplitudeScale),
+		FString::Printf(TEXT("%.6f"), Policy.MinObstacleReachScale),
+		FString::Printf(TEXT("%.6f"), Policy.ObstacleCancelClearance),
 		Metadata.VariantDifference.TrimStartAndEnd(),
 		Metadata.SourceRecipeHash.TrimStartAndEnd(),
 		Metadata.KinematicReportHash.TrimStartAndEnd(),

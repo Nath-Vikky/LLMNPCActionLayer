@@ -45,6 +45,14 @@ public:
 		int32 RandomSeed
 	) const;
 
+	const ULLMNPCMotionTemplate* ResolvePublishedVariantWithConstraints(
+		FName PublicActionId,
+		FName SkeletonProfileId,
+		FName StyleTag,
+		int32 RandomSeed,
+		bool bRequireMirror
+	) const;
+
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Template Library")
 	const ULLMNPCSkeletonProfile* FindSkeletonProfile(FName ProfileId) const;
 
