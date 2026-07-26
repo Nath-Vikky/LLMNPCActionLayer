@@ -451,6 +451,17 @@ bool FLLMNPCMannyN3ContextMigration::Run(
 		}
 		Definitions.Add(Definition);
 	}
+	if (ULLMNPCPublicActionDefinition* Clap =
+		LoadObject<ULLMNPCPublicActionDefinition>(
+			nullptr,
+			TEXT(
+				"/LLMNPCActionLayer/LLMNPC/PublicActions/"
+				"PA_Gesture_Clap.PA_Gesture_Clap"
+			)
+		))
+	{
+		Definitions.Add(Clap);
+	}
 
 	FLLMNPCTemplateSearchIndex Index;
 	if (

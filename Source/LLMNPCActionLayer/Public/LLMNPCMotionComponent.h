@@ -152,6 +152,10 @@ public:
 
 #if WITH_EDITOR
 	void ResetMotionTestState();
+	bool PreviewAnimationAssetTemplate(
+		const ULLMNPCMotionTemplate& Template,
+		const FLLMNPCTemplateModifiers& Modifiers
+	);
 #endif
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Debug")

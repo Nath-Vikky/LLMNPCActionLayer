@@ -1,0 +1,410 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "llmnpc.animation_template_draft.v1",
+  "title": "LLM NPC Animation Asset Template Draft v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "asset_name",
+    "template_id",
+    "public_action_id",
+    "semantic_version",
+    "kind",
+    "variant_id",
+    "variant_weight",
+    "variant_style_tags",
+    "review_state",
+    "display_name",
+    "description",
+    "skeleton_profile_id",
+    "metadata",
+    "modifier_policy",
+    "playback",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "llmnpc.animation_template_draft.v1"
+    },
+    "asset_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]{2,127}$"
+    },
+    "template_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128
+    },
+    "public_action_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128
+    },
+    "semantic_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "kind": {
+      "const": "animation_asset"
+    },
+    "variant_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "variant_weight": {
+      "type": "number",
+      "minimum": 0.01,
+      "maximum": 100
+    },
+    "variant_style_tags": {
+      "$ref": "#/$defs/tag_array"
+    },
+    "review_state": {
+      "enum": [
+        "draft",
+        "generated"
+      ]
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "skeleton_profile_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "compatible_skeleton_profile_ids": {
+      "$ref": "#/$defs/tag_array"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "visual_description",
+        "intent_tags",
+        "emotion_tags",
+        "personality_tags",
+        "body_region_tags",
+        "spatial_requirement_tags",
+        "semantic_effect_tags",
+        "target_category_tags",
+        "required_capabilities",
+        "required_channels",
+        "blocked_states",
+        "requires_target",
+        "can_run_while_moving",
+        "allow_runtime_model_selection",
+        "cooldown_seconds",
+        "expressiveness",
+        "energy",
+        "social_intensity"
+      ],
+      "properties": {
+        "visual_description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "intent_tags": {
+          "$ref": "#/$defs/tag_array"
+        },
+        "emotion_tags": {
+          "$ref": "#/$defs/tag_array"
+        },
+        "personality_tags": {
+          "$ref": "#/$defs/tag_array"
+        },
+        "body_region_tags": {
+          "$ref": "#/$defs/nonempty_tag_array"
+        },
+        "spatial_requirement_tags": {
+          "$ref": "#/$defs/tag_array"
+        },
+        "semantic_effect_tags": {
+          "$ref": "#/$defs/nonempty_tag_array"
+        },
+        "target_category_tags": {
+          "$ref": "#/$defs/tag_array"
+        },
+        "required_capabilities": {
+          "$ref": "#/$defs/nonempty_tag_array"
+        },
+        "required_channels": {
+          "$ref": "#/$defs/nonempty_tag_array"
+        },
+        "blocked_states": {
+          "$ref": "#/$defs/tag_array"
+        },
+        "requires_target": {
+          "type": "boolean"
+        },
+        "can_run_while_moving": {
+          "type": "boolean"
+        },
+        "allow_runtime_model_selection": {
+          "type": "boolean"
+        },
+        "cooldown_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60
+        },
+        "expressiveness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "energy": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "social_intensity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "variant_difference": {
+          "type": "string",
+          "maxLength": 600
+        }
+      }
+    },
+    "modifier_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amplitude",
+        "speed",
+        "duration",
+        "allow_mirror",
+        "allowed_styles"
+      ],
+      "properties": {
+        "amplitude": {
+          "const": [
+            1,
+            1
+          ]
+        },
+        "speed": {
+          "$ref": "#/$defs/bounded_scale_range"
+        },
+        "duration": {
+          "$ref": "#/$defs/bounded_scale_range"
+        },
+        "allow_mirror": {
+          "const": false
+        },
+        "allowed_styles": {
+          "$ref": "#/$defs/nonempty_tag_array"
+        },
+        "random_speed_jitter": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.25
+        }
+      }
+    },
+    "playback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slot_name",
+        "blend_in_seconds",
+        "blend_out_seconds",
+        "start_position_seconds",
+        "max_duration_seconds",
+        "loop",
+        "interruptible",
+        "stop_other_montages",
+        "allow_root_motion"
+      ],
+      "properties": {
+        "slot_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "blend_in_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "blend_out_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "start_position_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_duration_seconds": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 60
+        },
+        "loop": {
+          "type": "boolean"
+        },
+        "interruptible": {
+          "type": "boolean"
+        },
+        "stop_other_montages": {
+          "type": "boolean"
+        },
+        "allow_root_motion": {
+          "const": false
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_type",
+        "source_license",
+        "authoring_agent"
+      ],
+      "properties": {
+        "source_type": {
+          "enum": [
+            "project_owned_animation_asset",
+            "licensed_animation_asset"
+          ]
+        },
+        "source_notes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "reconstruction_profile_uri": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "reconstruction_profile_path": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "reconstruction_profile_hash": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "full_pose_artifact_uri": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "full_pose_artifact_hash": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 256
+        },
+        "source_license": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "identifier",
+            "holder",
+            "redistribution_allowed"
+          ],
+          "properties": {
+            "identifier": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "holder": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "redistribution_allowed": {
+              "type": "boolean"
+            },
+            "notes": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          }
+        },
+        "authoring_agent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tool",
+            "version",
+            "prompt_version"
+          ],
+          "properties": {
+            "tool": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "prompt_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "tag_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "nonempty_tag_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "bounded_scale_range": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 4
+        },
+        {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 4
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

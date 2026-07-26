@@ -27,6 +27,7 @@ public class LLMNPCActionLayerEditor : ModuleRules
 				"Json",
 				"JsonUtilities",
 				"LevelEditor",
+				"PropertyEditor",
 				"Projects",
 				"Slate",
 				"SlateCore",

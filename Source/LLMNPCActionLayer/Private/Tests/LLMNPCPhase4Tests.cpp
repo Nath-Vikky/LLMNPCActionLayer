@@ -127,7 +127,15 @@ bool FLLMNPCPhase4CandidateRetrieverTest::RunTest(const FString& Parameters)
 	ULLMNPCTemplateLibrarySubsystem* Library = MakeLibrary();
 	TArray<FLLMNPCTemplateCandidate> SourceCandidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), SourceCandidates);
-	TestEqual(TEXT("Phase 4 library exposes nod, wave, and point"), SourceCandidates.Num(), 3);
+	TestEqual(
+		TEXT("Phase 4 library exposes nod, wave, point, and Clap"),
+		SourceCandidates.Num(),
+		4
+	);
+	TestNotNull(
+		TEXT("The Published Clap source candidate exists"),
+		FindCandidate(SourceCandidates, TEXT("gesture.clap"))
+	);
 	const FLLMNPCTemplateCandidate* SourcePoint =
 		FindCandidate(SourceCandidates, TEXT("gesture.point.target"));
 	TestNotNull(TEXT("The point source candidate exists"), SourcePoint);

@@ -1,0 +1,328 @@
+{
+	"schema_version": "llmnpc.published_template_source.v1",
+	"asset_path": "/Game/LLMNPCActionLayer/MotionTemplates/Published/MT_Clap_Manny_Asset_v1_Generated.MT_Clap_Manny_Asset_v1_Generated",
+	"catalog_content_hash": "md5:da908e12edc3ea06a2d10a28598f8d07",
+	"template_kind": 1,
+	"metadata":
+	{
+		"templateId": "gesture.clap.manny.asset.v1",
+		"publicActionId": "gesture.clap",
+		"semanticVersion": "1.0.0",
+		"catalogSchemaVersion": "llmnpc.template_catalog.v1",
+		"catalogRevision": 1,
+		"variantId": "animation_asset",
+		"variantWeight": 1,
+		"variantStyleTags": [
+			"neutral",
+			"excited"
+		],
+		"displayName": "Manny Clap Animation",
+		"description": "A Manny-compatible reference animation in which both hands move together for a visible clap, then release and return.",
+		"visualDescription": "Both arms bring the open hands together in front of the upper body for a clearly timed clap, then separate and recover to the base pose.",
+		"intentTags": [
+			"applaud"
+		],
+		"emotionTags": [
+			"excited"
+		],
+		"personalityTags": [],
+		"bodyRegionTags": [
+			"two_hands",
+			"hand",
+			"fingers"
+		],
+		"spatialRequirementTags": [
+			"target_independent"
+		],
+		"semanticEffectTags": [
+			"applaud",
+			"acknowledge"
+		],
+		"targetCategoryTags": [],
+		"requiredCapabilities": [
+			"animation_asset.playback"
+		],
+		"requiredChannels": [
+			"full_body"
+		],
+		"blockedStates": [
+			"left_hand_busy",
+			"right_hand_busy"
+		],
+		"skeletonProfileId": "ue5_manny.v1",
+		"compatibleSkeletonProfileIds": [],
+		"bRequiresTarget": false,
+		"bCanRunWhileMoving": false,
+		"bAllowRuntimeModelSelection": true,
+		"cooldownSeconds": 1,
+		"expressiveness": 0.75,
+		"energy": 0.80000001192092896,
+		"socialIntensity": 0.75,
+		"variantDifference": "Reference Animation Asset baseline for later comparison with a procedural hands.contact version.",
+		"sourceRecipeHash": "animation_asset:/Game/LLMNPC/Animation/Clapping.Clapping:md5:1d24304d2966fa0c13e4cd7a1faa9faa",
+		"kinematicReportHash": "",
+		"catalogContentHash": "md5:da908e12edc3ea06a2d10a28598f8d07",
+		"reviewState": "Published"
+	},
+	"modifier_policy":
+	{
+		"policyVersion": 2,
+		"amplitudeRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"speedRange":
+		{
+			"x": 0.84999999999999998,
+			"y": 1.1499999999999999
+		},
+		"durationRange":
+		{
+			"x": 0.90000000000000002,
+			"y": 1.1000000000000001
+		},
+		"bAllowMirror": false,
+		"allowedStyleTags": [
+			"neutral",
+			"excited"
+		],
+		"reachScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"heightScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"lateralScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"cycleCountRange":
+		{
+			"x": 0,
+			"y": 0
+		},
+		"gazeEngagementRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"palmOrientationWeightRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"fingerPoseWeightRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"torsoParticipationRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"blendInScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"blendOutScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"bEnableDynamicTargetTracking": false,
+		"maxTargetFollowSpeedCmPerSecond": 240,
+		"maxTargetAngularSpeedDegreesPerSecond": 180,
+		"targetInterpolationSpeed": 8,
+		"targetTeleportThresholdCm": 250,
+		"targetLostFadeSeconds": 0.18000000715255737,
+		"targetLossPolicy": "FadeOut",
+		"bEnableObstacleAdaptation": false,
+		"minObstacleAmplitudeScale": 0.60000002384185791,
+		"minObstacleReachScale": 0.64999997615814209,
+		"obstacleCancelClearance": 0.20000000298023224,
+		"randomAmplitudeJitter": 0,
+		"randomSpeedJitter": 0,
+		"randomFrequencyJitter": 0,
+		"randomPhaseJitterRadians": 0
+	},
+	"procedural_clip":
+	{
+		"clipId": "clip_unnamed",
+		"duration": 1,
+		"blendIn": 0.15000000596046448,
+		"blendOut": 0.20000000298023224,
+		"priority": 0.5,
+		"bInterruptible": true,
+		"tracks": []
+	},
+	"animation_asset": "/Game/LLMNPC/Animation/Clapping.Clapping",
+	"animation_playback":
+	{
+		"slotName": "DefaultSlot",
+		"blendInSeconds": 0.15000000596046448,
+		"blendOutSeconds": 0.20000000298023224,
+		"startPositionSeconds": 0,
+		"maxDurationSeconds": 8,
+		"bLoop": false,
+		"bInterruptible": true,
+		"bStopOtherMontages": false,
+		"bAllowRootMotion": false
+	},
+	"source_provenance":
+	{
+		"source_type": "licensed_animation_asset",
+		"source_notes": "Downloaded from the Adobe Mixamo animation library and imported into the host Unreal Engine project as Clapping. The animation path remains absent from model-authored JSON; Workbench injects the user-selected UAnimationAsset.",
+		"source_license":
+		{
+			"identifier": "Adobe Mixamo FAQ royalty-free project use",
+			"holder": "Adobe Inc.",
+			"redistribution_allowed": false,
+			"notes": "Licensed for use in personal, commercial, and non-profit projects, including video games. Keep the raw animation asset out of the distributable plugin repository."
+		},
+		"authoring_agent":
+		{
+			"tool": "LLMNPCActionLayer Template Workbench",
+			"version": "0.10.0",
+			"prompt_version": "animation-template-draft-v1"
+		},
+		"source_asset_path": "/Game/LLMNPC/Animation/Clapping.Clapping",
+		"source_asset_class": "/Script/Engine.AnimSequence",
+		"source_asset_package_hash": "md5:1d24304d2966fa0c13e4cd7a1faa9faa",
+		"source_skeleton_path": "/Game/Characters/Mannequins/Meshes/SK_Mannequin.SK_Mannequin",
+		"asset_selection":
+		{
+			"method": "ue_asset_picker",
+			"model_supplied_asset_path": false
+		},
+		"import_record":
+		{
+			"schema_version": "llmnpc.animation_draft_import.v1",
+			"draft_content_hash": "sha1:08c0735b74ea142add722fa1c8795c3f48a34b97",
+			"selected_asset_path": "/Game/LLMNPC/Animation/Clapping.Clapping",
+			"imported_at_utc": "2026-07-26T07:09:37.172Z"
+		},
+		"review_history": [
+			{
+				"event": "previewed",
+				"reviewer": "preview_operator",
+				"notes": "Manny Clapping PIE visual acceptance passed: arms, palms, fingers, hand contact, separation, blend in/out, interruption, and idle recovery are correct.",
+				"timestamp_utc": "2026-07-26T07:38:27.109Z",
+				"approved": false
+			},
+			{
+				"event": "human_approved",
+				"reviewer": "Nath-Vikky",
+				"notes": "Manny Clapping PIE visual acceptance passed: arms, palms, fingers, hand contact, separation, blend in/out, interruption, and idle recovery are correct.",
+				"timestamp_utc": "2026-07-26T07:38:36.406Z",
+				"approved": true
+			}
+		],
+		"human_review":
+		{
+			"event": "human_approved",
+			"reviewer": "Nath-Vikky",
+			"notes": "Manny Clapping PIE visual acceptance passed: arms, palms, fingers, hand contact, separation, blend in/out, interruption, and idle recovery are correct.",
+			"timestamp_utc": "2026-07-26T07:38:36.406Z",
+			"approved": true
+		}
+	},
+	"quality_report":
+	{
+		"schema_version": "llmnpc.template_quality_report.v1",
+		"status": "pass",
+		"template_id": "gesture.clap.manny.asset.v1",
+		"template_content_hash": "sha1:8c52ee93d49aace911cdb8249d9dd7ecf93702a2",
+		"template_kind": "animation_asset",
+		"generated_at_utc": "2026-07-26T07:15:12.198Z",
+		"source_reconstruction_hash": "",
+		"full_pose_validation": "not_requested",
+		"source_asset_path": "/Game/LLMNPC/Animation/Clapping.Clapping",
+		"source_asset_skeleton": "/Game/Characters/Mannequins/Meshes/SK_Mannequin.SK_Mannequin",
+		"source_asset_play_length_seconds": 1.1666666269302368,
+		"source_asset_package_hash": "md5:1d24304d2966fa0c13e4cd7a1faa9faa",
+		"checks": [
+			{
+				"id": "template_structure",
+				"passed": true,
+				"message": "Template structure is valid."
+			},
+			{
+				"id": "skeleton_profile",
+				"passed": true,
+				"message": "Skeleton Profile exists and validates."
+			},
+			{
+				"id": "animation_asset_load",
+				"passed": true,
+				"message": "Animation Asset loaded: /Game/LLMNPC/Animation/Clapping.Clapping"
+			},
+			{
+				"id": "animation_asset_type",
+				"passed": true,
+				"message": "Animation Asset is a supported sequence or montage."
+			},
+			{
+				"id": "animation_asset_saved_package",
+				"passed": true,
+				"message": "Animation Asset is saved and its source package fingerprint is available."
+			},
+			{
+				"id": "animation_skeleton_compatibility",
+				"passed": true,
+				"message": "Animation Asset Skeleton matches the selected Manny Profile."
+			},
+			{
+				"id": "animation_slot",
+				"passed": true,
+				"message": "Slot DefaultSlot is registered and usable."
+			},
+			{
+				"id": "animation_root_motion",
+				"passed": true,
+				"message": "Root Motion is absent and forbidden by policy."
+			},
+			{
+				"id": "animation_modifier_surface",
+				"passed": true,
+				"message": "Only bounded speed and duration modifiers are exposed; amplitude and procedural dimensions are fixed."
+			},
+			{
+				"id": "animation_duration",
+				"passed": true,
+				"message": "Max Duration covers the slowest permitted playback (1.510s)."
+			},
+			{
+				"id": "animation_loop_interrupt",
+				"passed": true,
+				"message": "Loop and interruption policy has a bounded recovery path."
+			},
+			{
+				"id": "animation_channel_contract",
+				"passed": true,
+				"message": "Animation Asset declares an explicit non-ambiguous body-region Channel contract."
+			},
+			{
+				"id": "provenance_json",
+				"passed": true,
+				"message": "Provenance JSON parses."
+			},
+			{
+				"id": "animation_asset_source_fingerprint",
+				"passed": true,
+				"message": "The selected Animation Asset still matches the package imported into this Draft."
+			}
+		],
+		"warnings": [
+			"No optional Reconstruction evidence was supplied for this Animation Asset wrapper."
+		],
+		"manual_review_required": true
+	}
+}

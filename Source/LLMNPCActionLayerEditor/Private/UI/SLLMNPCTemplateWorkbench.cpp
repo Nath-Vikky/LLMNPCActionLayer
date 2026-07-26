@@ -1,15 +1,20 @@
 #include "UI/SLLMNPCTemplateWorkbench.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Animation/AnimSequenceBase.h"
+#include "Animation/AnimationAsset.h"
+#include "Animation/Skeleton.h"
 #include "Authoring/LLMNPCTemplateAuthoringSubsystem.h"
 #include "DesktopPlatformModule.h"
 #include "Editor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "IDesktopPlatform.h"
+#include "Interfaces/IPluginManager.h"
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCSettings.h"
 #include "Misc/MessageDialog.h"
 #include "Protocol/LLMNPCTurnRequestV3Adapter.h"
+#include "PropertyCustomizationHelpers.h"
 #include "ScopedTransaction.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
 #include "Styling/AppStyle.h"
@@ -188,6 +193,10 @@ void SLLMNPCTemplateWorkbench::Construct(const FArguments& InArgs)
 			]
 			+ SWidgetSwitcher::Slot()
 			[
+				BuildImportPage()
+			]
+			+ SWidgetSwitcher::Slot()
+			[
 				BuildPreviewPage()
 			]
 			+ SWidgetSwitcher::Slot()
@@ -264,6 +273,15 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildToolbar()
 					ELLMNPCTemplateWorkbenchPage::Library,
 					LOCTEXT("LibraryPage", "Library"),
 					TEXT("Icons.FolderOpen")
+				)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			[
+				BuildPageButton(
+					ELLMNPCTemplateWorkbenchPage::Import,
+					LOCTEXT("ImportPage", "Import"),
+					TEXT("Icons.Import")
 				)
 			]
 			+ SHorizontalBox::Slot()
@@ -491,6 +509,168 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildLibraryPage()
 						]
 					]
 			]
+		];
+}
+
+TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildImportPage()
+{
+	FString DefaultDraftPath;
+	const TSharedPtr<IPlugin> Plugin =
+		IPluginManager::Get().FindPlugin(TEXT("LLMNPCActionLayer"));
+	if (Plugin.IsValid())
+	{
+		DefaultDraftPath = FPaths::Combine(
+			Plugin->GetBaseDir(),
+			TEXT("Resources/AuthoringExamples/DT_Clap_Manny_AnimationAsset_v1.json")
+		);
+	}
+
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		[
+			MakeSectionHeader(
+				LOCTEXT(
+					"AnimationImportHeader",
+					"Animation Asset Draft"
+				)
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 10.0f, 0.0f, 0.0f)
+		[
+			MakeFormRow(
+				LOCTEXT("AnimationAssetLabel", "Animation Asset"),
+				SNew(SObjectPropertyEntryBox)
+					.AllowedClass(UAnimationAsset::StaticClass())
+					.AllowClear(true)
+					.ObjectPath_Lambda(
+						[this]()
+						{
+							return SelectedAnimationAssetPath;
+						}
+					)
+					.OnObjectChanged(
+						this,
+						&SLLMNPCTemplateWorkbench::HandleAnimationAssetChanged
+					)
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 6.0f, 0.0f, 0.0f)
+		[
+			MakeFormRow(
+				LOCTEXT("AnimationDraftPathLabel", "Draft JSON"),
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.FillWidth(1.0f)
+				[
+					SAssignNew(
+						AnimationDraftPathBox,
+						SEditableTextBox
+					)
+						.Text(FText::FromString(DefaultDraftPath))
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				.Padding(5.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SNew(SButton)
+						.ToolTipText(
+							LOCTEXT(
+								"BrowseAnimationDraftTooltip",
+								"Choose an Animation Template Draft JSON file"
+							)
+						)
+						.OnClicked(
+							this,
+							&SLLMNPCTemplateWorkbench::HandleBrowseAnimationDraft
+						)
+						[
+							SNew(SImage)
+								.Image(
+									FAppStyle::GetBrush(
+										"Icons.FolderOpen"
+									)
+								)
+						]
+				]
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 6.0f, 0.0f, 0.0f)
+		[
+			MakeFormRow(
+				LOCTEXT("AnimationDestinationLabel", "Destination"),
+				SAssignNew(
+					AnimationDestinationPathBox,
+					SEditableTextBox
+				)
+					.Text(
+						FText::FromString(
+							TEXT("/Game/LLMNPCActionLayer/Authoring/Drafts")
+						)
+					)
+			)
+		]
+		+ SVerticalBox::Slot()
+		.FillHeight(1.0f)
+		.Padding(0.0f, 12.0f, 0.0f, 0.0f)
+		[
+			SNew(SBorder)
+				.BorderImage(
+					FAppStyle::GetBrush("ToolPanel.GroupBorder")
+				)
+				.Padding(10.0f)
+				[
+					SNew(STextBlock)
+						.Text(
+							this,
+							&SLLMNPCTemplateWorkbench::GetAnimationImportSummaryText
+						)
+						.AutoWrapText(true)
+				]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.HAlign(HAlign_Right)
+		.Padding(0.0f, 10.0f, 0.0f, 0.0f)
+		[
+			SNew(SButton)
+				.IsEnabled(
+					this,
+					&SLLMNPCTemplateWorkbench::CanImportAnimationDraft
+				)
+				.OnClicked(
+					this,
+					&SLLMNPCTemplateWorkbench::HandleImportAnimationDraft
+				)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SNew(SImage)
+							.Image(
+								FAppStyle::GetBrush("Icons.Import")
+							)
+					]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.Padding(5.0f, 0.0f, 0.0f, 0.0f)
+					[
+						SNew(STextBlock)
+							.Text(
+								LOCTEXT(
+									"ImportAnimationDraft",
+									"Import Generated Draft"
+								)
+							)
+					]
+				]
 		];
 }
 
@@ -1454,6 +1634,43 @@ FText SLLMNPCTemplateWorkbench::GetCatalogSummaryText() const
 	);
 }
 
+FText SLLMNPCTemplateWorkbench::GetAnimationImportSummaryText() const
+{
+	if (SelectedAnimationAssetPath.IsEmpty())
+	{
+		return LOCTEXT(
+			"NoAnimationAssetSelected",
+			"No Animation Asset selected."
+		);
+	}
+	UAnimationAsset* AnimationAsset =
+		LoadObject<UAnimationAsset>(
+			nullptr,
+			*SelectedAnimationAssetPath
+		);
+	if (!AnimationAsset)
+	{
+		return FText::FromString(FString::Printf(
+			TEXT("Asset\n%s\n\nStatus\nUnavailable"),
+			*SelectedAnimationAssetPath
+		));
+	}
+	const UAnimSequenceBase* Sequence =
+		Cast<UAnimSequenceBase>(AnimationAsset);
+	return FText::FromString(FString::Printf(
+		TEXT("Asset\n%s\n\nClass\n%s\n\nSkeleton\n%s\n\nDuration\n%.3f seconds\n\nRoot Motion\n%s"),
+		*AnimationAsset->GetPathName(),
+		*AnimationAsset->GetClass()->GetName(),
+		AnimationAsset->GetSkeleton()
+			? *AnimationAsset->GetSkeleton()->GetPathName()
+			: TEXT("<missing>"),
+		AnimationAsset->GetPlayLength(),
+		Sequence && Sequence->HasRootMotion()
+			? TEXT("Present")
+			: TEXT("Absent")
+	));
+}
+
 FText SLLMNPCTemplateWorkbench::GetReviewStateText() const
 {
 	return SelectedItem.IsValid()
@@ -1505,14 +1722,37 @@ bool SLLMNPCTemplateWorkbench::CanPreviewSelection() const
 	return ResolvePreviewTemplate() && GetSelectedMotionComponent();
 }
 
+bool SLLMNPCTemplateWorkbench::CanImportAnimationDraft() const
+{
+	return
+		!SelectedAnimationAssetPath.IsEmpty() &&
+		AnimationDraftPathBox.IsValid() &&
+		FPaths::FileExists(
+			AnimationDraftPathBox->GetText().ToString()
+		) &&
+		AnimationDestinationPathBox.IsValid() &&
+		!AnimationDestinationPathBox->GetText()
+			.ToString()
+			.TrimStartAndEnd()
+			.IsEmpty();
+}
+
 bool SLLMNPCTemplateWorkbench::CanGenerateQualityReport() const
 {
 	const ULLMNPCMotionTemplate* Template = GetSelectedTemplate();
 	return
 		Template &&
 		!Template->IsPublished() &&
-		ReconstructionPathBox.IsValid() &&
-		!ReconstructionPathBox->GetText().ToString().TrimStartAndEnd().IsEmpty();
+		(
+			Template->Kind == ELLMNPCTemplateKind::AnimationAsset ||
+			(
+				ReconstructionPathBox.IsValid() &&
+				!ReconstructionPathBox->GetText()
+					.ToString()
+					.TrimStartAndEnd()
+					.IsEmpty()
+			)
+		);
 }
 
 bool SLLMNPCTemplateWorkbench::CanMarkPreviewed() const
@@ -1590,6 +1830,27 @@ void SLLMNPCTemplateWorkbench::HandleSearchChanged(const FText& Text)
 	ApplyFilters();
 }
 
+void SLLMNPCTemplateWorkbench::HandleAnimationAssetChanged(
+	const FAssetData& AssetData
+)
+{
+	SelectedAnimationAssetPath = AssetData.IsValid()
+		? AssetData.GetObjectPathString()
+		: FString();
+	SetStatus(
+		SelectedAnimationAssetPath.IsEmpty()
+			? LOCTEXT(
+				"AnimationSelectionCleared",
+				"Animation Asset selection cleared."
+			)
+			: FText::FromString(FString::Printf(
+				TEXT("Selected Animation Asset: %s"),
+				*SelectedAnimationAssetPath
+			)),
+		false
+	);
+}
+
 void SLLMNPCTemplateWorkbench::HandleIncludeNonPublishedChanged(
 	ECheckBoxState State
 )
@@ -1635,6 +1896,86 @@ FReply SLLMNPCTemplateWorkbench::HandleOpenAsset()
 	}
 	AssetEditor->OpenEditorForAsset(Asset);
 	SetStatus(FText::FromString(FString::Printf(TEXT("Opened %s"), *Asset->GetPathName())), false);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCTemplateWorkbench::HandleBrowseAnimationDraft()
+{
+	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+	if (!DesktopPlatform || !AnimationDraftPathBox.IsValid())
+	{
+		return FReply::Handled();
+	}
+	TArray<FString> Files;
+	const void* ParentWindow =
+		FSlateApplication::Get()
+			.FindBestParentWindowHandleForDialogs(nullptr);
+	if (DesktopPlatform->OpenFileDialog(
+		ParentWindow,
+		TEXT("Select Animation Template Draft"),
+		FPaths::GetPath(
+			AnimationDraftPathBox->GetText().ToString()
+		),
+		TEXT(""),
+		TEXT("JSON files (*.json)|*.json"),
+		EFileDialogFlags::None,
+		Files
+	) && !Files.IsEmpty())
+	{
+		AnimationDraftPathBox->SetText(
+			FText::FromString(Files[0])
+		);
+	}
+	return FReply::Handled();
+}
+
+FReply SLLMNPCTemplateWorkbench::HandleImportAnimationDraft()
+{
+	UAnimationAsset* AnimationAsset =
+		LoadObject<UAnimationAsset>(
+			nullptr,
+			*SelectedAnimationAssetPath
+		);
+	ULLMNPCTemplateAuthoringSubsystem* Authoring =
+		GEditor
+			? GEditor->GetEditorSubsystem<
+				ULLMNPCTemplateAuthoringSubsystem>()
+			: nullptr;
+	if (
+		!AnimationAsset ||
+		!Authoring ||
+		!AnimationDraftPathBox.IsValid() ||
+		!AnimationDestinationPathBox.IsValid()
+	)
+	{
+		SetStatus(
+			LOCTEXT(
+				"AnimationImportUnavailable",
+				"Animation Draft import inputs are unavailable."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	const FLLMNPCAuthoringOperationResult Result =
+		Authoring->ImportAnimationDraftFromFile(
+			AnimationDraftPathBox->GetText().ToString(),
+			AnimationAsset,
+			AnimationDestinationPathBox->GetText().ToString()
+		);
+	if (Result.bSuccess && Result.TemplateAsset)
+	{
+		bIncludeNonPublished = true;
+		const FString ImportedPath =
+			Result.TemplateAsset->GetPathName();
+		RefreshCatalog(ImportedPath);
+		SetActivePage(ELLMNPCTemplateWorkbenchPage::Quality);
+	}
+	SetStatus(
+		FText::FromString(Result.Message),
+		!Result.bSuccess
+	);
 	return FReply::Handled();
 }
 

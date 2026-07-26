@@ -638,6 +638,54 @@ void ULLMNPCMotionComponent::ResetMotionTestState()
 	LastExecutionContext = FLLMNPCExecutionContextSnapshot();
 	bLastSubmissionAccepted = false;
 }
+
+bool ULLMNPCMotionComponent::PreviewAnimationAssetTemplate(
+	const ULLMNPCMotionTemplate& Template,
+	const FLLMNPCTemplateModifiers& Modifiers
+)
+{
+	LastRequestedTemplateId = Template.Metadata.TemplateId;
+	LastResolvedTemplateId = Template.Metadata.TemplateId;
+	LastRequestedTemplateModifiers = Modifiers;
+	LastResolvedTemplateModifiers = FLLMNPCTemplateResolvedModifiers();
+	LastContextResolvedModifiers = FLLMNPCResolvedMotionModifiers();
+	LastModifierResolutionTrace = FLLMNPCModifierResolutionTrace();
+	LastExecutionContext = FLLMNPCExecutionContextSnapshot();
+	LastValidationSource = TEXT("EditorAnimationAssetPreview");
+	bLastSubmissionAccepted = false;
+
+	if (!CanSubmitLocally())
+	{
+		LastValidationError = TEXT("LLMNPC_MOTION_AUTHORITY_REQUIRED");
+		return false;
+	}
+	if (Template.Kind != ELLMNPCTemplateKind::AnimationAsset)
+	{
+		LastValidationError =
+			TEXT("LLMNPC_TEMPLATE_KIND_NOT_ANIMATION_ASSET");
+		return false;
+	}
+
+	ULLMNPCMotionTemplate* PreviewCopy =
+		DuplicateObject<ULLMNPCMotionTemplate>(
+			&Template,
+			GetTransientPackage()
+		);
+	if (!PreviewCopy)
+	{
+		LastValidationError =
+			TEXT("LLMNPC_AUTHORING_PREVIEW_COPY_FAILED");
+		return false;
+	}
+	PreviewCopy->Metadata.ReviewState =
+		ELLMNPCTemplateReviewState::Published;
+	PreviewCopy->Metadata.CatalogContentHash.Reset();
+	PreviewCopy->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*PreviewCopy);
+	bLastSubmissionAccepted =
+		SubmitAnimationAssetTemplate(*PreviewCopy, Modifiers);
+	return bLastSubmissionAccepted;
+}
 #endif
 
 void ULLMNPCMotionComponent::SetRuntimeDebugOverlayEnabled(bool bEnabled)

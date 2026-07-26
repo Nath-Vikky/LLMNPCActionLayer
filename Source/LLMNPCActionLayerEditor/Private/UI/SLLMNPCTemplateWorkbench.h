@@ -10,9 +10,11 @@ class SListViewBase;
 class SMultiLineEditableTextBox;
 class SSearchBox;
 class SWidgetSwitcher;
+class UAnimationAsset;
 class ULLMNPCMotionComponent;
 class ULLMNPCMotionTemplate;
 class ULLMNPCPublicActionDefinition;
+struct FAssetData;
 
 template<typename OptionType>
 class SComboBox;
@@ -23,6 +25,7 @@ class SListView;
 enum class ELLMNPCTemplateWorkbenchPage : uint8
 {
 	Library,
+	Import,
 	Preview,
 	Quality,
 	Review
@@ -90,6 +93,7 @@ private:
 	FText StatusText;
 	FString CandidateCardJson;
 	FString QualityText;
+	FString SelectedAnimationAssetPath;
 
 	TArray<UObject*> ReferencedAssets;
 	TArray<TSharedPtr<FLLMNPCTemplateWorkbenchItem>> AllItems;
@@ -106,6 +110,8 @@ private:
 	TSharedPtr<SComboBox<TSharedPtr<FLLMNPCTemplateWorkbenchActorOption>>> ActorCombo;
 
 	TSharedPtr<SWidgetSwitcher> PageSwitcher;
+	TSharedPtr<SEditableTextBox> AnimationDraftPathBox;
+	TSharedPtr<SEditableTextBox> AnimationDestinationPathBox;
 	TSharedPtr<SMultiLineEditableTextBox> CandidateCardBox;
 	TSharedPtr<SMultiLineEditableTextBox> QualityBox;
 	TSharedPtr<SEditableTextBox> ReconstructionPathBox;
@@ -117,6 +123,7 @@ private:
 
 	TSharedRef<SWidget> BuildToolbar();
 	TSharedRef<SWidget> BuildLibraryPage();
+	TSharedRef<SWidget> BuildImportPage();
 	TSharedRef<SWidget> BuildPreviewPage();
 	TSharedRef<SWidget> BuildQualityPage();
 	TSharedRef<SWidget> BuildReviewPage();
@@ -146,12 +153,14 @@ private:
 
 	FText GetSelectedSummaryText() const;
 	FText GetCatalogSummaryText() const;
+	FText GetAnimationImportSummaryText() const;
 	FText GetReviewStateText() const;
 	FText GetReviewDestinationText() const;
 	FSlateColor GetStatusColor() const;
 	ECheckBoxState GetPageCheckState(ELLMNPCTemplateWorkbenchPage Page) const;
 	ECheckBoxState GetIncludeNonPublishedState() const;
 	bool CanPreviewSelection() const;
+	bool CanImportAnimationDraft() const;
 	bool CanGenerateQualityReport() const;
 	bool CanMarkPreviewed() const;
 	bool CanApprove() const;
@@ -173,6 +182,7 @@ private:
 		ESelectInfo::Type SelectInfo
 	);
 	void HandleSearchChanged(const FText& Text);
+	void HandleAnimationAssetChanged(const FAssetData& AssetData);
 	void HandleIncludeNonPublishedChanged(ECheckBoxState State);
 	void HandleSkeletonChanged(
 		TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption> Option,
@@ -185,6 +195,8 @@ private:
 
 	FReply HandleRefresh();
 	FReply HandleOpenAsset();
+	FReply HandleBrowseAnimationDraft();
+	FReply HandleImportAnimationDraft();
 	FReply HandlePreview();
 	FReply HandleValidate();
 	FReply HandleGenerateQualityReport();

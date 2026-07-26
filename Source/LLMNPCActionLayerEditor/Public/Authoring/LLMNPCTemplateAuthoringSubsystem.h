@@ -6,6 +6,7 @@
 #include "LLMNPCTemplateAuthoringSubsystem.generated.h"
 
 class AActor;
+class UAnimationAsset;
 class ULLMNPCMotionTemplate;
 class ULLMNPCPublicActionDefinition;
 struct FLLMMotionPlan;
@@ -59,6 +60,19 @@ public:
 
 	FLLMNPCAuthoringOperationResult ImportDraftJson(
 		const FString& DraftJson,
+		const FString& DestinationPackagePath
+	);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC|Authoring|Draft")
+	FLLMNPCAuthoringOperationResult ImportAnimationDraftFromFile(
+		const FString& DraftFilePath,
+		UAnimationAsset* SelectedAnimationAsset,
+		const FString& DestinationPackagePath = TEXT("/Game/LLMNPCActionLayer/Authoring/Drafts")
+	);
+
+	FLLMNPCAuthoringOperationResult ImportAnimationDraftJson(
+		const FString& DraftJson,
+		UAnimationAsset* SelectedAnimationAsset,
 		const FString& DestinationPackagePath
 	);
 

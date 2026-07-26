@@ -70,6 +70,19 @@ bool FLLMNPCPhase6AnimationTemplatePolicyTest::RunTest(const FString& Parameters
 	ULLMNPCMotionTemplate* Template = MakeAnimationTemplate(Waving);
 	FString Error;
 	TestTrue(TEXT("A reviewed animation alias has a valid template policy"), Template->ValidateTemplate(Error));
+	const FString OriginalCatalogHash =
+		Template->Metadata.CatalogContentHash;
+	Template->AnimationPlayback.BlendInSeconds += 0.05f;
+	const FString ChangedPlaybackHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*Template);
+	TestNotEqual(
+		TEXT("Animation playback policy participates in the Catalog Content Hash"),
+		ChangedPlaybackHash,
+		OriginalCatalogHash
+	);
+	Template->AnimationPlayback.BlendInSeconds -= 0.05f;
+	Template->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*Template);
 
 	Template->Metadata.RequiredChannels.Reset();
 	Template->Metadata.CatalogContentHash =
@@ -81,6 +94,8 @@ bool FLLMNPCPhase6AnimationTemplatePolicyTest::RunTest(const FString& Parameters
 	Template->Metadata.CatalogContentHash =
 		ULLMNPCMotionTemplate::BuildCatalogContentHash(*Template);
 	Template->AnimationPlayback.MaxDurationSeconds = 0.0f;
+	Template->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*Template);
 	TestFalse(TEXT("Animation aliases reject an invalid hard timeout"), Template->ValidateTemplate(Error));
 	TestEqual(
 		TEXT("Invalid playback policy has a stable error"),

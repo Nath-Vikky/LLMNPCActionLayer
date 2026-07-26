@@ -35,6 +35,7 @@ const TCHAR* ForwardN2TemplatePaths[] = {
 };
 
 const TCHAR* ForwardN2DefinitionPaths[] = {
+	TEXT("/LLMNPCActionLayer/LLMNPC/PublicActions/PA_Gesture_Clap.PA_Gesture_Clap"),
 	TEXT("/LLMNPCActionLayer/LLMNPC/PublicActions/PA_Gesture_Nod.PA_Gesture_Nod"),
 	TEXT("/LLMNPCActionLayer/LLMNPC/PublicActions/PA_Gesture_Wave_Right.PA_Gesture_Wave_Right"),
 	TEXT("/LLMNPCActionLayer/LLMNPC/PublicActions/PA_Gesture_Point_Target.PA_Gesture_Point_Target")
@@ -134,7 +135,7 @@ bool FLLMNPCForwardN2CatalogBaselineTest::RunTest(const FString& Parameters)
 			Definition->SelectionSummary.TrimStartAndEnd().IsEmpty()
 		);
 	}
-	TestEqual(TEXT("Exactly three Manny Public Actions migrated"), Definitions.Num(), 3);
+	TestEqual(TEXT("Exactly four Manny Public Action definitions migrated"), Definitions.Num(), 4);
 
 	TArray<ULLMNPCMotionTemplate*> Templates;
 	for (const TCHAR* Path : ForwardN2TemplatePaths)
@@ -175,7 +176,7 @@ bool FLLMNPCForwardN2CatalogBaselineTest::RunTest(const FString& Parameters)
 	);
 	TestTrue(TEXT("The Published catalog has no diagnostics"), Index.GetDiagnostics().IsEmpty());
 	TestEqual(TEXT("The catalog indexes all six variants"), Index.GetTemplateCount(), 6);
-	TestEqual(TEXT("The catalog indexes three Public Actions"), Index.GetPublicActionCount(), 3);
+	TestEqual(TEXT("The catalog indexes four Public Action definitions"), Index.GetPublicActionCount(), 4);
 	const TSharedPtr<IPlugin> Plugin =
 		IPluginManager::Get().FindPlugin(TEXT("LLMNPCActionLayer"));
 	TestTrue(TEXT("The plugin descriptor is discoverable"), Plugin.IsValid());
@@ -257,14 +258,17 @@ bool FLLMNPCForwardN2CandidateAdapterTest::RunTest(const FString& Parameters)
 
 	TArray<FLLMNPCTemplateCandidate> Candidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), Candidates);
-	TestEqual(TEXT("Manny exposes three Public Action candidates"), Candidates.Num(), 3);
+	TestEqual(TEXT("Manny exposes four Public Action candidates"), Candidates.Num(), 4);
 	const FLLMNPCTemplateCandidate* Wave =
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.wave.right"));
 	const FLLMNPCTemplateCandidate* Point =
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.point.target"));
+	const FLLMNPCTemplateCandidate* Clap =
+		ForwardN2FindCandidate(Candidates, TEXT("gesture.clap"));
 	TestNotNull(TEXT("The aggregated Wave Candidate exists"), Wave);
 	TestNotNull(TEXT("The aggregated Point Candidate exists"), Point);
-	if (!Wave || !Point)
+	TestNotNull(TEXT("The Published Clap Candidate exists"), Clap);
+	if (!Wave || !Point || !Clap)
 	{
 		return false;
 	}
@@ -435,7 +439,7 @@ bool FLLMNPCForwardN2TurnRequestV3PrivacyTest::RunTest(
 	);
 	if (CandidateValues)
 	{
-		TestEqual(TEXT("All three Public Actions are offered"), CandidateValues->Num(), 3);
+		TestEqual(TEXT("All four Public Actions are offered"), CandidateValues->Num(), 4);
 		for (const TSharedPtr<FJsonValue>& Value : *CandidateValues)
 		{
 			const TSharedPtr<FJsonObject> CandidateObject = Value->AsObject();

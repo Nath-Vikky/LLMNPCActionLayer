@@ -3,7 +3,7 @@
 	"vocabulary_id": "llmnpc.manny_social_actions",
 	"semantic_version": "1.0.0",
 	"revision": 1,
-	"content_hash": "md5:7436981e5a19f58e41b430743a60ebb0",
+	"content_hash": "md5:1d842a151f0f80dfb22e261c9223ca0e",
 	"entries": [
 		{
 			"tag": "nod",
@@ -31,6 +31,17 @@
 			"tag": "point",
 			"display_name_en": "Point",
 			"display_name_zh": "指向",
+			"synonyms": [],
+			"allowed_fields": [
+				"GestureFamily"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "clap",
+			"display_name_en": "Clap",
+			"display_name_zh": "鼓掌",
 			"synonyms": [],
 			"allowed_fields": [
 				"GestureFamily"
@@ -153,6 +164,20 @@
 			"synonyms": [],
 			"allowed_fields": [
 				"Intent"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "applaud",
+			"display_name_en": "Applaud",
+			"display_name_zh": "喝彩",
+			"synonyms": [
+				"applause"
+			],
+			"allowed_fields": [
+				"Intent",
+				"SemanticEffect"
 			],
 			"deprecated": false,
 			"replacement_tag": "None"
@@ -285,6 +310,17 @@
 			"tag": "fingers",
 			"display_name_en": "Fingers",
 			"display_name_zh": "手指",
+			"synonyms": [],
+			"allowed_fields": [
+				"BodyRegion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "two_hands",
+			"display_name_en": "Two hands",
+			"display_name_zh": "双手",
 			"synonyms": [],
 			"allowed_fields": [
 				"BodyRegion"

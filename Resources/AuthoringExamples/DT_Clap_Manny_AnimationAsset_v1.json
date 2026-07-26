@@ -1,0 +1,105 @@
+{
+  "schema_version": "llmnpc.animation_template_draft.v1",
+  "asset_name": "MT_Clap_Manny_Asset_v1_Generated",
+  "template_id": "gesture.clap.manny.asset.v1",
+  "public_action_id": "gesture.clap",
+  "semantic_version": "1.0.0",
+  "kind": "animation_asset",
+  "variant_id": "animation_asset",
+  "variant_weight": 1.0,
+  "variant_style_tags": [
+    "neutral",
+    "excited"
+  ],
+  "review_state": "generated",
+  "display_name": "Manny Clap Animation",
+  "description": "A Manny-compatible reference animation in which both hands move together for a visible clap, then release and return.",
+  "skeleton_profile_id": "ue5_manny.v1",
+  "metadata": {
+    "visual_description": "Both arms bring the open hands together in front of the upper body for a clearly timed clap, then separate and recover to the base pose.",
+    "intent_tags": [
+      "applaud"
+    ],
+    "emotion_tags": [
+      "excited"
+    ],
+    "personality_tags": [],
+    "body_region_tags": [
+      "two_hands",
+      "hand",
+      "fingers"
+    ],
+    "spatial_requirement_tags": [
+      "target_independent"
+    ],
+    "semantic_effect_tags": [
+      "applaud",
+      "acknowledge"
+    ],
+    "target_category_tags": [],
+    "required_capabilities": [
+      "animation_asset.playback"
+    ],
+    "required_channels": [
+      "full_body"
+    ],
+    "blocked_states": [
+      "left_hand_busy",
+      "right_hand_busy"
+    ],
+    "requires_target": false,
+    "can_run_while_moving": false,
+    "allow_runtime_model_selection": true,
+    "cooldown_seconds": 1.0,
+    "expressiveness": 0.75,
+    "energy": 0.8,
+    "social_intensity": 0.75,
+    "variant_difference": "Reference Animation Asset baseline for later comparison with a procedural hands.contact version."
+  },
+  "modifier_policy": {
+    "amplitude": [
+      1.0,
+      1.0
+    ],
+    "speed": [
+      0.85,
+      1.15
+    ],
+    "duration": [
+      0.9,
+      1.1
+    ],
+    "allow_mirror": false,
+    "allowed_styles": [
+      "neutral",
+      "excited"
+    ],
+    "random_speed_jitter": 0.0
+  },
+  "playback": {
+    "slot_name": "DefaultSlot",
+    "blend_in_seconds": 0.15,
+    "blend_out_seconds": 0.2,
+    "start_position_seconds": 0.0,
+    "max_duration_seconds": 8.0,
+    "loop": false,
+    "interruptible": true,
+    "stop_other_montages": false,
+    "allow_root_motion": false
+  },
+  "provenance": {
+    "source_type": "licensed_animation_asset",
+    "source_notes": "Downloaded from the Adobe Mixamo animation library and imported into the host Unreal Engine project as Clapping. The animation path remains absent from model-authored JSON; Workbench injects the user-selected UAnimationAsset.",
+    "source_license": {
+      "identifier": "Adobe Mixamo FAQ royalty-free project use",
+      "holder": "Adobe Inc.",
+      "redistribution_allowed": false,
+      "notes": "Licensed for use in personal, commercial, and non-profit projects, including video games. Keep the raw animation asset out of the distributable plugin repository."
+    },
+    "authoring_agent": {
+      "tool": "LLMNPCActionLayer Template Workbench",
+      "version": "0.10.0",
+      "prompt_version": "animation-template-draft-v1"
+    }
+  }
+}

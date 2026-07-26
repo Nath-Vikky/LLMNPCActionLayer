@@ -315,7 +315,7 @@ FString ULLMNPCMotionTemplate::BuildCatalogContentHash(
 {
 	const FLLMNPCTemplateMetadata& Metadata = Template.Metadata;
 	const FLLMNPCModifierPolicy& Policy = Template.ModifierPolicy;
-	const TArray<FString> Lines = {
+	TArray<FString> Lines = {
 		Metadata.TemplateId.ToString().ToLower(),
 		Metadata.PublicActionId.ToString().ToLower(),
 		Metadata.SemanticVersion.TrimStartAndEnd(),
@@ -376,6 +376,24 @@ FString ULLMNPCMotionTemplate::BuildCatalogContentHash(
 		Metadata.KinematicReportHash.TrimStartAndEnd(),
 		Metadata.CatalogSchemaVersion
 	};
+	if (Template.Kind == ELLMNPCTemplateKind::AnimationAsset)
+	{
+		const FLLMNPCAnimationPlaybackPolicy& Playback =
+			Template.AnimationPlayback;
+		Lines.Append({
+			TEXT("animation_asset_v1"),
+			Template.AnimationAsset.ToSoftObjectPath().ToString(),
+			Playback.SlotName.ToString().ToLower(),
+			FString::Printf(TEXT("%.6f"), Playback.BlendInSeconds),
+			FString::Printf(TEXT("%.6f"), Playback.BlendOutSeconds),
+			FString::Printf(TEXT("%.6f"), Playback.StartPositionSeconds),
+			FString::Printf(TEXT("%.6f"), Playback.MaxDurationSeconds),
+			Playback.bLoop ? TEXT("1") : TEXT("0"),
+			Playback.bInterruptible ? TEXT("1") : TEXT("0"),
+			Playback.bStopOtherMontages ? TEXT("1") : TEXT("0"),
+			Playback.bAllowRootMotion ? TEXT("1") : TEXT("0")
+		});
+	}
 	return FString::Printf(
 		TEXT("md5:%s"),
 		*FMD5::HashAnsiString(*FString::Join(Lines, TEXT("\n")))

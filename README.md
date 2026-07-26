@@ -387,6 +387,31 @@ Use `LLMNPC.MigrateMannyN2Catalog` for the idempotent Manny migration and
 suite. See `Docs/Phases/forward-n2-catalog-workbench.md` for the frozen N2
 acceptance record.
 
+## Forward N4 Animation Asset Publication
+
+N4 adds a strict Animation Asset Draft importer and the first complete
+Workbench publication loop for `gesture.clap`. A model can describe the action
+and bounded playback policy, but cannot provide an Unreal asset path. The user
+selects a saved compatible Animation Asset in the UE Asset Picker, then the
+Workbench validates its package fingerprint, skeleton, slot, Root Motion
+policy, provenance, quality report, and human review before publication.
+
+For an editable project plugin, approved canonical JSON is versioned under:
+
+```text
+Resources/Templates/Published
+```
+
+Installed plugins fall back to
+`<Project>/LLMNPCSource/Templates/Published`, so project authors never need to
+write into a read-only plugin installation. Runtime still loads cooked
+`ULLMNPCMotionTemplate` assets rather than JSON. Licensed raw Animation Assets
+marked as non-redistributable remain host-project dependencies and are not
+copied into the plugin.
+
+See `Docs/Phases/forward-n4-animation-asset-clap.md` for the accepted online PIE
+evidence and release boundary.
+
 ## Product Runtime
 
 When the owning Actor replicates, `ULLMNPCMotionComponent` replicates only a
@@ -420,7 +445,11 @@ http://localhost:8787/npc/motion-plan
 
 The earlier `ULLMNPCActionComponent` and raw motion-plan endpoint are still present as a compatibility/prototyping layer, but the primary path is now Dialogue plus Published Templates.
 
-The plugin ships its default post-process AnimBP, Manny skeleton profile, and published templates as cooked plugin content. Motion templates are also retained as JSON authoring sources under `Resources/Templates`.
+The plugin ships its default post-process AnimBP, Manny skeleton profile, and
+self-contained built-in templates as cooked plugin content. Motion templates
+are also retained as JSON authoring sources under `Resources/Templates`.
+Project extension templates can reference licensed host-project Animation
+Assets without redistributing those raw assets through the plugin.
 
 Structured response/request schemas and versioned prompts live under `Resources/Schemas` and `Resources/PromptTemplates`.
 

@@ -166,6 +166,8 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 		{ ELLMNPCActionVocabularyField::GestureFamily });
 	AddVocabularyEntry(Vocabulary, TEXT("point"), TEXT("Point"), TEXT("\u6307\u5411"),
 		{ ELLMNPCActionVocabularyField::GestureFamily });
+	AddVocabularyEntry(Vocabulary, TEXT("clap"), TEXT("Clap"), TEXT("\u9f13\u638c"),
+		{ ELLMNPCActionVocabularyField::GestureFamily });
 
 	AddVocabularyEntry(Vocabulary, TEXT("confirm"), TEXT("Confirm"), TEXT("\u786e\u8ba4"),
 		{ ELLMNPCActionVocabularyField::Intent }, { TEXT("confirmation") });
@@ -187,6 +189,9 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 		{ ELLMNPCActionVocabularyField::Intent, ELLMNPCActionVocabularyField::SemanticEffect });
 	AddVocabularyEntry(Vocabulary, TEXT("answer_where"), TEXT("Answer where"), TEXT("\u56de\u7b54\u4f4d\u7f6e"),
 		{ ELLMNPCActionVocabularyField::Intent });
+	AddVocabularyEntry(Vocabulary, TEXT("applaud"), TEXT("Applaud"), TEXT("\u559d\u5f69"),
+		{ ELLMNPCActionVocabularyField::Intent, ELLMNPCActionVocabularyField::SemanticEffect },
+		{ TEXT("applause") });
 
 	AddVocabularyEntry(Vocabulary, TEXT("neutral"), TEXT("Neutral"), TEXT("\u4e2d\u6027"),
 		{ ELLMNPCActionVocabularyField::Emotion, ELLMNPCActionVocabularyField::VariantStyle });
@@ -212,6 +217,8 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 	AddVocabularyEntry(Vocabulary, TEXT("hand"), TEXT("Hand"), TEXT("\u624b\u90e8"),
 		{ ELLMNPCActionVocabularyField::BodyRegion });
 	AddVocabularyEntry(Vocabulary, TEXT("fingers"), TEXT("Fingers"), TEXT("\u624b\u6307"),
+		{ ELLMNPCActionVocabularyField::BodyRegion });
+	AddVocabularyEntry(Vocabulary, TEXT("two_hands"), TEXT("Two hands"), TEXT("\u53cc\u624b"),
 		{ ELLMNPCActionVocabularyField::BodyRegion });
 
 	AddVocabularyEntry(Vocabulary, TEXT("target_independent"), TEXT("Target independent"), TEXT("\u65e0\u76ee\u6807"),
@@ -269,6 +276,20 @@ TArray<FPublicActionSeed> GetPublicActionSeeds()
 			TEXT("neutral"),
 			{ TEXT("where"), TEXT("there"), TEXT("look"), TEXT("point"), TEXT("location") },
 			true
+		},
+		{
+			TEXT("PA_Gesture_Clap"),
+			TEXT("gesture.clap"),
+			TEXT("Clap"),
+			TEXT("Bring both hands together in a visible clap to applaud, celebrate, or show enthusiastic approval."),
+			{ TEXT("applauding an achievement"), TEXT("celebrating good news"), TEXT("showing enthusiastic approval") },
+			{ TEXT("either hand is occupied"), TEXT("quiet restraint is required"), TEXT("the character must keep both arms available") },
+			{ TEXT("applaud"), TEXT("acknowledge") },
+			{},
+			TEXT("clap"),
+			TEXT("excited"),
+			{ TEXT("clap"), TEXT("applaud"), TEXT("applause"), TEXT("celebrate"), TEXT("bravo") },
+			false
 		}
 	};
 }

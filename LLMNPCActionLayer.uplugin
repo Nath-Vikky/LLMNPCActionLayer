@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 16,
-	"VersionName": "0.10.0-alpha.3",
+	"Version": 18,
+	"VersionName": "0.10.0-beta.2",
 	"FriendlyName": "LLM NPC Action Layer",
 	"Description": "Data-driven LLM procedural NPC gesture layer for Unreal Engine.",
 	"Category": "AI",

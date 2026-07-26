@@ -1,7 +1,41 @@
 {
 	"schema_version": "llmnpc.public_action_catalog.v1",
-	"catalog_hash": "md5:8a9297fc3b842642c8c5a3211064caf6",
+	"catalog_hash": "md5:fb892221b1bfdf0561a82e36a64dea60",
 	"public_actions": [
+		{
+			"schema_version": "llmnpc.public_action_definition.v1",
+			"public_action_id": "gesture.clap",
+			"semantic_version": "1.0.0",
+			"definition_revision": 1,
+			"display_name": "Clap",
+			"selection_summary": "Bring both hands together in a visible clap to applaud, celebrate, or show enthusiastic approval.",
+			"suitable_when": [
+				"applauding an achievement",
+				"celebrating good news",
+				"showing enthusiastic approval"
+			],
+			"avoid_when": [
+				"either hand is occupied",
+				"quiet restraint is required",
+				"the character must keep both arms available"
+			],
+			"semantic_effect_tags": [
+				"applaud",
+				"acknowledge"
+			],
+			"target_category_tags": [],
+			"gesture_family": "clap",
+			"default_style": "excited",
+			"search_keywords": [
+				"clap",
+				"applaud",
+				"applause",
+				"celebrate",
+				"bravo"
+			],
+			"requires_target": false,
+			"content_hash": "md5:eb3bf4080c374b3c06d9f762f17491bc"
+		},
 		{
 			"schema_version": "llmnpc.public_action_definition.v1",
 			"public_action_id": "gesture.nod",

@@ -1,10 +1,16 @@
 #include "Authoring/LLMNPCTemplateAuthoringSubsystem.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Authoring/LLMNPCAnimationTemplateDraftImporter.h"
 #include "Authoring/LLMNPCTemplateDraftImporter.h"
+#include "Animation/AnimMontage.h"
+#include "Animation/AnimSequenceBase.h"
+#include "Animation/AnimationAsset.h"
+#include "Animation/Skeleton.h"
 #include "Dom/JsonObject.h"
 #include "Engine/AssetManager.h"
 #include "HAL/FileManager.h"
+#include "Interfaces/IPluginManager.h"
 #include "JsonObjectConverter.h"
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCMotionValidator.h"
@@ -562,6 +568,27 @@ TSharedRef<FJsonObject> MakeCheck(
 	Check->SetStringField(TEXT("message"), Message);
 	return Check;
 }
+
+bool IsFixedOneRange(const FVector2D& Range)
+{
+	return
+		FMath::IsNearlyEqual(Range.X, 1.0f) &&
+		FMath::IsNearlyEqual(Range.Y, 1.0f);
+}
+
+bool HasSafeAnimationAssetModifierPolicy(
+	const FLLMNPCModifierPolicy& Policy
+)
+{
+	return
+		IsFixedOneRange(Policy.AmplitudeRange) &&
+		!Policy.bAllowMirror &&
+		!Policy.bEnableDynamicTargetTracking &&
+		!Policy.bEnableObstacleAdaptation &&
+		FMath::IsNearlyZero(Policy.RandomAmplitudeJitter) &&
+		FMath::IsNearlyZero(Policy.RandomFrequencyJitter) &&
+		FMath::IsNearlyZero(Policy.RandomPhaseJitterRadians);
+}
 }
 
 void ULLMNPCTemplateAuthoringSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -732,6 +759,182 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::ImportDraftJs
 	);
 }
 
+FLLMNPCAuthoringOperationResult
+ULLMNPCTemplateAuthoringSubsystem::ImportAnimationDraftFromFile(
+	const FString& DraftFilePath,
+	UAnimationAsset* SelectedAnimationAsset,
+	const FString& DestinationPackagePath
+)
+{
+	FString DraftJson;
+	if (!FFileHelper::LoadFileToString(DraftJson, *DraftFilePath))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_ANIMATION_DRAFT_FILE_READ_FAILED"),
+			TEXT("Could not read the Animation Template Draft JSON file.")
+		);
+	}
+	return ImportAnimationDraftJson(
+		DraftJson,
+		SelectedAnimationAsset,
+		DestinationPackagePath
+	);
+}
+
+FLLMNPCAuthoringOperationResult
+ULLMNPCTemplateAuthoringSubsystem::ImportAnimationDraftJson(
+	const FString& DraftJson,
+	UAnimationAsset* SelectedAnimationAsset,
+	const FString& DestinationPackagePath
+)
+{
+	if (!SelectedAnimationAsset)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_ANIMATION_DRAFT_ASSET_SELECTION_REQUIRED"),
+			TEXT("Select an Animation Asset in the Workbench Asset Picker.")
+		);
+	}
+
+	FString DirectoryError;
+	if (!EnsureAuthoringDirectories(DirectoryError))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_DIRECTORY_FAILED"),
+			DirectoryError
+		);
+	}
+
+	ULLMNPCMotionTemplate* ParsedTemplate =
+		NewObject<ULLMNPCMotionTemplate>(GetTransientPackage());
+	FLLMNPCParsedAnimationDraftInfo ParsedInfo;
+	FString Error;
+	if (!FLLMNPCAnimationTemplateDraftImporter::ParseDraftJson(
+		DraftJson,
+		*SelectedAnimationAsset,
+		*ParsedTemplate,
+		ParsedInfo,
+		Error
+	))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+
+	ULLMNPCSkeletonProfile* SkeletonProfile =
+		FindSkeletonProfile(ParsedTemplate->Metadata.SkeletonProfileId);
+	FString ProfileError;
+	if (
+		!SkeletonProfile ||
+		!SkeletonProfile->ValidateProfile(ProfileError)
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_ANIMATION_DRAFT_SKELETON_PROFILE_INVALID"),
+			ProfileError.IsEmpty()
+				? TEXT("The selected Skeleton Profile was not found.")
+				: ProfileError
+		);
+	}
+	if (!SkeletonProfile->IsCompatibleSkeleton(
+		SelectedAnimationAsset->GetSkeleton()
+	))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_ANIMATION_DRAFT_SKELETON_INCOMPATIBLE"),
+			TEXT("The selected Animation Asset is not compatible with the Draft Skeleton Profile.")
+		);
+	}
+
+	const FString DraftHash =
+		FLLMNPCUEPIArtifactAdapter::HashJson(DraftJson);
+	FString SafeHash = DraftHash;
+	SafeHash.ReplaceInline(TEXT(":"), TEXT("_"));
+	const FString SourceCopyPath = FPaths::Combine(
+		GetDraftDirectory(),
+		FString::Printf(
+			TEXT("%s_%s.json"),
+			*ParsedInfo.AssetName,
+			*SafeHash.Right(12)
+		)
+	);
+	if (!FFileHelper::SaveStringToFile(
+		DraftJson,
+		*SourceCopyPath,
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM
+	))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_ANIMATION_DRAFT_SOURCE_COPY_FAILED"),
+			TEXT("Could not preserve the imported Animation Template Draft source.")
+		);
+	}
+
+	TSharedPtr<FJsonObject> Provenance;
+	if (!ParseJsonObject(
+		ParsedTemplate->SourceProvenanceJson,
+		Provenance
+	))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_PROVENANCE_JSON_INVALID"),
+			TEXT("Animation Draft provenance could not be parsed after validation.")
+		);
+	}
+	TSharedRef<FJsonObject> ImportRecord = MakeShared<FJsonObject>();
+	ImportRecord->SetStringField(
+		TEXT("schema_version"),
+		TEXT("llmnpc.animation_draft_import.v1")
+	);
+	ImportRecord->SetStringField(
+		TEXT("draft_content_hash"),
+		DraftHash
+	);
+	ImportRecord->SetStringField(
+		TEXT("draft_source_copy_path"),
+		FPaths::ConvertRelativePathToFull(SourceCopyPath)
+	);
+	ImportRecord->SetStringField(
+		TEXT("selected_asset_path"),
+		SelectedAnimationAsset->GetPathName()
+	);
+	ImportRecord->SetStringField(
+		TEXT("imported_at_utc"),
+		FDateTime::UtcNow().ToIso8601()
+	);
+	Provenance->SetObjectField(TEXT("import_record"), ImportRecord);
+	if (!SerializeJsonObject(
+		Provenance.ToSharedRef(),
+		ParsedTemplate->SourceProvenanceJson
+	))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_PROVENANCE_SERIALIZE_FAILED"),
+			TEXT("Animation Draft provenance could not be updated with the import record.")
+		);
+	}
+
+	ULLMNPCMotionTemplate* Asset = nullptr;
+	if (!CreateTemplateAsset(
+		DestinationPackagePath,
+		ParsedInfo.AssetName,
+		*ParsedTemplate,
+		Asset,
+		Error
+	))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	if (!SaveTemplateAsset(Asset, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	return SuccessResult(
+		TEXT("Animation Draft imported as a Generated template. The asset path came from the UE Asset Picker and is not runtime-selectable yet."),
+		Asset->GetPathName(),
+		Asset
+	);
+}
+
 FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQualityReport(
 	ULLMNPCMotionTemplate* Template,
 	const FString& ReconstructionProfileFilePath,
@@ -763,19 +966,28 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 		bTemplateValid ? TEXT("Template structure is valid.") : ValidationError
 	);
 
-	FLLMMotionPlan Plan;
-	Plan.Intent = Template->Metadata.PublicActionId.ToString();
-	Plan.Clip = Template->ProceduralClip;
-	ULLMNPCMotionValidator* Validator = NewObject<ULLMNPCMotionValidator>(this);
-	const FLLMMotionValidationResult MotionResult = Validator->ValidateAndClamp(
-		Plan,
-		ELLMNPCMotionValidationSource::PublishedTemplate
-	);
-	AddCheck(
-		TEXT("motion_validator"),
-		MotionResult.bValid,
-		MotionResult.bValid ? TEXT("Motion tracks pass the Published Template trust boundary.") : MotionResult.ErrorMessage
-	);
+	const bool bAnimationTemplate =
+		Template->Kind == ELLMNPCTemplateKind::AnimationAsset;
+	if (!bAnimationTemplate)
+	{
+		FLLMMotionPlan Plan;
+		Plan.Intent = Template->Metadata.PublicActionId.ToString();
+		Plan.Clip = Template->ProceduralClip;
+		ULLMNPCMotionValidator* Validator =
+			NewObject<ULLMNPCMotionValidator>(this);
+		const FLLMMotionValidationResult MotionResult =
+			Validator->ValidateAndClamp(
+				Plan,
+				ELLMNPCMotionValidationSource::PublishedTemplate
+			);
+		AddCheck(
+			TEXT("motion_validator"),
+			MotionResult.bValid,
+			MotionResult.bValid
+				? TEXT("Motion tracks pass the Published Template trust boundary.")
+				: MotionResult.ErrorMessage
+		);
+	}
 
 	ULLMNPCSkeletonProfile* SkeletonProfile = FindSkeletonProfile(Template->Metadata.SkeletonProfileId);
 	FString ProfileValidationError;
@@ -787,6 +999,190 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 			(ProfileValidationError.IsEmpty() ? TEXT("Skeleton Profile was not found.") : ProfileValidationError)
 	);
 
+	UAnimSequenceBase* AnimationSequence = nullptr;
+	FString CurrentAnimationAssetPackageHash;
+	FString AnimationAssetPackageHashError;
+	if (bAnimationTemplate)
+	{
+		UAnimationAsset* AnimationAsset =
+			Template->AnimationAsset.LoadSynchronous();
+		AddCheck(
+			TEXT("animation_asset_load"),
+			AnimationAsset != nullptr,
+			AnimationAsset
+				? FString::Printf(
+					TEXT("Animation Asset loaded: %s"),
+					*AnimationAsset->GetPathName()
+				)
+				: TEXT("Animation Asset could not be loaded.")
+		);
+
+		AnimationSequence = Cast<UAnimSequenceBase>(AnimationAsset);
+		AddCheck(
+			TEXT("animation_asset_type"),
+			AnimationSequence != nullptr,
+			AnimationSequence
+				? TEXT("Animation Asset is a supported sequence or montage.")
+				: TEXT("Animation Asset is not a supported UAnimSequenceBase.")
+		);
+		const bool bPackageHashAvailable =
+			AnimationAsset &&
+			FLLMNPCAnimationTemplateDraftImporter::
+				BuildAnimationAssetPackageHash(
+					*AnimationAsset,
+					CurrentAnimationAssetPackageHash,
+					AnimationAssetPackageHashError
+				);
+		AddCheck(
+			TEXT("animation_asset_saved_package"),
+			bPackageHashAvailable,
+			bPackageHashAvailable
+				? TEXT("Animation Asset is saved and its source package fingerprint is available.")
+				: (
+					AnimationAssetPackageHashError.IsEmpty()
+						? TEXT("Animation Asset source package could not be fingerprinted.")
+						: AnimationAssetPackageHashError
+				)
+		);
+
+		const USkeleton* AnimationSkeleton =
+			AnimationAsset ? AnimationAsset->GetSkeleton() : nullptr;
+		const bool bSkeletonCompatible =
+			bProfileValid &&
+			AnimationSkeleton &&
+			SkeletonProfile->IsCompatibleSkeleton(AnimationSkeleton);
+		AddCheck(
+			TEXT("animation_skeleton_compatibility"),
+			bSkeletonCompatible,
+			bSkeletonCompatible
+				? TEXT("Animation Asset Skeleton matches the selected Manny Profile.")
+				: TEXT("Animation Asset Skeleton is not compatible with the selected Skeleton Profile.")
+		);
+
+		bool bSlotValid =
+			AnimationSkeleton &&
+			AnimationSkeleton->ContainsSlotName(
+				Template->AnimationPlayback.SlotName
+			);
+		if (
+			bSlotValid &&
+			Cast<UAnimMontage>(AnimationAsset)
+		)
+		{
+			bSlotValid = false;
+			const UAnimMontage* Montage =
+				CastChecked<UAnimMontage>(AnimationAsset);
+			for (const FSlotAnimationTrack& SlotTrack : Montage->SlotAnimTracks)
+			{
+				if (
+					SlotTrack.SlotName ==
+					Template->AnimationPlayback.SlotName
+				)
+				{
+					bSlotValid = true;
+					break;
+				}
+			}
+		}
+		AddCheck(
+			TEXT("animation_slot"),
+			bSlotValid,
+			bSlotValid
+				? FString::Printf(
+					TEXT("Slot %s is registered and usable."),
+					*Template->AnimationPlayback.SlotName.ToString()
+				)
+				: FString::Printf(
+					TEXT("Slot %s is not registered for this asset."),
+					*Template->AnimationPlayback.SlotName.ToString()
+				)
+		);
+
+		const bool bRootMotionSafe =
+			AnimationSequence &&
+			!AnimationSequence->HasRootMotion() &&
+			!Template->AnimationPlayback.bAllowRootMotion;
+		AddCheck(
+			TEXT("animation_root_motion"),
+			bRootMotionSafe,
+			bRootMotionSafe
+				? TEXT("Root Motion is absent and forbidden by policy.")
+				: TEXT("v0.10 Animation Asset templates cannot contain or enable Root Motion.")
+		);
+
+		const bool bAssetModifierPolicySafe =
+			HasSafeAnimationAssetModifierPolicy(
+				Template->ModifierPolicy
+			);
+		AddCheck(
+			TEXT("animation_modifier_surface"),
+			bAssetModifierPolicySafe,
+			bAssetModifierPolicySafe
+				? TEXT("Only bounded speed and duration modifiers are exposed; amplitude and procedural dimensions are fixed.")
+				: TEXT("Animation Asset templates must fix amplitude, mirror, and procedural modifier dimensions.")
+		);
+
+		const float RemainingAnimationSeconds =
+			AnimationSequence
+				? AnimationSequence->GetPlayLength() -
+					Template->AnimationPlayback.StartPositionSeconds
+				: 0.0f;
+		const float SlowestPlayRate =
+			Template->ModifierPolicy.SpeedRange.X /
+			FMath::Max(
+				Template->ModifierPolicy.DurationRange.Y,
+				KINDA_SMALL_NUMBER
+			);
+		const float LongestPlaybackSeconds =
+			RemainingAnimationSeconds /
+			FMath::Max(SlowestPlayRate, KINDA_SMALL_NUMBER);
+		const bool bDurationSafe =
+			AnimationSequence &&
+			RemainingAnimationSeconds > 0.0f &&
+			Template->AnimationPlayback.MaxDurationSeconds + KINDA_SMALL_NUMBER >=
+				LongestPlaybackSeconds;
+		AddCheck(
+			TEXT("animation_duration"),
+			bDurationSafe,
+			bDurationSafe
+				? FString::Printf(
+					TEXT("Max Duration covers the slowest permitted playback (%.3fs)."),
+					LongestPlaybackSeconds
+				)
+				: FString::Printf(
+					TEXT("Max Duration would truncate the slowest permitted playback (needs %.3fs)."),
+					LongestPlaybackSeconds
+				)
+		);
+
+		const bool bLoopInterruptSafe =
+			!Template->AnimationPlayback.bLoop ||
+			Template->AnimationPlayback.bInterruptible;
+		AddCheck(
+			TEXT("animation_loop_interrupt"),
+			bLoopInterruptSafe,
+			bLoopInterruptSafe
+				? TEXT("Loop and interruption policy has a bounded recovery path.")
+				: TEXT("A looping Animation Asset must be interruptible.")
+		);
+
+		const TArray<FName>& Channels =
+			Template->Metadata.RequiredChannels;
+		const bool bChannelContractSafe =
+			!Channels.IsEmpty() &&
+			!(
+				Channels.Contains(TEXT("full_body")) &&
+				Channels.Num() > 1
+			);
+		AddCheck(
+			TEXT("animation_channel_contract"),
+			bChannelContractSafe,
+			bChannelContractSafe
+				? TEXT("Animation Asset declares an explicit non-ambiguous body-region Channel contract.")
+				: TEXT("Animation Asset Channels are missing or mix full_body with regional Channels.")
+		);
+	}
+
 	TSharedPtr<FJsonObject> Provenance;
 	const bool bProvenanceJsonValid = ParseJsonObject(Template->SourceProvenanceJson, Provenance);
 	AddCheck(
@@ -794,12 +1190,34 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 		bProvenanceJsonValid,
 		bProvenanceJsonValid ? TEXT("Provenance JSON parses.") : TEXT("Provenance JSON is invalid.")
 	);
+	if (bAnimationTemplate)
+	{
+		FString ImportedAnimationAssetPackageHash;
+		const bool bPackageHashMatches =
+			bProvenanceJsonValid &&
+			Provenance->TryGetStringField(
+				TEXT("source_asset_package_hash"),
+				ImportedAnimationAssetPackageHash
+			) &&
+			!CurrentAnimationAssetPackageHash.IsEmpty() &&
+			ImportedAnimationAssetPackageHash ==
+				CurrentAnimationAssetPackageHash;
+		AddCheck(
+			TEXT("animation_asset_source_fingerprint"),
+			bPackageHashMatches,
+			bPackageHashMatches
+				? TEXT("The selected Animation Asset still matches the package imported into this Draft.")
+				: TEXT("The selected Animation Asset has changed since import; re-import before review.")
+		);
+	}
 
 	FLLMNPCUEPIReconstructionSummary Summary;
 	FString AuthoringContext;
 	FString ArtifactError;
 	bool bArtifactValid = false;
-	if (!ReconstructionProfileFilePath.TrimStartAndEnd().IsEmpty())
+	const bool bReconstructionRequested =
+		!ReconstructionProfileFilePath.TrimStartAndEnd().IsEmpty();
+	if (bReconstructionRequested)
 	{
 		bArtifactValid = FLLMNPCUEPIArtifactAdapter::LoadReconstructionProfile(
 			ReconstructionProfileFilePath,
@@ -808,29 +1226,89 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 			ArtifactError
 		);
 	}
-	AddCheck(
-		TEXT("reconstruction_profile"),
-		bArtifactValid,
-		bArtifactValid ? TEXT("UEPI Reconstruction Profile validates.") :
-			(ArtifactError.IsEmpty() ? TEXT("A Reconstruction Profile is required.") : ArtifactError)
-	);
-
 	FString ExpectedReconstructionHash;
 	if (bProvenanceJsonValid)
 	{
 		Provenance->TryGetStringField(TEXT("reconstruction_profile_hash"), ExpectedReconstructionHash);
 	}
-	const bool bArtifactHashMatches =
-		bArtifactValid &&
-		!ExpectedReconstructionHash.IsEmpty() &&
-		ExpectedReconstructionHash == Summary.ProfileContentHash;
-	AddCheck(
-		TEXT("reconstruction_hash"),
-		bArtifactHashMatches,
-		bArtifactHashMatches
-			? TEXT("Draft provenance matches the source Reconstruction Profile hash.")
-			: TEXT("Draft provenance does not match the supplied Reconstruction Profile hash.")
-	);
+	ExpectedReconstructionHash =
+		ExpectedReconstructionHash.TrimStartAndEnd();
+	if (bAnimationTemplate)
+	{
+		if (bReconstructionRequested)
+		{
+			AddCheck(
+				TEXT("reconstruction_profile"),
+				bArtifactValid,
+				bArtifactValid
+					? TEXT("Optional UEPI Reconstruction Profile validates.")
+					: (
+						ArtifactError.IsEmpty()
+							? TEXT("The optional Reconstruction Profile could not be read.")
+							: ArtifactError
+					)
+			);
+			if (!ExpectedReconstructionHash.IsEmpty())
+			{
+				const bool bArtifactHashMatches =
+					bArtifactValid &&
+					ExpectedReconstructionHash ==
+						Summary.ProfileContentHash;
+				AddCheck(
+					TEXT("reconstruction_hash"),
+					bArtifactHashMatches,
+					bArtifactHashMatches
+						? TEXT("Draft provenance matches the optional Reconstruction Profile hash.")
+						: TEXT("Draft provenance does not match the supplied Reconstruction Profile hash.")
+				);
+			}
+			else if (bArtifactValid)
+			{
+				Warnings.Add(MakeShared<FJsonValueString>(
+					TEXT("Optional Reconstruction evidence was checked but the Draft did not pin its hash.")
+				));
+			}
+		}
+		else if (!ExpectedReconstructionHash.IsEmpty())
+		{
+			AddCheck(
+				TEXT("reconstruction_profile"),
+				false,
+				TEXT("Draft provenance pins Reconstruction evidence, so that evidence must be supplied.")
+			);
+		}
+		else
+		{
+			Warnings.Add(MakeShared<FJsonValueString>(
+				TEXT("No optional Reconstruction evidence was supplied for this Animation Asset wrapper.")
+			));
+		}
+	}
+	else
+	{
+		AddCheck(
+			TEXT("reconstruction_profile"),
+			bArtifactValid,
+			bArtifactValid
+				? TEXT("UEPI Reconstruction Profile validates.")
+				: (
+					ArtifactError.IsEmpty()
+						? TEXT("A Reconstruction Profile is required.")
+						: ArtifactError
+				)
+		);
+		const bool bArtifactHashMatches =
+			bArtifactValid &&
+			!ExpectedReconstructionHash.IsEmpty() &&
+			ExpectedReconstructionHash == Summary.ProfileContentHash;
+		AddCheck(
+			TEXT("reconstruction_hash"),
+			bArtifactHashMatches,
+			bArtifactHashMatches
+				? TEXT("Draft provenance matches the source Reconstruction Profile hash.")
+				: TEXT("Draft provenance does not match the supplied Reconstruction Profile hash.")
+		);
+	}
 
 	FString FullPoseValidation = TEXT("not_requested");
 	if (!FullPoseArtifactFilePath.TrimStartAndEnd().IsEmpty())
@@ -885,7 +1363,7 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 		));
 	}
 
-	if (bArtifactValid)
+	if (bArtifactValid && !bAnimationTemplate)
 	{
 		const float DurationRatio = Template->ProceduralClip.Duration / Summary.PlayLengthSeconds;
 		if (DurationRatio < 0.2f || DurationRatio > 2.0f)
@@ -901,9 +1379,38 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 	Report->SetStringField(TEXT("status"), bAllPassed ? TEXT("pass") : TEXT("fail"));
 	Report->SetStringField(TEXT("template_id"), Template->Metadata.TemplateId.ToString());
 	Report->SetStringField(TEXT("template_content_hash"), BuildTemplateContentHash(*Template));
+	Report->SetStringField(
+		TEXT("template_kind"),
+		bAnimationTemplate
+			? TEXT("animation_asset")
+			: TEXT("procedural_motion")
+	);
 	Report->SetStringField(TEXT("generated_at_utc"), FDateTime::UtcNow().ToIso8601());
 	Report->SetStringField(TEXT("source_reconstruction_hash"), Summary.ProfileContentHash);
 	Report->SetStringField(TEXT("full_pose_validation"), FullPoseValidation);
+	if (bAnimationTemplate)
+	{
+		Report->SetStringField(
+			TEXT("source_asset_path"),
+			Template->AnimationAsset.ToSoftObjectPath().ToString()
+		);
+		Report->SetStringField(
+			TEXT("source_asset_skeleton"),
+			AnimationSequence && AnimationSequence->GetSkeleton()
+				? AnimationSequence->GetSkeleton()->GetPathName()
+				: FString()
+		);
+		Report->SetNumberField(
+			TEXT("source_asset_play_length_seconds"),
+			AnimationSequence
+				? AnimationSequence->GetPlayLength()
+				: 0.0f
+		);
+		Report->SetStringField(
+			TEXT("source_asset_package_hash"),
+			CurrentAnimationAssetPackageHash
+		);
+	}
 	Report->SetArrayField(TEXT("checks"), Checks);
 	Report->SetArrayField(TEXT("warnings"), Warnings);
 	Report->SetBoolField(TEXT("manual_review_required"), true);
@@ -1419,6 +1926,29 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::PreviewTempla
 			TEXT("Preview actor has no LLM NPC Motion Component.")
 		);
 	}
+	if (Template->Kind == ELLMNPCTemplateKind::AnimationAsset)
+	{
+		FString QualityError;
+		if (!HasCurrentPassingQualityReport(*Template, QualityError))
+		{
+			return ErrorResult(FName(*QualityError), QualityError);
+		}
+		if (!MotionComponent->PreviewAnimationAssetTemplate(
+			*Template,
+			FLLMNPCTemplateModifiers()
+		))
+		{
+			return ErrorResult(
+				TEXT("LLMNPC_AUTHORING_PREVIEW_SUBMIT_FAILED"),
+				MotionComponent->LastValidationError
+			);
+		}
+		return SuccessResult(
+			TEXT("Animation Asset Draft submitted to the PIE preview actor through Dynamic Montage."),
+			PreviewActor->GetPathName(),
+			Template
+		);
+	}
 	FLLMMotionPlan Plan;
 	FString Error;
 	if (!CompileTemplateForPreview(*Template, Plan, Error))
@@ -1525,6 +2055,15 @@ FString ULLMNPCTemplateAuthoringSubsystem::GetRejectedDirectory()
 
 FString ULLMNPCTemplateAuthoringSubsystem::GetPublishedSourceDirectory()
 {
+	const TSharedPtr<IPlugin> Plugin =
+		IPluginManager::Get().FindPlugin(TEXT("LLMNPCActionLayer"));
+	if (Plugin.IsValid() && !Plugin->GetDescriptor().bInstalled)
+	{
+		return FPaths::ConvertRelativePathToFull(FPaths::Combine(
+			Plugin->GetBaseDir(),
+			TEXT("Resources/Templates/Published")
+		));
+	}
 	return FPaths::ConvertRelativePathToFull(FPaths::Combine(
 		FPaths::ProjectDir(),
 		TEXT("LLMNPCSource/Templates/Published")
@@ -1724,6 +2263,14 @@ bool ULLMNPCTemplateAuthoringSubsystem::ExportPublishedTemplateSource(
 	TSharedPtr<FJsonObject> Provenance;
 	if (ParseJsonObject(Template.SourceProvenanceJson, Provenance))
 	{
+		const TSharedPtr<FJsonObject>* ImportRecord = nullptr;
+		if (
+			Provenance->TryGetObjectField(TEXT("import_record"), ImportRecord) &&
+			ImportRecord && ImportRecord->IsValid()
+		)
+		{
+			(*ImportRecord)->RemoveField(TEXT("draft_source_copy_path"));
+		}
 		Root->SetObjectField(TEXT("source_provenance"), Provenance.ToSharedRef());
 	}
 	TSharedPtr<FJsonObject> QualityReport;
@@ -1915,6 +2462,59 @@ bool ULLMNPCTemplateAuthoringSubsystem::HasCurrentPassingQualityReport(
 	{
 		OutError = TEXT("LLMNPC_AUTHORING_QUALITY_REPORT_STALE");
 		return false;
+	}
+	if (Template.Kind == ELLMNPCTemplateKind::AnimationAsset)
+	{
+		FString ReportAssetPath;
+		FString ReportSkeletonPath;
+		FString ReportPackageHash;
+		FString CurrentPackageHash;
+		FString PackageHashError;
+		double ReportPlayLength = 0.0;
+		UAnimSequenceBase* Sequence =
+			Cast<UAnimSequenceBase>(
+				Template.AnimationAsset.LoadSynchronous()
+			);
+		if (
+			!Sequence ||
+			!Sequence->GetSkeleton() ||
+			!Report->TryGetStringField(
+				TEXT("source_asset_path"),
+				ReportAssetPath
+			) ||
+			!Report->TryGetStringField(
+				TEXT("source_asset_skeleton"),
+				ReportSkeletonPath
+			) ||
+			!Report->TryGetNumberField(
+				TEXT("source_asset_play_length_seconds"),
+				ReportPlayLength
+			) ||
+			!Report->TryGetStringField(
+				TEXT("source_asset_package_hash"),
+				ReportPackageHash
+			) ||
+			!FLLMNPCAnimationTemplateDraftImporter::
+				BuildAnimationAssetPackageHash(
+					*Sequence,
+					CurrentPackageHash,
+					PackageHashError
+				) ||
+			ReportAssetPath !=
+				Template.AnimationAsset.ToSoftObjectPath().ToString() ||
+			ReportSkeletonPath !=
+				Sequence->GetSkeleton()->GetPathName() ||
+			ReportPackageHash != CurrentPackageHash ||
+			!FMath::IsNearlyEqual(
+				ReportPlayLength,
+				static_cast<double>(Sequence->GetPlayLength()),
+				1.e-6
+			)
+		)
+		{
+			OutError = TEXT("LLMNPC_AUTHORING_QUALITY_REPORT_STALE");
+			return false;
+		}
 	}
 	return true;
 }
