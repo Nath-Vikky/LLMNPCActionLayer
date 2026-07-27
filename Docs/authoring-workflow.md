@@ -110,6 +110,13 @@ stale and closes the Publish gate.
 Reject unsuitable work with `reject_template`; the Draft source is copied to
 the Rejected directory when an import record is available.
 
+For an online Motion Recipe Draft, the Workbench also offers `Revise Online`.
+Enter reviewer identity and concrete visual feedback first. The operation
+marks the current Draft Rejected, binds a new request to its Template ID and
+Recipe hash, and opens `Generate`. The regenerated result is always a separate
+Generated asset with new evidence; it cannot inherit Quality, Previewed, or
+HumanApproved state.
+
 ## 8. Publish
 
 ```python

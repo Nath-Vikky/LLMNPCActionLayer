@@ -7,6 +7,7 @@
 #include "Capabilities/LLMNPCSkeletonCapabilityBuilder.h"
 #include "Authoring/LLMNPCTemplateAuthoringSubsystem.h"
 #include "DesktopPlatformModule.h"
+#include "Dom/JsonObject.h"
 #include "Editor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "IDesktopPlatform.h"
@@ -20,6 +21,8 @@
 #include "Protocol/LLMNPCTurnRequestV3Adapter.h"
 #include "PropertyCustomizationHelpers.h"
 #include "ScopedTransaction.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
 #include "Styling/AppStyle.h"
 #include "Subsystems/AssetEditorSubsystem.h"
@@ -95,6 +98,42 @@ FString WorkbenchItemKindToString(ELLMNPCTemplateWorkbenchItemKind Kind)
 	return Kind == ELLMNPCTemplateWorkbenchItemKind::PublicAction
 		? TEXT("Action")
 		: TEXT("Template");
+}
+
+bool WorkbenchReadLatestRejectionFeedback(
+	const ULLMNPCMotionTemplate& Template,
+	FString& OutFeedback
+)
+{
+	OutFeedback.Reset();
+	TSharedPtr<FJsonObject> Provenance;
+	const TSharedRef<TJsonReader<>> Reader =
+		TJsonReaderFactory<>::Create(
+			Template.SourceProvenanceJson
+		);
+	if (
+		!FJsonSerializer::Deserialize(Reader, Provenance) ||
+		!Provenance.IsValid()
+	)
+	{
+		return false;
+	}
+	const TSharedPtr<FJsonObject>* HumanReview = nullptr;
+	FString Event;
+	return
+		Provenance->TryGetObjectField(
+			TEXT("human_review"),
+			HumanReview
+		) &&
+		HumanReview &&
+		HumanReview->IsValid() &&
+		(*HumanReview)->TryGetStringField(TEXT("event"), Event) &&
+		Event == TEXT("rejected") &&
+		(*HumanReview)->TryGetStringField(
+			TEXT("notes"),
+			OutFeedback
+		) &&
+		!OutFeedback.TrimStartAndEnd().IsEmpty();
 }
 
 class SLLMNPCCatalogTableRow final
@@ -818,6 +857,23 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildGeneratePage()
 								}
 							)
 					]
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 6.0f, 0.0f, 0.0f)
+		[
+			MakeFormRow(
+				LOCTEXT(
+					"RecipeRequestSourceLabel",
+					"Request Source"
+				),
+				SNew(STextBlock)
+					.Text(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							GetRecipeRequestSourceText
+					)
 			)
 		]
 		+ SVerticalBox::Slot()
@@ -1608,6 +1664,47 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildReviewPage()
 			.Padding(0.0f, 0.0f, 6.0f, 0.0f)
 			[
 				SNew(SButton)
+					.IsEnabled(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							CanReviseOnline
+					)
+					.OnClicked(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandleReviseOnline
+					)
+					[
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						[
+							SNew(SImage)
+								.Image(
+									FAppStyle::GetBrush(
+										"Icons.Refresh"
+									)
+								)
+						]
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						.Padding(5.0f, 0.0f, 0.0f, 0.0f)
+						[
+							SNew(STextBlock)
+								.Text(
+									LOCTEXT(
+										"ReviseOnline",
+										"Revise Online"
+									)
+								)
+						]
+					]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(0.0f, 0.0f, 6.0f, 0.0f)
+			[
+				SNew(SButton)
 					.IsEnabled(this, &SLLMNPCTemplateWorkbench::CanReject)
 					.OnClicked(this, &SLLMNPCTemplateWorkbench::HandleReject)
 					[
@@ -2333,6 +2430,22 @@ FText SLLMNPCTemplateWorkbench::GetRecipeGenerationSummaryText() const
 	);
 }
 
+FText SLLMNPCTemplateWorkbench::GetRecipeRequestSourceText() const
+{
+	if (PendingRecipeRequestContext.IsRegeneration())
+	{
+		return FText::FromString(FString::Printf(
+			TEXT("%s | %s"),
+			LLMNPCMotionRecipeAuthoring::
+				RegenerationTriggerSource,
+			*PendingRecipeRequestContext.SourceTemplateId.ToString()
+		));
+	}
+	return FText::FromString(
+		LLMNPCMotionRecipeAuthoring::ManualTriggerSource
+	);
+}
+
 FText SLLMNPCTemplateWorkbench::GetSandboxSummaryText() const
 {
 	return SandboxSummary.IsEmpty()
@@ -2519,6 +2632,7 @@ bool SLLMNPCTemplateWorkbench::CanGenerateQualityReport() const
 {
 	const ULLMNPCMotionTemplate* Template = GetSelectedTemplate();
 	return
+		!bAuthoringRequestPending &&
 		Template &&
 		!Template->IsPublished() &&
 		(
@@ -2562,6 +2676,24 @@ bool SLLMNPCTemplateWorkbench::CanReject() const
 	return SelectedItem.IsValid() &&
 		SelectedItem->ReviewState != ELLMNPCTemplateReviewState::Published &&
 		SelectedItem->ReviewState != ELLMNPCTemplateReviewState::Rejected;
+}
+
+bool SLLMNPCTemplateWorkbench::CanReviseOnline() const
+{
+	const ULLMNPCMotionTemplate* Template = GetSelectedTemplate();
+	return
+		!bAuthoringRequestPending &&
+		Template &&
+		Template->Kind ==
+			ELLMNPCTemplateKind::ProceduralMotion &&
+		!Template->Metadata.SourceRecipeHash.IsEmpty() &&
+		Template->Metadata.PublicActionId ==
+			TEXT("gesture.shrug") &&
+		Template->Metadata.SkeletonProfileId ==
+			TEXT("ue5_manny.v1") &&
+		!Template->IsPublished() &&
+		Template->Metadata.ReviewState !=
+			ELLMNPCTemplateReviewState::Deprecated;
 }
 
 bool SLLMNPCTemplateWorkbench::CanPublish() const
@@ -2956,7 +3088,8 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 		Capability,
 		PublishedExamples,
 		Prompt,
-		PromptError
+		PromptError,
+		PendingRecipeRequestContext
 	))
 	{
 		SetStatus(FText::FromString(PromptError), true);
@@ -2989,7 +3122,8 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 	GenerationEndpointOrigin = OnlineConfig.EndpointOrigin;
 	GenerationConfigHash = OnlineConfig.NonSecretConfigHash;
 	RecipeGenerationSummary = FString::Printf(
-		TEXT("Request: pending\nProfile: %s\nCapability: %s\nRegistry: %s\nPrompt: %s\nExamples: %d"),
+		TEXT("Request: pending\nSource: %s\nProfile: %s\nCapability: %s\nRegistry: %s\nPrompt: %s\nExamples: %d"),
+		*LastRecipePrompt.RequestContext.TriggerSource.ToString(),
 		*SelectedSkeleton->ProfileId.ToString(),
 		*LastRecipePrompt.CapabilityHash,
 		*LastRecipePrompt.RegistryVersion,
@@ -3562,6 +3696,14 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		LastRecipePrompt.CapabilityModelViewJson;
 	Evidence.RawResponseJson =
 		LastAuthoringResult.ResponseJson;
+	Evidence.TriggerSource =
+		LastRecipePrompt.RequestContext.TriggerSource;
+	Evidence.SourceTemplateId =
+		LastRecipePrompt.RequestContext.SourceTemplateId;
+	Evidence.SourceRecipeHash =
+		LastRecipePrompt.RequestContext.SourceRecipeHash;
+	Evidence.ReviewFeedback =
+		LastRecipePrompt.RequestContext.ReviewFeedback;
 	Evidence.GeneratedAtUtc = RecipeGeneratedAtUtc;
 	Evidence.HttpStatus = LastAuthoringResult.HttpStatus;
 	Evidence.AttemptCount =
@@ -3593,6 +3735,8 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		);
 	if (Result.bSuccess && Result.TemplateAsset)
 	{
+		PendingRecipeRequestContext =
+			FLLMNPCMotionRecipeRequestContext();
 		SandboxReport.Outcome = TEXT("sent_to_generated_draft");
 		SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
 		SaveSandboxReport();
@@ -3843,6 +3987,104 @@ FReply SLLMNPCTemplateWorkbench::HandleReject()
 	return FReply::Handled();
 }
 
+FReply SLLMNPCTemplateWorkbench::HandleReviseOnline()
+{
+	ULLMNPCMotionTemplate* Template = GetSelectedTemplate();
+	ULLMNPCTemplateAuthoringSubsystem* Authoring =
+		GEditor
+			? GEditor->GetEditorSubsystem<
+				ULLMNPCTemplateAuthoringSubsystem>()
+			: nullptr;
+	if (!Template || !Authoring || !CanReviseOnline())
+	{
+		SetStatus(
+			LOCTEXT(
+				"ReviseOnlineUnavailable",
+				"Only a non-Published Manny Shrug Motion Recipe Draft can start an online revision."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	FString Feedback = ReviewNotesBox.IsValid()
+		? ReviewNotesBox->GetText().ToString().TrimStartAndEnd()
+		: FString();
+	if (
+		Template->Metadata.ReviewState !=
+			ELLMNPCTemplateReviewState::Rejected
+	)
+	{
+		const FString Reviewer = ReviewerBox.IsValid()
+			? ReviewerBox->GetText()
+				.ToString()
+				.TrimStartAndEnd()
+			: FString();
+		if (Reviewer.IsEmpty() || Feedback.IsEmpty())
+		{
+			SetStatus(
+				LOCTEXT(
+					"ReviseOnlineReviewRequired",
+					"Reviewer identity and concrete visual feedback are required before revision."
+				),
+				true
+			);
+			return FReply::Handled();
+		}
+		const FScopedTransaction Transaction(
+			LOCTEXT(
+				"RejectForRevisionTransaction",
+				"Reject and Revise LLM NPC Motion Recipe"
+			)
+		);
+		Template->Modify();
+		const FLLMNPCAuthoringOperationResult Rejection =
+			Authoring->RejectTemplate(
+				Template,
+				Reviewer,
+				Feedback
+			);
+		if (!Rejection.bSuccess)
+		{
+			SetStatus(
+				FText::FromString(Rejection.Message),
+				true
+			);
+			return FReply::Handled();
+		}
+		RefreshCatalog(Template->GetPathName());
+	}
+	else if (
+		!WorkbenchReadLatestRejectionFeedback(
+			*Template,
+			Feedback
+		)
+	)
+	{
+		SetStatus(
+			LOCTEXT(
+				"ReviseOnlineFeedbackMissing",
+				"The Rejected Draft has no usable visual feedback."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	if (!PrepareRejectedDraftRegeneration(*Template, Feedback))
+	{
+		return FReply::Handled();
+	}
+	SetStatus(
+		LOCTEXT(
+			"ReviseOnlinePrepared",
+			"Rejected Draft lineage is locked. Generate Online will create a separate revision."
+		),
+		false
+	);
+	return FReply::Handled();
+}
+
 FReply SLLMNPCTemplateWorkbench::HandlePublish()
 {
 	if (FMessageDialog::Open(
@@ -3883,6 +4125,138 @@ FReply SLLMNPCTemplateWorkbench::HandlePublish()
 	);
 	SetStatus(FText::FromString(Result.Message), !Result.bSuccess);
 	return FReply::Handled();
+}
+
+bool SLLMNPCTemplateWorkbench::PrepareRejectedDraftRegeneration(
+	ULLMNPCMotionTemplate& Template,
+	const FString& ReviewFeedback
+)
+{
+	const FString CleanFeedback =
+		ReviewFeedback.TrimStartAndEnd();
+	if (
+		Template.Metadata.ReviewState !=
+			ELLMNPCTemplateReviewState::Rejected ||
+		Template.Metadata.TemplateId.IsNone() ||
+		Template.Metadata.SourceRecipeHash.IsEmpty() ||
+		Template.Metadata.SkeletonProfileId.IsNone() ||
+		CleanFeedback.IsEmpty() ||
+		CleanFeedback.Len() > 600
+	)
+	{
+		SetStatus(
+			LOCTEXT(
+				"ReviseOnlineLineageInvalid",
+				"Rejected Draft lineage or bounded visual feedback is invalid."
+			),
+			true
+		);
+		return false;
+	}
+
+	TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption>
+		SourceSkeleton;
+	for (
+		const TSharedPtr<
+			FLLMNPCTemplateWorkbenchSkeletonOption>& Option :
+			SkeletonOptions
+	)
+	{
+		if (
+			Option.IsValid() &&
+			Option->ProfileId ==
+				Template.Metadata.SkeletonProfileId
+		)
+		{
+			SourceSkeleton = Option;
+			break;
+		}
+	}
+	if (!SourceSkeleton.IsValid())
+	{
+		SetStatus(
+			LOCTEXT(
+				"ReviseOnlineSkeletonMissing",
+				"The rejected Draft Skeleton Profile is unavailable."
+			),
+			true
+		);
+		return false;
+	}
+
+	PendingRecipeRequestContext =
+		FLLMNPCMotionRecipeRequestContext();
+	PendingRecipeRequestContext.TriggerSource =
+		LLMNPCMotionRecipeAuthoring::
+			RegenerationTriggerSource;
+	PendingRecipeRequestContext.SourceTemplateId =
+		Template.Metadata.TemplateId;
+	PendingRecipeRequestContext.SourceRecipeHash =
+		Template.Metadata.SourceRecipeHash;
+	PendingRecipeRequestContext.ReviewFeedback =
+		CleanFeedback;
+	SelectedSkeleton = SourceSkeleton;
+	if (GenerateSkeletonCombo)
+	{
+		GenerateSkeletonCombo->SetSelectedItem(
+			SourceSkeleton
+		);
+	}
+	if (SkeletonCombo)
+	{
+		SkeletonCombo->SetSelectedItem(SourceSkeleton);
+	}
+
+	FString DesiredAction =
+		Template.Metadata.Description.ToString()
+			.TrimStartAndEnd();
+	if (DesiredAction.IsEmpty())
+	{
+		DesiredAction =
+			Template.Metadata.DisplayName.ToString()
+				.TrimStartAndEnd();
+	}
+	if (RecipeIntentBox)
+	{
+		RecipeIntentBox->SetText(
+			FText::FromString(DesiredAction.Left(600))
+		);
+	}
+
+	CancelActiveSandboxPreview(TEXT("revision_started"));
+	LastRecipePrompt = FLLMNPCMotionRecipePromptPackage();
+	LastRecipeResponse =
+		FLLMNPCMotionRecipeAuthoringResponse();
+	LastAuthoringResult = FLLMNPCAuthoringJsonResult();
+	LastSandboxPreflight =
+		FLLMNPCAuthoringSandboxPreflightResult();
+	SandboxReport = FLLMNPCOnlineSandboxReportRecord();
+	RecipeGeneratedAtUtc = FDateTime();
+	RecipeGenerationSummary = FString::Printf(
+		TEXT("Revision source: %s\nParent Recipe: %s\nFeedback: %s"),
+		*Template.Metadata.TemplateId.ToString(),
+		*Template.Metadata.SourceRecipeHash,
+		*CleanFeedback
+	);
+	if (RecipeJsonBox)
+	{
+		RecipeJsonBox->SetText(FText::GetEmpty());
+	}
+	if (RecipeEvidenceBox)
+	{
+		RecipeEvidenceBox->SetText(
+			GetRecipeGenerationSummaryText()
+		);
+	}
+	if (SandboxReviewNotesBox)
+	{
+		SandboxReviewNotesBox->SetText(
+			FText::GetEmpty()
+		);
+	}
+	UpdateSandboxSummary();
+	SetActivePage(ELLMNPCTemplateWorkbenchPage::Generate);
+	return true;
 }
 
 void SLLMNPCTemplateWorkbench::InvalidateSandboxPreflight(

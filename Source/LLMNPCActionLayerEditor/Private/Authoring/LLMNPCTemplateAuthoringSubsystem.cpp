@@ -137,6 +137,43 @@ bool SerializeJsonObject(
 	return FJsonSerializer::Serialize(Object, Writer);
 }
 
+TSharedRef<FJsonObject> BuildMotionRecipeAuthoringTrigger(
+	const FLLMNPCMotionRecipeGenerationEvidence& Evidence
+)
+{
+	TSharedRef<FJsonObject> Trigger = MakeShared<FJsonObject>();
+	Trigger->SetStringField(
+		TEXT("schema_version"),
+		TEXT("llmnpc.motion_recipe_authoring_trigger.v1")
+	);
+	Trigger->SetStringField(
+		TEXT("source"),
+		Evidence.TriggerSource.ToString()
+	);
+	if (
+		Evidence.TriggerSource ==
+			LLMNPCMotionRecipeAuthoring::
+				RegenerationTriggerSource
+	)
+	{
+		TSharedRef<FJsonObject> Parent = MakeShared<FJsonObject>();
+		Parent->SetStringField(
+			TEXT("template_id"),
+			Evidence.SourceTemplateId.ToString()
+		);
+		Parent->SetStringField(
+			TEXT("recipe_hash"),
+			Evidence.SourceRecipeHash
+		);
+		Parent->SetStringField(
+			TEXT("human_review_feedback"),
+			Evidence.ReviewFeedback.TrimStartAndEnd()
+		);
+		Trigger->SetObjectField(TEXT("revision_parent"), Parent);
+	}
+	return Trigger;
+}
+
 bool AppendReviewRecord(
 	ULLMNPCMotionTemplate& Template,
 	const FString& Event,
@@ -394,6 +431,41 @@ bool HasPublishedTemplateId(FName TemplateId, const ULLMNPCMotionTemplate* Ignor
 		}
 	}
 	return false;
+}
+
+ULLMNPCMotionTemplate* FindMotionTemplateById(FName TemplateId)
+{
+	FAssetRegistryModule& AssetRegistryModule =
+		FModuleManager::LoadModuleChecked<FAssetRegistryModule>(
+			TEXT("AssetRegistry")
+		);
+	FARFilter Filter;
+	Filter.ClassPaths.Add(
+		ULLMNPCMotionTemplate::StaticClass()->GetClassPathName()
+	);
+	Filter.bRecursiveClasses = true;
+	TArray<FAssetData> Assets;
+	AssetRegistryModule.Get().GetAssets(Filter, Assets);
+	Assets.Sort(
+		[](const FAssetData& A, const FAssetData& B)
+		{
+			return A.GetObjectPathString() <
+				B.GetObjectPathString();
+		}
+	);
+	for (const FAssetData& AssetData : Assets)
+	{
+		ULLMNPCMotionTemplate* Template =
+			Cast<ULLMNPCMotionTemplate>(AssetData.GetAsset());
+		if (
+			Template &&
+			Template->Metadata.TemplateId == TemplateId
+		)
+		{
+			return Template;
+		}
+	}
+	return nullptr;
 }
 
 bool HasPublishedPublicActionVersion(
@@ -654,6 +726,78 @@ bool IsMotionRecipeProvenance(
 		SourceType == TEXT("motion_recipe");
 }
 
+struct FLLMNPCMotionRecipeTriggerIdentity
+{
+	FString Source;
+	FString ParentTemplateId;
+	FString ParentRecipeHash;
+	FString ReviewFeedback;
+};
+
+bool ReadMotionRecipeTriggerIdentity(
+	const TSharedPtr<FJsonObject>& Trigger,
+	FLLMNPCMotionRecipeTriggerIdentity& OutIdentity
+)
+{
+	OutIdentity = FLLMNPCMotionRecipeTriggerIdentity();
+	FString SchemaVersion;
+	if (
+		!Trigger.IsValid() ||
+		!Trigger->TryGetStringField(
+			TEXT("schema_version"),
+			SchemaVersion
+		) ||
+		SchemaVersion !=
+			TEXT("llmnpc.motion_recipe_authoring_trigger.v1") ||
+		!Trigger->TryGetStringField(
+			TEXT("source"),
+			OutIdentity.Source
+		)
+	)
+	{
+		return false;
+	}
+	if (
+		OutIdentity.Source ==
+			LLMNPCMotionRecipeAuthoring::ManualTriggerSource
+	)
+	{
+		return !Trigger->HasField(TEXT("revision_parent"));
+	}
+	if (
+		OutIdentity.Source !=
+			LLMNPCMotionRecipeAuthoring::
+				RegenerationTriggerSource
+	)
+	{
+		return false;
+	}
+
+	const TSharedPtr<FJsonObject>* Parent = nullptr;
+	return
+		Trigger->TryGetObjectField(
+			TEXT("revision_parent"),
+			Parent
+		) &&
+		Parent &&
+		Parent->IsValid() &&
+		(*Parent)->TryGetStringField(
+			TEXT("template_id"),
+			OutIdentity.ParentTemplateId
+		) &&
+		!OutIdentity.ParentTemplateId.IsEmpty() &&
+		(*Parent)->TryGetStringField(
+			TEXT("recipe_hash"),
+			OutIdentity.ParentRecipeHash
+		) &&
+		!OutIdentity.ParentRecipeHash.IsEmpty() &&
+		(*Parent)->TryGetStringField(
+			TEXT("human_review_feedback"),
+			OutIdentity.ReviewFeedback
+		) &&
+		!OutIdentity.ReviewFeedback.IsEmpty();
+}
+
 bool ValidateMotionRecipeEvidenceEnvelope(
 	const TSharedPtr<FJsonObject>& Provenance,
 	FString& OutError
@@ -669,6 +813,7 @@ bool ValidateMotionRecipeEvidenceEnvelope(
 	const TSharedPtr<FJsonObject>* License = nullptr;
 	const TSharedPtr<FJsonObject>* Agent = nullptr;
 	const TSharedPtr<FJsonObject>* ImportRecord = nullptr;
+	const TSharedPtr<FJsonObject>* AuthoringTrigger = nullptr;
 	FString RecipeHash;
 	FString CompiledRecipeHash;
 	FString CapabilityHash;
@@ -703,6 +848,12 @@ bool ValidateMotionRecipeEvidenceEnvelope(
 		) ||
 		!ImportRecord ||
 		!ImportRecord->IsValid() ||
+		!Provenance->TryGetObjectField(
+			TEXT("authoring_trigger"),
+			AuthoringTrigger
+		) ||
+		!AuthoringTrigger ||
+		!AuthoringTrigger->IsValid() ||
 		!Provenance->TryGetStringField(
 			TEXT("recipe_hash"),
 			RecipeHash
@@ -791,6 +942,47 @@ bool ValidateMotionRecipeEvidenceEnvelope(
 	)
 	{
 		OutError = TEXT("LLMNPC_RECIPE_PROVENANCE_JOB_SECRET_MARKER");
+		return false;
+	}
+	TSharedPtr<FJsonObject> Job;
+	const TSharedPtr<FJsonObject>* JobTrigger = nullptr;
+	FString JobSchemaVersion;
+	FLLMNPCMotionRecipeTriggerIdentity ProvenanceTriggerIdentity;
+	FLLMNPCMotionRecipeTriggerIdentity JobTriggerIdentity;
+	if (
+		!ParseJsonObject(JobJson, Job) ||
+		!Job->TryGetStringField(
+			TEXT("schema_version"),
+			JobSchemaVersion
+		) ||
+		JobSchemaVersion !=
+			LLMNPCMotionRecipeAuthoring::JobSchemaVersion ||
+		!Job->TryGetObjectField(
+			TEXT("authoring_trigger"),
+			JobTrigger
+		) ||
+		!JobTrigger ||
+		!JobTrigger->IsValid() ||
+		!ReadMotionRecipeTriggerIdentity(
+			*AuthoringTrigger,
+			ProvenanceTriggerIdentity
+		) ||
+		!ReadMotionRecipeTriggerIdentity(
+			*JobTrigger,
+			JobTriggerIdentity
+		) ||
+		ProvenanceTriggerIdentity.Source !=
+			JobTriggerIdentity.Source ||
+		ProvenanceTriggerIdentity.ParentTemplateId !=
+			JobTriggerIdentity.ParentTemplateId ||
+		ProvenanceTriggerIdentity.ParentRecipeHash !=
+			JobTriggerIdentity.ParentRecipeHash ||
+		ProvenanceTriggerIdentity.ReviewFeedback !=
+			JobTriggerIdentity.ReviewFeedback
+	)
+	{
+		OutError =
+			TEXT("LLMNPC_RECIPE_PROVENANCE_TRIGGER_INVALID");
 		return false;
 	}
 	return true;
@@ -1392,6 +1584,124 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 		);
 	}
 
+	TSharedPtr<FJsonObject> UserRequestObject;
+	FString RequestSchemaVersion;
+	FString RequestTriggerSource;
+	if (
+		!ParseJsonObject(Evidence.UserJson, UserRequestObject) ||
+		!UserRequestObject->TryGetStringField(
+			TEXT("schema_version"),
+			RequestSchemaVersion
+		) ||
+		RequestSchemaVersion !=
+			TEXT("llmnpc.motion_recipe_authoring_request.v2") ||
+		!UserRequestObject->TryGetStringField(
+			TEXT("trigger_source"),
+			RequestTriggerSource
+		) ||
+		RequestTriggerSource != Evidence.TriggerSource.ToString()
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_TRIGGER_EVIDENCE_INVALID"),
+			TEXT("The Authoring trigger source is missing or does not match its request evidence.")
+		);
+	}
+
+	const bool bManualTrigger =
+		Evidence.TriggerSource ==
+			LLMNPCMotionRecipeAuthoring::ManualTriggerSource;
+	const bool bRegenerationTrigger =
+		Evidence.TriggerSource ==
+			LLMNPCMotionRecipeAuthoring::
+				RegenerationTriggerSource;
+	ULLMNPCMotionTemplate* RegenerationSource = nullptr;
+	if (!bManualTrigger && !bRegenerationTrigger)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_TRIGGER_SOURCE_UNKNOWN"),
+			TEXT("The Authoring trigger source is not allowed.")
+		);
+	}
+	if (bManualTrigger)
+	{
+		if (
+			UserRequestObject->HasField(TEXT("revision_context")) ||
+			!Evidence.SourceTemplateId.IsNone() ||
+			!Evidence.SourceRecipeHash.IsEmpty() ||
+			!Evidence.ReviewFeedback.IsEmpty()
+		)
+		{
+			return ErrorResult(
+				TEXT("LLMNPC_RECIPE_DRAFT_MANUAL_LINEAGE_INVALID"),
+				TEXT("A ManualWorkbench request cannot inherit rejected Draft lineage.")
+			);
+		}
+	}
+	else
+	{
+		const TSharedPtr<FJsonObject>* RevisionContext = nullptr;
+		FString RequestSourceTemplateId;
+		FString RequestSourceRecipeHash;
+		FString RequestReviewFeedback;
+		if (
+			!UserRequestObject->TryGetObjectField(
+				TEXT("revision_context"),
+				RevisionContext
+			) ||
+			!RevisionContext ||
+			!RevisionContext->IsValid() ||
+			!(*RevisionContext)->TryGetStringField(
+				TEXT("source_template_id"),
+				RequestSourceTemplateId
+			) ||
+			!(*RevisionContext)->TryGetStringField(
+				TEXT("source_recipe_hash"),
+				RequestSourceRecipeHash
+			) ||
+			!(*RevisionContext)->TryGetStringField(
+				TEXT("human_review_feedback"),
+				RequestReviewFeedback
+			) ||
+			RequestSourceTemplateId !=
+				Evidence.SourceTemplateId.ToString() ||
+			RequestSourceRecipeHash !=
+				Evidence.SourceRecipeHash ||
+			RequestReviewFeedback !=
+				Evidence.ReviewFeedback.TrimStartAndEnd() ||
+			Evidence.SourceTemplateId.IsNone() ||
+			Evidence.SourceRecipeHash.IsEmpty() ||
+			Evidence.ReviewFeedback.TrimStartAndEnd().IsEmpty() ||
+			Evidence.ReviewFeedback.Len() > 600
+		)
+		{
+			return ErrorResult(
+				TEXT("LLMNPC_RECIPE_DRAFT_REVISION_EVIDENCE_INVALID"),
+				TEXT("Rejected Draft lineage is incomplete or does not match the online request.")
+			);
+		}
+
+		RegenerationSource =
+			FindMotionTemplateById(Evidence.SourceTemplateId);
+		if (
+			!RegenerationSource ||
+			RegenerationSource->Metadata.ReviewState !=
+				ELLMNPCTemplateReviewState::Rejected ||
+			RegenerationSource->Metadata.SourceRecipeHash !=
+				Evidence.SourceRecipeHash ||
+			RegenerationSource->Metadata.SkeletonProfileId !=
+				SkeletonProfileId ||
+			RegenerationSource->Metadata.PublicActionId !=
+				CatalogSpec.PublicActionId
+		)
+		{
+			return ErrorResult(
+				TEXT("LLMNPC_RECIPE_DRAFT_REVISION_PARENT_INVALID"),
+				TEXT("The regeneration parent must remain a matching Rejected Motion Recipe Draft.")
+			);
+		}
+	}
+
 	ULLMNPCSkeletonProfile* SkeletonProfile =
 		FindSkeletonProfile(SkeletonProfileId);
 	FString ProfileError;
@@ -1672,11 +1982,9 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 
 	TSharedPtr<FJsonObject> CanonicalRecipeObject;
 	TSharedPtr<FJsonObject> RawResponseObject;
-	TSharedPtr<FJsonObject> UserRequestObject;
 	if (
 		!ParseJsonObject(CanonicalRecipe, CanonicalRecipeObject) ||
-		!ParseJsonObject(Evidence.RawResponseJson, RawResponseObject) ||
-		!ParseJsonObject(Evidence.UserJson, UserRequestObject)
+		!ParseJsonObject(Evidence.RawResponseJson, RawResponseObject)
 	)
 	{
 		return ErrorResult(
@@ -1758,6 +2066,10 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	Job->SetStringField(
 		TEXT("system_prompt"),
 		Evidence.SystemPrompt
+	);
+	Job->SetObjectField(
+		TEXT("authoring_trigger"),
+		BuildMotionRecipeAuthoringTrigger(Evidence)
 	);
 	Job->SetObjectField(
 		TEXT("authoring_request"),
@@ -1873,6 +2185,10 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	Provenance->SetStringField(
 		TEXT("authoring_job_hash"),
 		JobPayloadHash
+	);
+	Provenance->SetObjectField(
+		TEXT("authoring_trigger"),
+		BuildMotionRecipeAuthoringTrigger(Evidence)
 	);
 	TSharedRef<FJsonObject> License = MakeShared<FJsonObject>();
 	License->SetStringField(

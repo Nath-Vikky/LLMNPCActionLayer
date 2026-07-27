@@ -56,6 +56,10 @@ struct FLLMNPCMotionRecipeGenerationEvidence
 	FString RecipeSchemaJson;
 	FString CapabilityModelViewJson;
 	FString RawResponseJson;
+	FName TriggerSource = TEXT("ManualWorkbench");
+	FName SourceTemplateId = NAME_None;
+	FString SourceRecipeHash;
+	FString ReviewFeedback;
 	FString CompiledRecipeHash;
 	FString KinematicReportHash;
 	FDateTime GeneratedAtUtc;

@@ -461,6 +461,24 @@ checked-in Schema can be refreshed with
 `Docs/Phases/forward-n5-motion-recipe-shrug.md` for trust boundaries,
 provenance, quality gates, and acceptance steps.
 
+## Forward N7 Rejected Draft Revision
+
+The first N7 gate closes the online model-derived action loop without editing
+or overwriting a failed Draft. On the Workbench `Review` page, `Revise Online`
+records reviewer identity and visual feedback, rejects the source Motion Recipe
+Draft, and prepares a new online request. The request and Authoring Job bind
+`RegenerateRejectedDraft` to the parent Template ID and Recipe hash. UE rejects
+the revision if the parent is missing, changed, not Rejected, uses another
+Manny profile, or belongs to another Public Action.
+
+The revision receives a new Template ID and must repeat Sandbox visual review,
+Quality, Previewed, HumanApproved, and Publish. Existing prompt-v2 Drafts are
+intentionally stale under the prompt-v3 evidence gate and should be revised
+instead of published.
+
+See `Docs/Phases/forward-n7a-rejected-draft-revision.md` for the exact gate and
+manual online acceptance sequence.
+
 ## Product Runtime
 
 When the owning Actor replicates, `ULLMNPCMotionComponent` replicates only a

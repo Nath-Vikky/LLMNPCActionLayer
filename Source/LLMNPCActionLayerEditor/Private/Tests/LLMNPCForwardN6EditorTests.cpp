@@ -2,6 +2,7 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Authoring/LLMNPCMotionRecipeAuthoringPrompt.h"
 #include "Authoring/LLMNPCTemplateAuthoringSubsystem.h"
 #include "HAL/FileManager.h"
 #include "Interfaces/IPluginManager.h"
@@ -96,7 +97,7 @@ bool FLLMNPCForwardN6SandboxReportTest::RunTest(
 	Report.EndpointOrigin = TEXT("https://example.invalid");
 	Report.NonSecretConfigHash = TEXT("md5:config");
 	Report.PromptVersion =
-		TEXT("llmnpc.motion_recipe_authoring_prompt.v2");
+		LLMNPCMotionRecipeAuthoring::PromptVersion;
 	Report.PromptHash = TEXT("md5:prompt");
 	Report.CapabilityHash =
 		Preflight.CompiledMetadata.CapabilityHash;

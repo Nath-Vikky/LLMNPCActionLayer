@@ -110,6 +110,7 @@ private:
 	FDateTime RecipeGeneratedAtUtc;
 	FLLMNPCMotionRecipePromptPackage LastRecipePrompt;
 	FLLMNPCMotionRecipeAuthoringResponse LastRecipeResponse;
+	FLLMNPCMotionRecipeRequestContext PendingRecipeRequestContext;
 	FLLMNPCSkeletonCapabilitySnapshot LastRecipeCapability;
 	FLLMNPCAuthoringJsonResult LastAuthoringResult;
 	FLLMNPCAuthoringSandboxPreflightResult LastSandboxPreflight;
@@ -190,6 +191,7 @@ private:
 	FText GetCatalogSummaryText() const;
 	FText GetAnimationImportSummaryText() const;
 	FText GetRecipeGenerationSummaryText() const;
+	FText GetRecipeRequestSourceText() const;
 	FText GetSandboxSummaryText() const;
 	FText GetReviewStateText() const;
 	FText GetReviewDestinationText() const;
@@ -209,6 +211,7 @@ private:
 	bool CanMarkPreviewed() const;
 	bool CanApprove() const;
 	bool CanReject() const;
+	bool CanReviseOnline() const;
 	bool CanPublish() const;
 
 	TSharedRef<ITableRow> GenerateItemRow(
@@ -258,9 +261,14 @@ private:
 	FReply HandleMarkPreviewed();
 	FReply HandleApprove();
 	FReply HandleReject();
+	FReply HandleReviseOnline();
 	FReply HandlePublish();
 
 	ULLMNPCSkeletonProfile* GetSelectedSkeletonProfile() const;
+	bool PrepareRejectedDraftRegeneration(
+		ULLMNPCMotionTemplate& Template,
+		const FString& ReviewFeedback
+	);
 	void InvalidateSandboxPreflight(bool bCancelActivePreview);
 	void CancelActiveSandboxPreview(FName Outcome);
 	void UpdateSandboxSummary();

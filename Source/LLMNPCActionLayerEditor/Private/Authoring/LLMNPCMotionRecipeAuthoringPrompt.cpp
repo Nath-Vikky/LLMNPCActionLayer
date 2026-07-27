@@ -185,7 +185,8 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 	const FLLMNPCSkeletonCapabilitySnapshot& CapabilitySnapshot,
 	const TArray<const ULLMNPCMotionTemplate*>& PublishedExamples,
 	FLLMNPCMotionRecipePromptPackage& OutPackage,
-	FString& OutError
+	FString& OutError,
+	const FLLMNPCMotionRecipeRequestContext& RequestContext
 )
 {
 	OutPackage = FLLMNPCMotionRecipePromptPackage();
@@ -195,6 +196,36 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 	if (CleanIntent.IsEmpty() || CleanIntent.Len() > 600)
 	{
 		OutError = TEXT("LLMNPC_RECIPE_AUTHORING_INTENT_INVALID");
+		return false;
+	}
+	const bool bManualRequest =
+		RequestContext.TriggerSource ==
+			LLMNPCMotionRecipeAuthoring::ManualTriggerSource;
+	const bool bRegeneration = RequestContext.IsRegeneration();
+	if (
+		(!bManualRequest && !bRegeneration) ||
+		(
+			bManualRequest &&
+			(
+				!RequestContext.SourceTemplateId.IsNone() ||
+				!RequestContext.SourceRecipeHash.IsEmpty() ||
+				!RequestContext.ReviewFeedback.IsEmpty()
+			)
+		) ||
+		(
+			bRegeneration &&
+			(
+				RequestContext.SourceTemplateId.IsNone() ||
+				RequestContext.SourceRecipeHash.TrimStartAndEnd().IsEmpty() ||
+				RequestContext.SourceRecipeHash.Len() > 160 ||
+				RequestContext.ReviewFeedback.TrimStartAndEnd().IsEmpty() ||
+				RequestContext.ReviewFeedback.Len() > 600
+			)
+		)
+	)
+	{
+		OutError =
+			TEXT("LLMNPC_RECIPE_AUTHORING_REQUEST_CONTEXT_INVALID");
 		return false;
 	}
 
@@ -246,9 +277,38 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 	TSharedRef<FJsonObject> Request = MakeShared<FJsonObject>();
 	Request->SetStringField(
 		TEXT("schema_version"),
-		TEXT("llmnpc.motion_recipe_authoring_request.v1")
+		TEXT("llmnpc.motion_recipe_authoring_request.v2")
+	);
+	Request->SetStringField(
+		TEXT("trigger_source"),
+		RequestContext.TriggerSource.ToString()
 	);
 	Request->SetStringField(TEXT("desired_action"), CleanIntent);
+	if (bRegeneration)
+	{
+		TSharedRef<FJsonObject> RevisionContext =
+			MakeShared<FJsonObject>();
+		RevisionContext->SetStringField(
+			TEXT("source_template_id"),
+			RequestContext.SourceTemplateId.ToString()
+		);
+		RevisionContext->SetStringField(
+			TEXT("source_recipe_hash"),
+			RequestContext.SourceRecipeHash
+		);
+		RevisionContext->SetStringField(
+			TEXT("human_review_feedback"),
+			RequestContext.ReviewFeedback.TrimStartAndEnd()
+		);
+		RevisionContext->SetStringField(
+			TEXT("revision_policy"),
+			TEXT("Create a new Draft. Preserve the shrug intent and address only the bounded visual feedback.")
+		);
+		Request->SetObjectField(
+			TEXT("revision_context"),
+			RevisionContext
+		);
+	}
 	Request->SetStringField(
 		TEXT("target_contract"),
 		TEXT("No scene target is available for this generation request.")
@@ -355,6 +415,8 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 		TEXT("Copy every primitive_id verbatim from a const value in the supplied Schema and obey the ")
 		TEXT("authoring_constraints exactly. Words from prose are never primitive IDs. Use primitive start ")
 		TEXT("and end values for timing; Unreal owns easing, holds, transitions, and pose synthesis. ")
+		TEXT("When revision_context is present, address its human_review_feedback only through the supplied ")
+		TEXT("semantic primitive parameters; never weaken constraints or change the requested action. ")
 		TEXT("Produce one interruptible action no longer than the supplied limits. The catalog text must describe ")
 		TEXT("the exact visible result without overstating it. Return exactly one JSON object and no markdown. ")
 		TEXT("Use schema_version llmnpc.motion_recipe_authoring_response.v1. For a supported request, set ")
@@ -371,6 +433,7 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 	OutPackage.CapabilityHash = CapabilitySnapshot.CapabilityHash;
 	OutPackage.RegistryVersion = Registry.GetRegistryVersion();
 	OutPackage.SimilarTemplateCount = SortedExamples.Num();
+	OutPackage.RequestContext = RequestContext;
 	const FString StablePrompt = FString::Printf(
 		TEXT("%s\n%s\n%s"),
 		LLMNPCMotionRecipeAuthoring::PromptVersion,

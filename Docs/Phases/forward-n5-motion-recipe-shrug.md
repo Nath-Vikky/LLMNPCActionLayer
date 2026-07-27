@@ -52,9 +52,10 @@ closed.
 The authoring request uses:
 
 ```text
-llmnpc.motion_recipe_authoring_prompt.v2
+llmnpc.motion_recipe_authoring_request.v2
+llmnpc.motion_recipe_authoring_prompt.v3
 llmnpc.motion_recipe_authoring_response.v1
-llmnpc.motion_recipe_authoring_job.v1
+llmnpc.motion_recipe_authoring_job.v2
 ```
 
 The N5 prompt has a Shrug-specific generation contract: exactly one
@@ -62,6 +63,12 @@ The N5 prompt has a Shrug-specific generation contract: exactly one
 owned by Unreal's solver and may not be invented as `hold`, `ease`, `pause`,
 or transition primitives. A response is shown as accepted only after it passes
 the UE Recipe Parser and the current Manny Capability Validator.
+
+Prompt v3 records either `ManualWorkbench` or
+`RegenerateRejectedDraft`. Regeneration binds the request to a Rejected parent
+Template ID, its Recipe hash, and bounded human visual feedback. Draft creation
+rechecks that parent state and identity before accepting the new online result.
+The parent remains immutable and the revision receives a new Template ID.
 
 It is deliberately separate from `llmnpc.model_turn.v3`. Runtime selection
 chooses only Published public actions; authoring creates a quarantined
@@ -176,6 +183,12 @@ the project-owned `LLMNPCSource` directories.
 Changing Recipe structure, primitive IDs, side, target slots, or order after
 the online response requires a new online generation request. This prevents a
 manually authored Recipe from inheriting online provenance.
+
+When a generated Recipe has a visual problem, enter reviewer identity and
+concrete notes on `Review`, then select `Revise Online`. The Workbench rejects
+the source Draft, locks its lineage, and returns to `Generate`. The next
+request is a separate online generation and cannot reuse Previewed,
+HumanApproved, or Quality state from its parent.
 
 ## Evidence And Quality
 
