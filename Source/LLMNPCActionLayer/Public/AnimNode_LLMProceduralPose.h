@@ -14,6 +14,9 @@ struct LLMNPCACTIONLAYER_API FAnimNode_LLMProceduralPose : public FAnimNode_Skel
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(PinShownByDefault))
 	FLLMProceduralPoseSnapshot Snapshot;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion")
+	bool bReadSnapshotFromMotionComponent = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="LLM NPC Motion", meta=(PinShownByDefault))
 	bool bEnableRightArmIK = true;
 
@@ -153,13 +156,19 @@ struct LLMNPCACTIONLAYER_API FAnimNode_LLMProceduralPose : public FAnimNode_Skel
 
 	virtual void Initialize_AnyThread(const FAnimationInitializeContext& Context) override;
 	virtual void GatherDebugData(FNodeDebugData& DebugData) override;
+	virtual bool HasPreUpdate() const override { return bReadSnapshotFromMotionComponent; }
+	virtual void PreUpdate(const UAnimInstance* InAnimInstance) override;
 
 protected:
+	virtual void UpdateInternal(const FAnimationUpdateContext& Context) override;
 	virtual void InitializeBoneReferences(const FBoneContainer& RequiredBones) override;
 	virtual bool IsValidToEvaluate(const USkeleton* Skeleton, const FBoneContainer& RequiredBones) override;
 	virtual void EvaluateSkeletalControl_AnyThread(FComponentSpacePoseContext& Output, TArray<FBoneTransform>& OutBoneTransforms) override;
 
 private:
+	FLLMProceduralPoseSnapshot MotionComponentSnapshot;
+	bool bHasMotionComponentSnapshot = false;
+
 	void ApplyAdditiveRotationCS(
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms,
@@ -197,7 +206,7 @@ private:
 		float Alpha
 	) const;
 
-	void ApplyRightOpenPalmIKOrientation(
+	void ApplyHandPoseIKOrientations(
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms
 	) const;
@@ -208,6 +217,11 @@ private:
 	) const;
 
 	void PropagateLeftHandChildrenCS(
+		FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& OutBoneTransforms
+	) const;
+
+	void PropagateArmAuxiliaryBonesCS(
 		FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& OutBoneTransforms
 	) const;

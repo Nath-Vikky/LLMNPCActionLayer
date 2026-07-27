@@ -11,6 +11,60 @@ class ULLMNPCMotionTemplate;
 class ULLMNPCPublicActionDefinition;
 struct FLLMMotionPlan;
 
+struct FLLMNPCMotionRecipeDraftCatalogSpec
+{
+	FString AssetName;
+	FName TemplateId = NAME_None;
+	FName PublicActionId = NAME_None;
+	FString PublicActionAssetName;
+	FString SemanticVersion = TEXT("1.0.0");
+	FName VariantId = TEXT("generated_recipe");
+	FString DisplayName;
+	FString SelectionSummary;
+	FString VisualDescription;
+	TArray<FString> SuitableWhen;
+	TArray<FString> AvoidWhen;
+	TArray<FName> IntentTags;
+	TArray<FName> EmotionTags;
+	TArray<FName> VariantStyleTags;
+	TArray<FName> BodyRegionTags;
+	TArray<FName> SpatialRequirementTags;
+	TArray<FName> SemanticEffectTags;
+	TArray<FName> TargetCategoryTags;
+	FName GestureFamily = NAME_None;
+	FName DefaultStyle = TEXT("neutral");
+	TArray<FString> SearchKeywords;
+	bool bCanRunWhileMoving = true;
+	float Expressiveness = 0.5f;
+	float Energy = 0.5f;
+	float SocialIntensity = 0.5f;
+};
+
+struct FLLMNPCMotionRecipeGenerationEvidence
+{
+	FGuid RequestId;
+	FName ProviderId = NAME_None;
+	FString ProviderModelId;
+	FString EndpointOrigin;
+	FString NonSecretConfigHash;
+	FString PromptVersion;
+	FString PromptHash;
+	FString CapabilityHash;
+	FString RegistryVersion;
+	FString SystemPrompt;
+	FString UserJson;
+	FString RecipeSchemaJson;
+	FString CapabilityModelViewJson;
+	FString RawResponseJson;
+	FDateTime GeneratedAtUtc;
+	int32 HttpStatus = 0;
+	int32 AttemptCount = 0;
+	float TotalLatencySeconds = 0.0f;
+	int32 PromptTokens = INDEX_NONE;
+	int32 CompletionTokens = INDEX_NONE;
+	int32 TotalTokens = INDEX_NONE;
+};
+
 USTRUCT(BlueprintType)
 struct FLLMNPCAuthoringOperationResult
 {
@@ -74,6 +128,16 @@ public:
 		const FString& DraftJson,
 		UAnimationAsset* SelectedAnimationAsset,
 		const FString& DestinationPackagePath
+	);
+
+	FLLMNPCAuthoringOperationResult CreateMotionRecipeDraft(
+		const FString& RecipeJson,
+		FName SkeletonProfileId,
+		const FLLMNPCMotionRecipeDraftCatalogSpec& CatalogSpec,
+		const FLLMNPCMotionRecipeGenerationEvidence& Evidence,
+		const FString& DestinationPackagePath,
+		const FString& PublicActionDraftDestinationPath =
+			TEXT("/Game/LLMNPCActionLayer/Authoring/PublicActions")
 	);
 
 	UFUNCTION(BlueprintCallable, Category="LLM NPC|Authoring|Quality")
@@ -161,6 +225,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Authoring|Paths")
 	static FString GetPublishedSourceDirectory();
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Authoring|Paths")
+	static FString GetPublishedPublicActionSourceDirectory();
 
 	static bool CompileTemplateForPreview(
 		const ULLMNPCMotionTemplate& Template,

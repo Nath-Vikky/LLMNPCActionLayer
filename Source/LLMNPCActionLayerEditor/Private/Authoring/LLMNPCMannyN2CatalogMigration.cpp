@@ -156,8 +156,8 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 {
 	Vocabulary.VocabularyId = TEXT("llmnpc.manny_social_actions");
 	Vocabulary.SchemaVersion = LLMNPCCatalog::VocabularySchemaVersion;
-	Vocabulary.SemanticVersion = TEXT("1.0.0");
-	Vocabulary.Revision = 1;
+	Vocabulary.SemanticVersion = TEXT("1.1.0");
+	Vocabulary.Revision = 2;
 	Vocabulary.Entries.Reset();
 
 	AddVocabularyEntry(Vocabulary, TEXT("nod"), TEXT("Nod"), TEXT("\u70b9\u5934"),
@@ -167,6 +167,8 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 	AddVocabularyEntry(Vocabulary, TEXT("point"), TEXT("Point"), TEXT("\u6307\u5411"),
 		{ ELLMNPCActionVocabularyField::GestureFamily });
 	AddVocabularyEntry(Vocabulary, TEXT("clap"), TEXT("Clap"), TEXT("\u9f13\u638c"),
+		{ ELLMNPCActionVocabularyField::GestureFamily });
+	AddVocabularyEntry(Vocabulary, TEXT("shrug"), TEXT("Shrug"), TEXT("\u8038\u80a9"),
 		{ ELLMNPCActionVocabularyField::GestureFamily });
 
 	AddVocabularyEntry(Vocabulary, TEXT("confirm"), TEXT("Confirm"), TEXT("\u786e\u8ba4"),
@@ -192,6 +194,11 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 	AddVocabularyEntry(Vocabulary, TEXT("applaud"), TEXT("Applaud"), TEXT("\u559d\u5f69"),
 		{ ELLMNPCActionVocabularyField::Intent, ELLMNPCActionVocabularyField::SemanticEffect },
 		{ TEXT("applause") });
+	AddVocabularyEntry(Vocabulary, TEXT("express_uncertainty"), TEXT("Express uncertainty"), TEXT("\u8868\u8fbe\u4e0d\u786e\u5b9a"),
+		{ ELLMNPCActionVocabularyField::Intent, ELLMNPCActionVocabularyField::SemanticEffect },
+		{ TEXT("uncertain_response") });
+	AddVocabularyEntry(Vocabulary, TEXT("noncommittal"), TEXT("Noncommittal"), TEXT("\u4e0d\u7f6e\u53ef\u5426"),
+		{ ELLMNPCActionVocabularyField::SemanticEffect });
 
 	AddVocabularyEntry(Vocabulary, TEXT("neutral"), TEXT("Neutral"), TEXT("\u4e2d\u6027"),
 		{ ELLMNPCActionVocabularyField::Emotion, ELLMNPCActionVocabularyField::VariantStyle });
@@ -203,6 +210,8 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 		{ ELLMNPCActionVocabularyField::Emotion });
 	AddVocabularyEntry(Vocabulary, TEXT("subtle"), TEXT("Subtle"), TEXT("\u8f7b\u5fae"),
 		{ ELLMNPCActionVocabularyField::VariantStyle });
+	AddVocabularyEntry(Vocabulary, TEXT("uncertain"), TEXT("Uncertain"), TEXT("\u4e0d\u786e\u5b9a"),
+		{ ELLMNPCActionVocabularyField::Emotion, ELLMNPCActionVocabularyField::VariantStyle });
 	AddVocabularyEntry(Vocabulary, TEXT("shy"), TEXT("Shy"), TEXT("\u5bb3\u7f9e"),
 		{ ELLMNPCActionVocabularyField::Personality });
 	AddVocabularyEntry(Vocabulary, TEXT("reserved"), TEXT("Reserved"), TEXT("\u514b\u5236"),
@@ -219,6 +228,12 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 	AddVocabularyEntry(Vocabulary, TEXT("fingers"), TEXT("Fingers"), TEXT("\u624b\u6307"),
 		{ ELLMNPCActionVocabularyField::BodyRegion });
 	AddVocabularyEntry(Vocabulary, TEXT("two_hands"), TEXT("Two hands"), TEXT("\u53cc\u624b"),
+		{ ELLMNPCActionVocabularyField::BodyRegion });
+	AddVocabularyEntry(Vocabulary, TEXT("shoulders"), TEXT("Shoulders"), TEXT("\u80a9\u90e8"),
+		{ ELLMNPCActionVocabularyField::BodyRegion });
+	AddVocabularyEntry(Vocabulary, TEXT("upper_torso"), TEXT("Upper torso"), TEXT("\u4e0a\u534a\u8eab"),
+		{ ELLMNPCActionVocabularyField::BodyRegion });
+	AddVocabularyEntry(Vocabulary, TEXT("two_arms"), TEXT("Two arms"), TEXT("\u53cc\u81c2"),
 		{ ELLMNPCActionVocabularyField::BodyRegion });
 
 	AddVocabularyEntry(Vocabulary, TEXT("target_independent"), TEXT("Target independent"), TEXT("\u65e0\u76ee\u6807"),
@@ -814,7 +829,10 @@ bool FLLMNPCMannyN2CatalogMigration::Run(
 		Template->Modify();
 		FLLMNPCTemplateMetadata& Metadata = Template->Metadata;
 		Metadata.CatalogSchemaVersion = LLMNPCCatalog::SchemaVersion;
-		Metadata.CatalogRevision = 1;
+		Metadata.CatalogRevision = FMath::Max(
+			Metadata.CatalogRevision,
+			1
+		);
 		if (FString(Seed.AssetPath).Contains(TEXT("MT_Wave_Asset_Manny_v1")))
 		{
 			Metadata.PublicActionId = TEXT("gesture.wave.right");

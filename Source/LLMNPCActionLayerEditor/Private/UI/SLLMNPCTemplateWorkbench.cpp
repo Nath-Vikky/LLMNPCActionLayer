@@ -4,6 +4,7 @@
 #include "Animation/AnimSequenceBase.h"
 #include "Animation/AnimationAsset.h"
 #include "Animation/Skeleton.h"
+#include "Capabilities/LLMNPCSkeletonCapabilityBuilder.h"
 #include "Authoring/LLMNPCTemplateAuthoringSubsystem.h"
 #include "DesktopPlatformModule.h"
 #include "Editor.h"
@@ -13,6 +14,8 @@
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCSettings.h"
 #include "Misc/MessageDialog.h"
+#include "Misc/SecureHash.h"
+#include "Online/LLMNPCOnlineTestConfigLoader.h"
 #include "Protocol/LLMNPCTurnRequestV3Adapter.h"
 #include "PropertyCustomizationHelpers.h"
 #include "ScopedTransaction.h"
@@ -167,6 +170,7 @@ void SLLMNPCTemplateWorkbench::Construct(const FArguments& InArgs)
 	static_cast<void>(InArgs);
 	ReviewerBox.Reset();
 	ReviewNotesBox.Reset();
+	AuthoringModelClient = MakeShared<FLLMNPCAuthoringModelClient>();
 
 	ChildSlot
 	[
@@ -197,6 +201,10 @@ void SLLMNPCTemplateWorkbench::Construct(const FArguments& InArgs)
 			]
 			+ SWidgetSwitcher::Slot()
 			[
+				BuildGeneratePage()
+			]
+			+ SWidgetSwitcher::Slot()
+			[
 				BuildPreviewPage()
 			]
 			+ SWidgetSwitcher::Slot()
@@ -220,6 +228,17 @@ void SLLMNPCTemplateWorkbench::Construct(const FArguments& InArgs)
 
 	RefreshCatalog();
 	RefreshPIEActors();
+}
+
+SLLMNPCTemplateWorkbench::~SLLMNPCTemplateWorkbench()
+{
+	if (
+		AuthoringModelClient.IsValid() &&
+		ActiveAuthoringRequestId.IsValid()
+	)
+	{
+		AuthoringModelClient->Cancel(ActiveAuthoringRequestId);
+	}
 }
 
 void SLLMNPCTemplateWorkbench::AddReferencedObjects(FReferenceCollector& Collector)
@@ -282,6 +301,15 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildToolbar()
 					ELLMNPCTemplateWorkbenchPage::Import,
 					LOCTEXT("ImportPage", "Import"),
 					TEXT("Icons.Import")
+				)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			[
+				BuildPageButton(
+					ELLMNPCTemplateWorkbenchPage::Generate,
+					LOCTEXT("GeneratePage", "Generate"),
+					TEXT("Icons.Plus")
 				)
 			]
 			+ SHorizontalBox::Slot()
@@ -667,6 +695,282 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildImportPage()
 								LOCTEXT(
 									"ImportAnimationDraft",
 									"Import Generated Draft"
+								)
+							)
+					]
+				]
+		];
+}
+
+TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildGeneratePage()
+{
+	const FString DefaultIntent =
+		TEXT("Express uncertainty with a natural bilateral shrug. Raise both shoulders together, ")
+		TEXT("add subtle chest and arm participation, keep both hands relaxed and visible, ")
+		TEXT("then return smoothly to neutral.");
+
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		[
+			MakeSectionHeader(
+				LOCTEXT(
+					"RecipeGenerateHeader",
+					"Online Motion Recipe"
+				)
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 10.0f, 0.0f, 0.0f)
+		[
+			MakeFormRow(
+				LOCTEXT(
+					"RecipeSkeletonProfileLabel",
+					"Skeleton Profile"
+				),
+				SAssignNew(
+					GenerateSkeletonCombo,
+					SComboBox<
+						TSharedPtr<
+							FLLMNPCTemplateWorkbenchSkeletonOption
+						>
+					>
+				)
+					.OptionsSource(&SkeletonOptions)
+					.OnGenerateWidget(
+						this,
+						&SLLMNPCTemplateWorkbench::GenerateSkeletonOption
+					)
+					.OnSelectionChanged(
+						this,
+						&SLLMNPCTemplateWorkbench::HandleSkeletonChanged
+					)
+					[
+						SNew(STextBlock)
+							.Text_Lambda(
+								[this]()
+								{
+									return SelectedSkeleton.IsValid()
+										? SelectedSkeleton->Label
+										: LOCTEXT(
+											"NoRecipeSkeleton",
+											"No profile"
+										);
+								}
+							)
+					]
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 6.0f, 0.0f, 0.0f)
+		[
+			MakeFormRow(
+				LOCTEXT("RecipeIntentLabel", "Desired Action"),
+				SNew(SBox)
+					.HeightOverride(82.0f)
+					[
+						SAssignNew(
+							RecipeIntentBox,
+							SMultiLineEditableTextBox
+						)
+							.Text(FText::FromString(DefaultIntent))
+							.AutoWrapText(true)
+					]
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 6.0f, 0.0f, 0.0f)
+		[
+			MakeFormRow(
+				LOCTEXT(
+					"RecipeDestinationLabel",
+					"Draft Destination"
+				),
+				SAssignNew(
+					RecipeDestinationPathBox,
+					SEditableTextBox
+				)
+					.Text(
+						FText::FromString(
+							TEXT("/Game/LLMNPCActionLayer/Authoring/Drafts")
+						)
+					)
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.HAlign(HAlign_Right)
+		.Padding(0.0f, 8.0f, 0.0f, 8.0f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			[
+				SNew(SButton)
+					.IsEnabled(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							CanGenerateMotionRecipe
+					)
+					.OnClicked(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandleGenerateMotionRecipe
+					)
+					[
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						[
+							SNew(SImage)
+								.Image(
+									FAppStyle::GetBrush(
+										"Icons.Plus"
+									)
+								)
+						]
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						.Padding(5.0f, 0.0f, 0.0f, 0.0f)
+						[
+							SNew(STextBlock)
+								.Text(
+									LOCTEXT(
+										"GenerateRecipeOnline",
+										"Generate Online"
+									)
+								)
+						]
+					]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SButton)
+					.IsEnabled(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							CanCancelMotionRecipeGeneration
+					)
+					.OnClicked(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandleCancelMotionRecipeGeneration
+					)
+					[
+						SNew(STextBlock)
+							.Text(
+								LOCTEXT(
+									"CancelRecipeGeneration",
+									"Cancel"
+								)
+							)
+					]
+			]
+		]
+		+ SVerticalBox::Slot()
+		.FillHeight(1.0f)
+		[
+			SNew(SSplitter)
+			+ SSplitter::Slot()
+			.Value(0.62f)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(0.0f, 0.0f, 0.0f, 5.0f)
+				[
+					MakeSectionHeader(
+						LOCTEXT(
+							"GeneratedRecipeHeader",
+							"Generated Recipe JSON"
+						)
+					)
+				]
+				+ SVerticalBox::Slot()
+				.FillHeight(1.0f)
+				[
+					SAssignNew(
+						RecipeJsonBox,
+						SMultiLineEditableTextBox
+					)
+						.AutoWrapText(false)
+				]
+			]
+			+ SSplitter::Slot()
+			.Value(0.38f)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(8.0f, 0.0f, 0.0f, 5.0f)
+				[
+					MakeSectionHeader(
+						LOCTEXT(
+							"RecipeEvidenceHeader",
+							"Generation Evidence"
+						)
+					)
+				]
+				+ SVerticalBox::Slot()
+				.FillHeight(1.0f)
+				.Padding(8.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SAssignNew(
+						RecipeEvidenceBox,
+						SMultiLineEditableTextBox
+					)
+						.IsReadOnly(true)
+						.AutoWrapText(true)
+						.Text(
+							this,
+							&SLLMNPCTemplateWorkbench::
+								GetRecipeGenerationSummaryText
+						)
+				]
+			]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.HAlign(HAlign_Right)
+		.Padding(0.0f, 10.0f, 0.0f, 0.0f)
+		[
+			SNew(SButton)
+				.IsEnabled(
+					this,
+					&SLLMNPCTemplateWorkbench::
+						CanCreateMotionRecipeDraft
+				)
+				.OnClicked(
+					this,
+					&SLLMNPCTemplateWorkbench::
+						HandleCreateMotionRecipeDraft
+				)
+				[
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					[
+						SNew(SImage)
+							.Image(
+								FAppStyle::GetBrush(
+									"Icons.Import"
+								)
+							)
+					]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.Padding(5.0f, 0.0f, 0.0f, 0.0f)
+					[
+						SNew(STextBlock)
+							.Text(
+								LOCTEXT(
+									"CreateRecipeDraft",
+									"Create Generated Draft"
 								)
 							)
 					]
@@ -1191,6 +1495,11 @@ void SLLMNPCTemplateWorkbench::RefreshCatalog(
 		SkeletonCombo->RefreshOptions();
 		SkeletonCombo->SetSelectedItem(SelectedSkeleton);
 	}
+	if (GenerateSkeletonCombo)
+	{
+		GenerateSkeletonCombo->RefreshOptions();
+		GenerateSkeletonCombo->SetSelectedItem(SelectedSkeleton);
+	}
 
 	CatalogIndex.Build(Templates, Definitions, Vocabulary, ProfileIds);
 
@@ -1671,6 +1980,25 @@ FText SLLMNPCTemplateWorkbench::GetAnimationImportSummaryText() const
 	));
 }
 
+FText SLLMNPCTemplateWorkbench::GetRecipeGenerationSummaryText() const
+{
+	if (bAuthoringRequestPending)
+	{
+		return LOCTEXT(
+			"RecipeGenerationPending",
+			"Online Authoring request is running."
+		);
+	}
+	if (!RecipeGenerationSummary.IsEmpty())
+	{
+		return FText::FromString(RecipeGenerationSummary);
+	}
+	return LOCTEXT(
+		"RecipeGenerationNotRun",
+		"No Authoring request has completed."
+	);
+}
+
 FText SLLMNPCTemplateWorkbench::GetReviewStateText() const
 {
 	return SelectedItem.IsValid()
@@ -1737,6 +2065,47 @@ bool SLLMNPCTemplateWorkbench::CanImportAnimationDraft() const
 			.IsEmpty();
 }
 
+bool SLLMNPCTemplateWorkbench::CanGenerateMotionRecipe() const
+{
+	return
+		!bAuthoringRequestPending &&
+		AuthoringModelClient.IsValid() &&
+		SelectedSkeleton.IsValid() &&
+		RecipeIntentBox.IsValid() &&
+		!RecipeIntentBox->GetText()
+			.ToString()
+			.TrimStartAndEnd()
+			.IsEmpty();
+}
+
+bool SLLMNPCTemplateWorkbench::
+CanCancelMotionRecipeGeneration() const
+{
+	return
+		bAuthoringRequestPending &&
+		ActiveAuthoringRequestId.IsValid() &&
+		AuthoringModelClient.IsValid();
+}
+
+bool SLLMNPCTemplateWorkbench::CanCreateMotionRecipeDraft() const
+{
+	return
+		!bAuthoringRequestPending &&
+		LastAuthoringResult.bSuccess &&
+		!LastRecipeResponse.bUnsupported &&
+		!LastRecipeResponse.RecipeJson.IsEmpty() &&
+		RecipeJsonBox.IsValid() &&
+		!RecipeJsonBox->GetText()
+			.ToString()
+			.TrimStartAndEnd()
+			.IsEmpty() &&
+		RecipeDestinationPathBox.IsValid() &&
+		!RecipeDestinationPathBox->GetText()
+			.ToString()
+			.TrimStartAndEnd()
+			.IsEmpty();
+}
+
 bool SLLMNPCTemplateWorkbench::CanGenerateQualityReport() const
 {
 	const ULLMNPCMotionTemplate* Template = GetSelectedTemplate();
@@ -1745,6 +2114,9 @@ bool SLLMNPCTemplateWorkbench::CanGenerateQualityReport() const
 		!Template->IsPublished() &&
 		(
 			Template->Kind == ELLMNPCTemplateKind::AnimationAsset ||
+			!Template->Metadata.SourceRecipeHash
+				.TrimStartAndEnd()
+				.IsEmpty() ||
 			(
 				ReconstructionPathBox.IsValid() &&
 				!ReconstructionPathBox->GetText()
@@ -1970,6 +2342,516 @@ FReply SLLMNPCTemplateWorkbench::HandleImportAnimationDraft()
 		const FString ImportedPath =
 			Result.TemplateAsset->GetPathName();
 		RefreshCatalog(ImportedPath);
+		SetActivePage(ELLMNPCTemplateWorkbenchPage::Quality);
+	}
+	SetStatus(
+		FText::FromString(Result.Message),
+		!Result.bSuccess
+	);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
+{
+	if (
+		!CanGenerateMotionRecipe() ||
+		!SelectedSkeleton.IsValid()
+	)
+	{
+		SetStatus(
+			LOCTEXT(
+				"RecipeGenerationInputsUnavailable",
+				"Motion Recipe generation inputs are unavailable."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+	if (SelectedSkeleton->ProfileId != TEXT("ue5_manny.v1"))
+	{
+		SetStatus(
+			LOCTEXT(
+				"RecipeGenerationMannyOnly",
+				"Online Motion Recipe generation is currently locked to ue5_manny.v1."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	FLLMNPCOnlineTestConfigState OnlineConfig =
+		FLLMNPCOnlineTestConfigLoader::GetState();
+	if (!OnlineConfig.IsLoaded())
+	{
+		OnlineConfig =
+			FLLMNPCOnlineTestConfigLoader::LoadProjectConfig();
+	}
+	if (!OnlineConfig.HasPassingConnectionForCurrentConfig())
+	{
+		SetStatus(
+			LOCTEXT(
+				"RecipeGenerationConnectionGate",
+				"Load env.txt and pass Test Connection for the current config before online authoring."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	ULLMNPCSkeletonProfile* Profile = nullptr;
+	TArray<const ULLMNPCMotionTemplate*> PublishedExamples;
+	for (UObject* Asset : ReferencedAssets)
+	{
+		if (
+			ULLMNPCSkeletonProfile* CandidateProfile =
+				Cast<ULLMNPCSkeletonProfile>(Asset)
+		)
+		{
+			if (
+				CandidateProfile->ProfileId ==
+				SelectedSkeleton->ProfileId
+			)
+			{
+				Profile = CandidateProfile;
+			}
+		}
+		else if (
+			const ULLMNPCMotionTemplate* Template =
+				Cast<ULLMNPCMotionTemplate>(Asset)
+		)
+		{
+			if (Template->IsPublished())
+			{
+				PublishedExamples.Add(Template);
+			}
+		}
+	}
+	if (!Profile)
+	{
+		SetStatus(
+			LOCTEXT(
+				"RecipeGenerationProfileMissing",
+				"The selected Skeleton Profile could not be loaded."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	FLLMNPCSkeletonCapabilitySnapshot Capability;
+	const FLLMNPCSkeletonCapabilityBuildResult CapabilityResult =
+		FLLMNPCSkeletonCapabilityBuilder::Build(
+			*Profile,
+			nullptr,
+			Capability
+		);
+	if (!CapabilityResult.bSucceeded)
+	{
+		SetStatus(
+			FText::FromString(
+				CapabilityResult.Errors.IsEmpty()
+					? TEXT("Skeleton Capability build failed.")
+					: CapabilityResult.Errors[0]
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	FString PromptError;
+	FLLMNPCMotionRecipePromptPackage Prompt;
+	if (!FLLMNPCMotionRecipeAuthoringPrompt::Build(
+		RecipeIntentBox->GetText().ToString(),
+		Capability,
+		PublishedExamples,
+		Prompt,
+		PromptError
+	))
+	{
+		SetStatus(FText::FromString(PromptError), true);
+		return FReply::Handled();
+	}
+
+	LastRecipePrompt = MoveTemp(Prompt);
+	LastRecipeCapability = Capability;
+	LastRecipeResponse =
+		FLLMNPCMotionRecipeAuthoringResponse();
+	LastAuthoringResult = FLLMNPCAuthoringJsonResult();
+	RecipeGeneratedAtUtc = FDateTime();
+	GenerationEndpointOrigin = OnlineConfig.EndpointOrigin;
+	GenerationConfigHash = OnlineConfig.NonSecretConfigHash;
+	RecipeGenerationSummary = FString::Printf(
+		TEXT("Request: pending\nProfile: %s\nCapability: %s\nRegistry: %s\nPrompt: %s\nExamples: %d"),
+		*SelectedSkeleton->ProfileId.ToString(),
+		*LastRecipePrompt.CapabilityHash,
+		*LastRecipePrompt.RegistryVersion,
+		*LastRecipePrompt.PromptHash,
+		LastRecipePrompt.SimilarTemplateCount
+	);
+	if (RecipeJsonBox)
+	{
+		RecipeJsonBox->SetText(FText::GetEmpty());
+	}
+	if (RecipeEvidenceBox)
+	{
+		RecipeEvidenceBox->SetText(
+			GetRecipeGenerationSummaryText()
+		);
+	}
+
+	FLLMNPCAuthoringJsonRequest Request;
+	Request.RequestId = FGuid::NewGuid();
+	Request.SystemPrompt = LastRecipePrompt.SystemPrompt;
+	Request.UserJson = LastRecipePrompt.UserJson;
+	Request.Temperature = 0.1f;
+	Request.MaxTokens = 1800;
+	ActiveAuthoringRequestId = Request.RequestId;
+	bAuthoringRequestPending = true;
+	SetStatus(
+		LOCTEXT(
+			"RecipeGenerationStarted",
+			"Online Authoring request started."
+		),
+		false
+	);
+
+	const TWeakPtr<SLLMNPCTemplateWorkbench> WeakWorkbench =
+		SharedThis(this);
+	AuthoringModelClient->Send(
+		Request,
+		[WeakWorkbench](
+			const FLLMNPCAuthoringJsonResult& Result
+		)
+		{
+			const TSharedPtr<SLLMNPCTemplateWorkbench> Self =
+				WeakWorkbench.Pin();
+			if (
+				!Self.IsValid() ||
+				Result.RequestId != Self->ActiveAuthoringRequestId
+			)
+			{
+				return;
+			}
+			Self->bAuthoringRequestPending = false;
+			Self->ActiveAuthoringRequestId.Invalidate();
+			Self->LastAuthoringResult = Result;
+			Self->RecipeGeneratedAtUtc = FDateTime::UtcNow();
+			if (!Result.bSuccess)
+			{
+				Self->RecipeGenerationSummary = FString::Printf(
+					TEXT("Request: failed\nError: %s\nHTTP: %d\nAttempts: %d\nLatency: %.3fs"),
+					*Result.ErrorCode.ToString(),
+					Result.HttpStatus,
+					Result.AttemptCount,
+					Result.TotalLatencySeconds
+				);
+				if (Self->RecipeEvidenceBox)
+				{
+					Self->RecipeEvidenceBox->SetText(
+						Self->GetRecipeGenerationSummaryText()
+					);
+				}
+				Self->SetStatus(
+					FText::FromName(Result.ErrorCode),
+					true
+				);
+				return;
+			}
+
+			FString ParseError;
+			if (!FLLMNPCMotionRecipeAuthoringPrompt::ParseResponse(
+				Result.ResponseJson,
+				Self->LastRecipeResponse,
+				ParseError
+			))
+			{
+				Self->LastAuthoringResult.bSuccess = false;
+				Self->LastAuthoringResult.ErrorCode =
+					TEXT("LLMNPC_RECIPE_AUTHORING_RESPONSE_INVALID");
+				Self->RecipeGenerationSummary = FString::Printf(
+					TEXT("Request: rejected\nError: %s\nModel: %s\nHTTP: %d\nLatency: %.3fs"),
+					*ParseError,
+					*Result.ProviderModelId,
+					Result.HttpStatus,
+					Result.TotalLatencySeconds
+				);
+				if (Self->RecipeEvidenceBox)
+				{
+					Self->RecipeEvidenceBox->SetText(
+						Self->GetRecipeGenerationSummaryText()
+					);
+				}
+				Self->SetStatus(
+					FText::FromString(ParseError),
+					true
+				);
+				return;
+			}
+			if (Self->LastRecipeResponse.bUnsupported)
+			{
+				Self->LastAuthoringResult.bSuccess = false;
+				Self->RecipeGenerationSummary = FString::Printf(
+					TEXT("Request: unsupported\nModel: %s\nReason: %s\nLatency: %.3fs"),
+					*Result.ProviderModelId,
+					*Self->LastRecipeResponse.UnsupportedReason,
+					Result.TotalLatencySeconds
+				);
+				if (Self->RecipeEvidenceBox)
+				{
+					Self->RecipeEvidenceBox->SetText(
+						Self->GetRecipeGenerationSummaryText()
+					);
+				}
+				Self->SetStatus(
+					FText::FromString(
+						Self->LastRecipeResponse.UnsupportedReason
+					),
+					true
+				);
+				return;
+			}
+
+			if (Self->RecipeJsonBox)
+			{
+				Self->RecipeJsonBox->SetText(
+					FText::FromString(
+						Self->LastRecipeResponse.RecipeJson
+					)
+				);
+			}
+			FString RecipeValidationError;
+			if (
+				!FLLMNPCMotionRecipeAuthoringPrompt::
+					ValidateRecipeForCapability(
+						Self->LastRecipeResponse,
+						Self->LastRecipeCapability,
+						{TEXT("shoulder.shrug")},
+						TEXT("express_uncertainty"),
+						1,
+						RecipeValidationError
+					)
+			)
+			{
+				Self->LastAuthoringResult.bSuccess = false;
+				Self->LastAuthoringResult.ErrorCode =
+					TEXT("LLMNPC_RECIPE_AUTHORING_RECIPE_REJECTED");
+				Self->RecipeGenerationSummary = FString::Printf(
+					TEXT("Request: rejected by UE Recipe Validator\nError: %s\nModel: %s\nHTTP: %d\nLatency: %.3fs\nCapability: %s\nRegistry: %s\nPrompt: %s"),
+					*RecipeValidationError,
+					*Result.ProviderModelId,
+					Result.HttpStatus,
+					Result.TotalLatencySeconds,
+					*Self->LastRecipePrompt.CapabilityHash,
+					*Self->LastRecipePrompt.RegistryVersion,
+					*Self->LastRecipePrompt.PromptHash
+				);
+				if (Self->RecipeEvidenceBox)
+				{
+					Self->RecipeEvidenceBox->SetText(
+						Self->GetRecipeGenerationSummaryText()
+					);
+				}
+				Self->SetStatus(
+					FText::FromString(RecipeValidationError),
+					true
+				);
+				return;
+			}
+			Self->RecipeGenerationSummary = FString::Printf(
+				TEXT("Request: accepted\nProvider: %s\nModel: %s\nHTTP: %d\nAttempts: %d\nLatency: %.3fs\nTokens: %d / %d / %d\nCapability: %s\nRegistry: %s\nPrompt: %s"),
+				*Result.ProviderId.ToString(),
+				*Result.ProviderModelId,
+				Result.HttpStatus,
+				Result.AttemptCount,
+				Result.TotalLatencySeconds,
+				Result.PromptTokens,
+				Result.CompletionTokens,
+				Result.TotalTokens,
+				*Self->LastRecipePrompt.CapabilityHash,
+				*Self->LastRecipePrompt.RegistryVersion,
+				*Self->LastRecipePrompt.PromptHash
+			);
+			if (Self->RecipeEvidenceBox)
+			{
+				Self->RecipeEvidenceBox->SetText(
+					Self->GetRecipeGenerationSummaryText()
+				);
+			}
+			Self->SetStatus(
+				LOCTEXT(
+					"RecipeGenerationAccepted",
+					"Online Recipe passed the Authoring response contract."
+				),
+				false
+			);
+		}
+	);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCTemplateWorkbench::
+HandleCancelMotionRecipeGeneration()
+{
+	if (CanCancelMotionRecipeGeneration())
+	{
+		AuthoringModelClient->Cancel(ActiveAuthoringRequestId);
+	}
+	return FReply::Handled();
+}
+
+FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
+{
+	if (
+		!CanCreateMotionRecipeDraft() ||
+		!SelectedSkeleton.IsValid()
+	)
+	{
+		SetStatus(
+			LOCTEXT(
+				"RecipeDraftInputsUnavailable",
+				"An accepted online Recipe and Draft destination are required."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+	ULLMNPCTemplateAuthoringSubsystem* Authoring =
+		GEditor
+			? GEditor->GetEditorSubsystem<
+				ULLMNPCTemplateAuthoringSubsystem>()
+			: nullptr;
+	if (!Authoring)
+	{
+		SetStatus(
+			LOCTEXT(
+				"RecipeDraftAuthoringUnavailable",
+				"Authoring subsystem is unavailable."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	const FString RequestSuffix =
+		LastAuthoringResult.RequestId
+			.ToString(EGuidFormats::Digits)
+			.Left(6)
+			.ToLower();
+	const FString RecipeSuffix =
+		FMD5::HashAnsiString(
+			*RecipeJsonBox->GetText().ToString()
+		).Left(6).ToLower();
+	const FString Suffix =
+		RequestSuffix + RecipeSuffix;
+	FLLMNPCMotionRecipeDraftCatalogSpec CatalogSpec;
+	CatalogSpec.AssetName =
+		FString::Printf(
+			TEXT("MT_Shrug_Manny_Generated_%s"),
+			*Suffix
+		);
+	CatalogSpec.TemplateId =
+		FName(*FString::Printf(
+			TEXT("gesture.shrug.manny.generated.%s"),
+			*Suffix
+		));
+	CatalogSpec.PublicActionId = TEXT("gesture.shrug");
+	CatalogSpec.PublicActionAssetName =
+		TEXT("PA_Gesture_Shrug_Draft");
+	CatalogSpec.SemanticVersion = TEXT("1.0.0");
+	CatalogSpec.VariantId = TEXT("generated_recipe");
+	CatalogSpec.DisplayName =
+		LastRecipeResponse.CatalogDraft.DisplayName;
+	CatalogSpec.SelectionSummary =
+		LastRecipeResponse.CatalogDraft.SelectionSummary;
+	CatalogSpec.VisualDescription =
+		LastRecipeResponse.CatalogDraft.VisualDescription;
+	CatalogSpec.SuitableWhen =
+		LastRecipeResponse.CatalogDraft.SuitableWhen;
+	CatalogSpec.AvoidWhen =
+		LastRecipeResponse.CatalogDraft.AvoidWhen;
+	CatalogSpec.IntentTags = {TEXT("express_uncertainty")};
+	CatalogSpec.EmotionTags = {TEXT("uncertain")};
+	CatalogSpec.VariantStyleTags = {
+		TEXT("neutral"),
+		TEXT("subtle"),
+		TEXT("uncertain")
+	};
+	CatalogSpec.BodyRegionTags = {
+		TEXT("shoulders"),
+		TEXT("upper_torso"),
+		TEXT("two_arms"),
+		TEXT("two_hands"),
+		TEXT("fingers")
+	};
+	CatalogSpec.SpatialRequirementTags = {
+		TEXT("target_independent")
+	};
+	CatalogSpec.SemanticEffectTags = {
+		TEXT("express_uncertainty"),
+		TEXT("noncommittal")
+	};
+	CatalogSpec.GestureFamily = TEXT("shrug");
+	CatalogSpec.DefaultStyle = TEXT("uncertain");
+	CatalogSpec.SearchKeywords = {
+		TEXT("shrug"),
+		TEXT("uncertain"),
+		TEXT("unsure"),
+		TEXT("maybe"),
+		TEXT("do not know")
+	};
+	CatalogSpec.bCanRunWhileMoving = true;
+	CatalogSpec.Expressiveness = 0.6f;
+	CatalogSpec.Energy = 0.42f;
+	CatalogSpec.SocialIntensity = 0.48f;
+
+	FLLMNPCMotionRecipeGenerationEvidence Evidence;
+	Evidence.RequestId = LastAuthoringResult.RequestId;
+	Evidence.ProviderId = LastAuthoringResult.ProviderId;
+	Evidence.ProviderModelId =
+		LastAuthoringResult.ProviderModelId;
+	Evidence.EndpointOrigin = GenerationEndpointOrigin;
+	Evidence.NonSecretConfigHash = GenerationConfigHash;
+	Evidence.PromptVersion = LastRecipePrompt.PromptVersion;
+	Evidence.PromptHash = LastRecipePrompt.PromptHash;
+	Evidence.CapabilityHash = LastRecipePrompt.CapabilityHash;
+	Evidence.RegistryVersion = LastRecipePrompt.RegistryVersion;
+	Evidence.SystemPrompt = LastRecipePrompt.SystemPrompt;
+	Evidence.UserJson = LastRecipePrompt.UserJson;
+	Evidence.RecipeSchemaJson =
+		LastRecipePrompt.RecipeSchemaJson;
+	Evidence.CapabilityModelViewJson =
+		LastRecipePrompt.CapabilityModelViewJson;
+	Evidence.RawResponseJson =
+		LastAuthoringResult.ResponseJson;
+	Evidence.GeneratedAtUtc = RecipeGeneratedAtUtc;
+	Evidence.HttpStatus = LastAuthoringResult.HttpStatus;
+	Evidence.AttemptCount =
+		LastAuthoringResult.AttemptCount;
+	Evidence.TotalLatencySeconds =
+		LastAuthoringResult.TotalLatencySeconds;
+	Evidence.PromptTokens = LastAuthoringResult.PromptTokens;
+	Evidence.CompletionTokens =
+		LastAuthoringResult.CompletionTokens;
+	Evidence.TotalTokens = LastAuthoringResult.TotalTokens;
+
+	const FScopedTransaction Transaction(
+		LOCTEXT(
+			"CreateRecipeDraftTransaction",
+			"Create LLM NPC Motion Recipe Draft"
+		)
+	);
+	const FLLMNPCAuthoringOperationResult Result =
+		Authoring->CreateMotionRecipeDraft(
+			RecipeJsonBox->GetText().ToString(),
+			SelectedSkeleton->ProfileId,
+			CatalogSpec,
+			Evidence,
+			RecipeDestinationPathBox->GetText().ToString()
+		);
+	if (Result.bSuccess && Result.TemplateAsset)
+	{
+		bIncludeNonPublished = true;
+		RefreshCatalog(Result.TemplateAsset->GetPathName());
 		SetActivePage(ELLMNPCTemplateWorkbenchPage::Quality);
 	}
 	SetStatus(

@@ -1,0 +1,1067 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "urn:llmnpc:motion-recipe:v1",
+	"title": "LLM NPC Motion Recipe v1",
+	"type": "object",
+	"additionalProperties": false,
+	"x-llmnpc-registry-version": "llmnpc.motion_primitives.v1",
+	"required": [
+		"schema_version",
+		"recipe_id",
+		"intent",
+		"duration",
+		"interruptible",
+		"primitives"
+	],
+	"properties":
+	{
+		"schema_version":
+		{
+			"type": "string",
+			"const": "llmnpc.motion_recipe.v1"
+		},
+		"recipe_id":
+		{
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 128,
+			"pattern": "^[A-Za-z0-9._-]+$"
+		},
+		"intent":
+		{
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 128,
+			"pattern": "^[A-Za-z0-9._-]+$"
+		},
+		"duration":
+		{
+			"type": "number",
+			"exclusiveMinimum": 0,
+			"maximum": 4
+		},
+		"interruptible":
+		{
+			"type": "boolean",
+			"const": true
+		},
+		"primitives":
+		{
+			"type": "array",
+			"minItems": 1,
+			"maxItems": 12,
+			"items":
+			{
+				"oneOf": [
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Present a validated person, object, or direction with one open hand.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side",
+							"target_slot"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "arm.present"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"target_slot":
+							{
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9._-]+$"
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"amplitude":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "Normalized expressive amplitude.",
+										"x-unit": "normalized",
+										"default": 0.65000000000000002
+									},
+									"height":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1,
+										"description": "Relative presentation height.",
+										"x-unit": "normalized",
+										"default": 0.5
+									},
+									"speed":
+									{
+										"type": "number",
+										"minimum": 0.59999999999999998,
+										"maximum": 1.3999999999999999,
+										"description": "Bounded timing multiplier.",
+										"x-unit": "multiplier",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Move one hand toward a validated target slot.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side",
+							"target_slot"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "arm.reach"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"target_slot":
+							{
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9._-]+$"
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"height":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1,
+										"description": "Relative target height influence.",
+										"x-unit": "normalized",
+										"default": 0.5
+									},
+									"reach":
+									{
+										"type": "number",
+										"minimum": 0.050000000000000003,
+										"maximum": 0.97999999999999998,
+										"description": "Bounded fraction of arm reach.",
+										"x-unit": "normalized",
+										"default": 0.75
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Apply a small upper-body lean without moving the root or feet.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "chest.lean"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"none"
+								],
+								"default": "none"
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"amplitude":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "Normalized expressive amplitude.",
+										"x-unit": "normalized",
+										"default": 0.34999999999999998
+									},
+									"direction":
+									{
+										"type": "string",
+										"enum": [
+											"forward",
+											"back"
+										],
+										"description": "Semantic lean direction.",
+										"x-unit": "enum",
+										"default": "forward"
+									},
+									"speed":
+									{
+										"type": "number",
+										"minimum": 0.59999999999999998,
+										"maximum": 1.3999999999999999,
+										"description": "Bounded timing multiplier.",
+										"x-unit": "multiplier",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Apply a bounded upper-body turn while locomotion keeps ownership.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "chest.turn"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"amplitude":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "Normalized expressive amplitude.",
+										"x-unit": "normalized",
+										"default": 0.34999999999999998
+									},
+									"speed":
+									{
+										"type": "number",
+										"minimum": 0.59999999999999998,
+										"maximum": 1.3999999999999999,
+										"description": "Bounded timing multiplier.",
+										"x-unit": "multiplier",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Track one validated target slot with constrained gaze motion.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"target_slot"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "gaze.track"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"none"
+								],
+								"default": "none"
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"target_slot":
+							{
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9._-]+$"
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"engagement":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1,
+										"description": "Strength of target engagement.",
+										"x-unit": "normalized",
+										"default": 0.75
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Blend one hand toward its calibrated curl pose.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "hand.pose.curl"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"weight":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1,
+										"description": "Calibrated pose blend weight.",
+										"x-unit": "normalized",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Blend one hand toward its calibrated open pose.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "hand.pose.open"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"weight":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1,
+										"description": "Calibrated pose blend weight.",
+										"x-unit": "normalized",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Blend one hand toward its calibrated pointing pose.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "hand.pose.point"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"weight":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1,
+										"description": "Calibrated pose blend weight.",
+										"x-unit": "normalized",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Blend one hand toward its calibrated relaxed pose.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "hand.pose.relaxed"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"weight":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1,
+										"description": "Calibrated pose blend weight.",
+										"x-unit": "normalized",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Raise one hand and move it through a bounded greeting or farewell arc.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "hand.wave_arc"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"target_slot":
+							{
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 64,
+								"pattern": "^[A-Za-z0-9._-]+$"
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"amplitude":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "Normalized expressive amplitude.",
+										"x-unit": "normalized",
+										"default": 0.65000000000000002
+									},
+									"cycles":
+									{
+										"type": "integer",
+										"minimum": 1,
+										"maximum": 4,
+										"description": "Whole bounded wave count.",
+										"x-unit": "count",
+										"default": 2
+									},
+									"height":
+									{
+										"type": "number",
+										"minimum": 0.25,
+										"maximum": 0.90000000000000002,
+										"description": "Relative hand height.",
+										"x-unit": "normalized",
+										"default": 0.55000000000000004
+									},
+									"speed":
+									{
+										"type": "number",
+										"minimum": 0.59999999999999998,
+										"maximum": 1.3999999999999999,
+										"description": "Bounded timing multiplier.",
+										"x-unit": "multiplier",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Move the head vertically for acknowledgement or agreement.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "head.nod"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"none"
+								],
+								"default": "none"
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"amplitude":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "Normalized expressive amplitude.",
+										"x-unit": "normalized",
+										"default": 0.65000000000000002
+									},
+									"cycles":
+									{
+										"type": "integer",
+										"minimum": 1,
+										"maximum": 4,
+										"description": "Whole bounded repetition count.",
+										"x-unit": "count",
+										"default": 1
+									},
+									"speed":
+									{
+										"type": "number",
+										"minimum": 0.59999999999999998,
+										"maximum": 1.3999999999999999,
+										"description": "Bounded timing multiplier.",
+										"x-unit": "multiplier",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Move the head laterally for disagreement or refusal.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "head.shake"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"none"
+								],
+								"default": "none"
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"amplitude":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "Normalized expressive amplitude.",
+										"x-unit": "normalized",
+										"default": 0.65000000000000002
+									},
+									"cycles":
+									{
+										"type": "integer",
+										"minimum": 1,
+										"maximum": 4,
+										"description": "Whole bounded repetition count.",
+										"x-unit": "count",
+										"default": 1
+									},
+									"speed":
+									{
+										"type": "number",
+										"minimum": 0.59999999999999998,
+										"maximum": 1.3999999999999999,
+										"description": "Bounded timing multiplier.",
+										"x-unit": "multiplier",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Tilt the head for curiosity, empathy, or uncertainty.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "head.tilt"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"none"
+								],
+								"default": "none"
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"amplitude":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "Normalized expressive amplitude.",
+										"x-unit": "normalized",
+										"default": 0.65000000000000002
+									},
+									"direction":
+									{
+										"type": "string",
+										"enum": [
+											"left",
+											"right"
+										],
+										"description": "Semantic tilt direction.",
+										"x-unit": "enum",
+										"default": "right"
+									},
+									"speed":
+									{
+										"type": "number",
+										"minimum": 0.59999999999999998,
+										"maximum": 1.3999999999999999,
+										"description": "Bounded timing multiplier.",
+										"x-unit": "multiplier",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Raise both shoulders with bounded chest, elbow, wrist, and relaxed-hand participation.",
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "shoulder.shrug"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"none"
+								],
+								"default": "none"
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"amplitude":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "Normalized expressive amplitude.",
+										"x-unit": "normalized",
+										"default": 0.75
+									},
+									"arm_openness":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "How far the elbows and hands open from the torso.",
+										"x-unit": "normalized",
+										"default": 0.59999999999999998
+									},
+									"asymmetry":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 0.25,
+										"description": "Small bounded left-right variation.",
+										"x-unit": "normalized",
+										"default": 0.050000000000000003
+									},
+									"palm_openness":
+									{
+										"type": "number",
+										"minimum": 0.20000000000000001,
+										"maximum": 1,
+										"description": "Relaxed palm and finger openness.",
+										"x-unit": "normalized",
+										"default": 0.75
+									},
+									"speed":
+									{
+										"type": "number",
+										"minimum": 0.59999999999999998,
+										"maximum": 1.3999999999999999,
+										"description": "Bounded timing multiplier.",
+										"x-unit": "multiplier",
+										"default": 1
+									},
+									"torso_participation":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1,
+										"description": "Amount of subtle upper-chest support.",
+										"x-unit": "normalized",
+										"default": 0.34999999999999998
+									}
+								}
+							}
+						}
+					}
+				]
+			}
+		}
+	}
+}

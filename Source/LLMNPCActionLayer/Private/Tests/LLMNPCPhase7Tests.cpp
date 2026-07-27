@@ -139,6 +139,192 @@ bool FLLMNPCPhase7StableArmIKTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FLLMNPCPhase7BlendedArmIKTest,
+	"LLMNPCActionLayer.Phase7.SkeletonProfiles.BlendedArmIKPreservesLength",
+	Phase7TestFlags
+)
+
+bool FLLMNPCPhase7BlendedArmIKTest::RunTest(const FString& Parameters)
+{
+	static_cast<void>(Parameters);
+	const FTransform OriginalUpper(
+		FQuat::Identity,
+		FVector::ZeroVector
+	);
+	const FTransform OriginalLower(
+		FQuat::Identity,
+		FVector(28.0f, -4.0f, 0.0f)
+	);
+	const FTransform OriginalHand(
+		FQuat::Identity,
+		FVector(54.0f, 0.0f, 0.0f)
+	);
+	const float OriginalUpperLength =
+		(OriginalLower.GetLocation() - OriginalUpper.GetLocation()).Size();
+	const float OriginalLowerLength =
+		(OriginalHand.GetLocation() - OriginalLower.GetLocation()).Size();
+	const FVector DesiredEnd(30.0f, 36.0f, 8.0f);
+	const float Alpha = 0.45f;
+	const FVector ExpectedEnd = FMath::Lerp(
+		OriginalHand.GetLocation(),
+		DesiredEnd,
+		Alpha
+	);
+
+	FTransform Upper = OriginalUpper;
+	FTransform Lower = OriginalLower;
+	FTransform Hand = OriginalHand;
+	FLLMNPCArmIKSolver::SolveAtBlendedEffector(
+		Upper,
+		Lower,
+		Hand,
+		DesiredEnd,
+		FVector::BackwardVector,
+		FVector::BackwardVector,
+		Alpha
+	);
+
+	TestTrue(
+		TEXT("Partial IK solves to the blended effector target"),
+		Hand.GetLocation().Equals(ExpectedEnd, 0.001f)
+	);
+	TestTrue(
+		TEXT("Partial IK preserves the upper-arm segment length"),
+		FMath::IsNearlyEqual(
+			(Lower.GetLocation() - Upper.GetLocation()).Size(),
+			OriginalUpperLength,
+			0.001f
+		)
+	);
+	TestTrue(
+		TEXT("Partial IK preserves the lower-arm segment length"),
+		FMath::IsNearlyEqual(
+			(Hand.GetLocation() - Lower.GetLocation()).Size(),
+			OriginalLowerLength,
+			0.001f
+		)
+	);
+
+	Upper = OriginalUpper;
+	Lower = OriginalLower;
+	Hand = OriginalHand;
+	FLLMNPCArmIKSolver::SolveAtBlendedEffector(
+		Upper,
+		Lower,
+		Hand,
+		DesiredEnd,
+		FVector::BackwardVector,
+		FVector::BackwardVector,
+		0.0f
+	);
+	TestTrue(
+		TEXT("Zero-alpha IK preserves the original chain exactly"),
+		Upper.Equals(OriginalUpper) &&
+			Lower.Equals(OriginalLower) &&
+			Hand.Equals(OriginalHand)
+	);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FLLMNPCPhase7ConstrainedWristTest,
+	"LLMNPCActionLayer.Phase7.SkeletonProfiles.ConstrainedWristOrientation",
+	Phase7TestFlags
+)
+
+bool FLLMNPCPhase7ConstrainedWristTest::RunTest(const FString& Parameters)
+{
+	static_cast<void>(Parameters);
+	const FTransform OriginalLower(
+		FQuat::Identity,
+		FVector::ZeroVector
+	);
+	const FTransform OriginalHand(
+		FQuat::Identity,
+		FVector(30.0f, 0.0f, 0.0f)
+	);
+	const FQuat DesiredTwist(
+		FVector::ForwardVector,
+		FMath::DegreesToRadians(80.0f)
+	);
+
+	FTransform Lower = OriginalLower;
+	FTransform Hand = OriginalHand;
+	const float AppliedTwistRadians =
+		FLLMNPCArmIKSolver::ApplyConstrainedWristOrientation(
+			Lower,
+			Hand,
+			DesiredTwist,
+			1.0f
+		);
+	TestTrue(
+		TEXT("Palm alignment never rotates or translates the elbow bone"),
+		Lower.Equals(OriginalLower)
+	);
+	TestTrue(
+		TEXT("A legal axial hand twist remains within the configured limit"),
+		FMath::IsNearlyEqual(
+			FMath::RadiansToDegrees(AppliedTwistRadians),
+			80.0f,
+			0.01f
+		)
+	);
+	TestTrue(
+		TEXT("A legal hand twist reaches the requested palm rotation"),
+		Hand.GetRotation().AngularDistance(DesiredTwist) < 0.001f
+	);
+	TestTrue(
+		TEXT("Hand orientation never moves the IK endpoint"),
+		Lower.GetLocation().Equals(OriginalLower.GetLocation()) &&
+			Hand.GetLocation().Equals(OriginalHand.GetLocation())
+	);
+
+	Lower = OriginalLower;
+	Hand = OriginalHand;
+	const FQuat ExcessiveSwing(
+		FVector::RightVector,
+		FMath::DegreesToRadians(70.0f)
+	);
+	const float SwingTwistRadians =
+		FLLMNPCArmIKSolver::ApplyConstrainedWristOrientation(
+		Lower,
+		Hand,
+		ExcessiveSwing,
+		1.0f
+	);
+	const float AppliedSwingDegrees = FMath::RadiansToDegrees(
+		OriginalHand.GetRotation().AngularDistance(
+			Hand.GetRotation()
+		)
+	);
+	TestTrue(
+		TEXT("Excessive wrist swing is clamped"),
+		AppliedSwingDegrees <= 35.01f
+	);
+	TestTrue(
+		TEXT("Pure wrist swing reports no axial twist"),
+		FMath::IsNearlyZero(SwingTwistRadians)
+	);
+
+	Lower = OriginalLower;
+	Hand = OriginalHand;
+	const float ZeroAlphaTwistRadians =
+		FLLMNPCArmIKSolver::ApplyConstrainedWristOrientation(
+		Lower,
+		Hand,
+		DesiredTwist,
+		0.0f
+	);
+	TestTrue(
+		TEXT("Zero-alpha wrist orientation preserves the input pose"),
+		Lower.Equals(OriginalLower) &&
+			Hand.Equals(OriginalHand) &&
+			FMath::IsNearlyZero(ZeroAlphaTwistRadians)
+	);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FLLMNPCPhase7EffectorRotationTest,
 	"LLMNPCActionLayer.Phase7.SkeletonProfiles.EffectorRelativeRotation",
 	Phase7TestFlags

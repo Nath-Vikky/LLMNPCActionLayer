@@ -1,5 +1,7 @@
 #include "LLMNPCArmIKSolver.h"
 
+#include "TwoBoneIK.h"
+
 namespace
 {
 FVector ProjectOntoBendPlane(const FVector& Direction, const FVector& LimbDirection)
@@ -23,6 +25,83 @@ FVector ProjectOntoPalmPlane(const FVector& Direction, const FVector& PalmNormal
 		Direction -
 		SafeNormal * FVector::DotProduct(Direction, SafeNormal)
 	).GetSafeNormal();
+}
+
+FQuat NormalizeShortestArc(FQuat Rotation)
+{
+	Rotation.Normalize();
+	if (Rotation.W < 0.0f)
+	{
+		Rotation.X *= -1.0f;
+		Rotation.Y *= -1.0f;
+		Rotation.Z *= -1.0f;
+		Rotation.W *= -1.0f;
+	}
+	return Rotation;
+}
+
+void DecomposeSwingTwist(
+	const FQuat& Rotation,
+	const FVector& TwistAxis,
+	FQuat& OutSwing,
+	float& OutSignedTwistRadians
+)
+{
+	const FVector SafeAxis = TwistAxis.GetSafeNormal();
+	const FQuat SafeRotation = NormalizeShortestArc(Rotation);
+	const FVector RotationVector(
+		SafeRotation.X,
+		SafeRotation.Y,
+		SafeRotation.Z
+	);
+	const FVector ProjectedVector =
+		SafeAxis * FVector::DotProduct(RotationVector, SafeAxis);
+	FQuat Twist(
+		ProjectedVector.X,
+		ProjectedVector.Y,
+		ProjectedVector.Z,
+		SafeRotation.W
+	);
+	if (Twist.SizeSquared() <= UE_SMALL_NUMBER)
+	{
+		Twist = FQuat::Identity;
+	}
+	else
+	{
+		Twist = NormalizeShortestArc(Twist);
+	}
+
+	OutSignedTwistRadians = FMath::UnwindRadians(
+		2.0f * FMath::Atan2(
+			FVector::DotProduct(
+				FVector(Twist.X, Twist.Y, Twist.Z),
+				SafeAxis
+			),
+			Twist.W
+		)
+	);
+	OutSwing = NormalizeShortestArc(SafeRotation * Twist.Inverse());
+}
+
+FQuat ClampSwing(const FQuat& Swing, float MaxSwingRadians)
+{
+	const FQuat SafeSwing = NormalizeShortestArc(Swing);
+	const float SwingRadians = 2.0f * FMath::Acos(
+		FMath::Clamp(SafeSwing.W, -1.0f, 1.0f)
+	);
+	if (
+		SwingRadians <= MaxSwingRadians ||
+		SwingRadians <= KINDA_SMALL_NUMBER
+	)
+	{
+		return SafeSwing;
+	}
+
+	return FQuat::Slerp(
+		FQuat::Identity,
+		SafeSwing,
+		MaxSwingRadians / SwingRadians
+	).GetNormalized();
 }
 }
 
@@ -92,6 +171,63 @@ void FLLMNPCArmIKSolver::MaintainEndEffectorRelativeRotation(
 	InOutSolvedEndTransform.NormalizeRotation();
 }
 
+void FLLMNPCArmIKSolver::SolveAtBlendedEffector(
+	FTransform& InOutUpperTransform,
+	FTransform& InOutLowerTransform,
+	FTransform& InOutHandTransform,
+	const FVector& DesiredEndPosition,
+	const FVector& ConfiguredPoleDirection,
+	const FVector& FallbackPoleDirection,
+	float Alpha,
+	float CurrentPoseWeight
+)
+{
+	const float SafeAlpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
+	if (SafeAlpha <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	const FTransform OriginalLower = InOutLowerTransform;
+	const FTransform OriginalHand = InOutHandTransform;
+	const FVector RootPosition = InOutUpperTransform.GetLocation();
+	const float ChainLength =
+		(InOutLowerTransform.GetLocation() - RootPosition).Size() +
+		(InOutHandTransform.GetLocation() -
+			InOutLowerTransform.GetLocation()).Size();
+	const FVector BlendedEndPosition = FMath::Lerp(
+		OriginalHand.GetLocation(),
+		DesiredEndPosition,
+		SafeAlpha
+	);
+	const FVector JointTarget = BuildStableJointTarget(
+		RootPosition,
+		OriginalLower.GetLocation(),
+		BlendedEndPosition,
+		ConfiguredPoleDirection,
+		FallbackPoleDirection,
+		ChainLength,
+		CurrentPoseWeight
+	);
+
+	AnimationCore::SolveTwoBoneIK(
+		InOutUpperTransform,
+		InOutLowerTransform,
+		InOutHandTransform,
+		JointTarget,
+		BlendedEndPosition,
+		false,
+		1.0f,
+		1.2f
+	);
+	MaintainEndEffectorRelativeRotation(
+		OriginalLower,
+		OriginalHand,
+		InOutLowerTransform,
+		InOutHandTransform
+	);
+}
+
 FQuat FLLMNPCArmIKSolver::BuildPalmFacingRotation(
 	const FQuat& CurrentHandRotation,
 	const FVector& CurrentFingerDirection,
@@ -133,4 +269,74 @@ FQuat FLLMNPCArmIKSolver::BuildPalmFacingRotation(
 	);
 	const FQuat FingerAlignment(TargetPalm, TwistAngle);
 	return (FingerAlignment * PalmAlignment * CurrentHandRotation).GetNormalized();
+}
+
+float FLLMNPCArmIKSolver::ApplyConstrainedWristOrientation(
+	const FTransform& LowerArmTransform,
+	FTransform& InOutHandTransform,
+	const FQuat& DesiredHandRotation,
+	float Alpha,
+	float MaxAxialTwistDegrees,
+	float MaxWristSwingDegrees
+)
+{
+	const float SafeAlpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
+	if (SafeAlpha <= KINDA_SMALL_NUMBER)
+	{
+		return 0.0f;
+	}
+
+	const FVector ForearmAxis = (
+		InOutHandTransform.GetLocation() -
+		LowerArmTransform.GetLocation()
+	).GetSafeNormal();
+	if (ForearmAxis.IsNearlyZero())
+	{
+		return 0.0f;
+	}
+
+	const FQuat OriginalHandRotation =
+		InOutHandTransform.GetRotation().GetNormalized();
+	const FQuat BlendedTarget = FQuat::Slerp(
+		OriginalHandRotation,
+		DesiredHandRotation.GetNormalized(),
+		SafeAlpha
+	).GetNormalized();
+	const FQuat DesiredDelta = NormalizeShortestArc(
+		BlendedTarget * OriginalHandRotation.Inverse()
+	);
+
+	FQuat Swing;
+	float DesiredTwistRadians = 0.0f;
+	DecomposeSwingTwist(
+		DesiredDelta,
+		ForearmAxis,
+		Swing,
+		DesiredTwistRadians
+	);
+
+	const float MaxAxialTwistRadians = FMath::DegreesToRadians(
+		FMath::Max(MaxAxialTwistDegrees, 0.0f)
+	);
+	const float MaxWristSwingRadians = FMath::DegreesToRadians(
+		FMath::Max(MaxWristSwingDegrees, 0.0f)
+	);
+	const float AppliedTwistRadians = FMath::Clamp(
+		DesiredTwistRadians,
+		-MaxAxialTwistRadians,
+		MaxAxialTwistRadians
+	);
+
+	const FQuat ClampedSwing = ClampSwing(
+		Swing,
+		MaxWristSwingRadians
+	);
+	const FQuat AppliedTwist(ForearmAxis, AppliedTwistRadians);
+	InOutHandTransform.SetRotation(
+		(ClampedSwing *
+			AppliedTwist *
+			OriginalHandRotation).GetNormalized()
+	);
+	InOutHandTransform.NormalizeRotation();
+	return AppliedTwistRadians;
 }

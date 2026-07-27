@@ -2,11 +2,13 @@
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Authoring/LLMNPCAnimationTemplateDraftImporter.h"
+#include "Authoring/LLMNPCMotionRecipeAuthoringPrompt.h"
 #include "Authoring/LLMNPCTemplateDraftImporter.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequenceBase.h"
 #include "Animation/AnimationAsset.h"
 #include "Animation/Skeleton.h"
+#include "Capabilities/LLMNPCSkeletonCapabilityBuilder.h"
 #include "Dom/JsonObject.h"
 #include "Engine/AssetManager.h"
 #include "HAL/FileManager.h"
@@ -19,6 +21,11 @@
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "Misc/SecureHash.h"
+#include "MotionRecipe/LLMNPCMotionPrimitiveRegistry.h"
+#include "MotionRecipe/LLMNPCMotionRecipeCompiler.h"
+#include "MotionRecipe/LLMNPCMotionRecipeParser.h"
+#include "MotionRecipe/LLMNPCMotionRecipeValidator.h"
 #include "ObjectTools.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -420,6 +427,42 @@ bool HasPublishedPublicActionVersion(
 	return false;
 }
 
+ULLMNPCPublicActionDefinition* FindPublicActionDefinition(
+	FName PublicActionId
+)
+{
+	FAssetRegistryModule& AssetRegistryModule =
+		FModuleManager::LoadModuleChecked<FAssetRegistryModule>(
+			TEXT("AssetRegistry")
+		);
+	FARFilter Filter;
+	Filter.ClassPaths.Add(
+		ULLMNPCPublicActionDefinition::StaticClass()->GetClassPathName()
+	);
+	Filter.bRecursiveClasses = true;
+	TArray<FAssetData> Assets;
+	AssetRegistryModule.Get().GetAssets(Filter, Assets);
+	Assets.Sort(
+		[](const FAssetData& A, const FAssetData& B)
+		{
+			return A.GetObjectPathString() < B.GetObjectPathString();
+		}
+	);
+	for (const FAssetData& AssetData : Assets)
+	{
+		ULLMNPCPublicActionDefinition* Definition =
+			Cast<ULLMNPCPublicActionDefinition>(AssetData.GetAsset());
+		if (
+			Definition &&
+			Definition->PublicActionId == PublicActionId
+		)
+		{
+			return Definition;
+		}
+	}
+	return nullptr;
+}
+
 bool LoadPublishedDefinitionForAction(
 	FName PublicActionId,
 	ULLMNPCActionVocabulary*& OutVocabulary,
@@ -588,6 +631,324 @@ bool HasSafeAnimationAssetModifierPolicy(
 		FMath::IsNearlyZero(Policy.RandomAmplitudeJitter) &&
 		FMath::IsNearlyZero(Policy.RandomFrequencyJitter) &&
 		FMath::IsNearlyZero(Policy.RandomPhaseJitterRadians);
+}
+
+struct FLLMNPCRecipeQualityIdentity
+{
+	FString RecipeHash;
+	FString CompiledRecipeHash;
+	FString CapabilityHash;
+	FString RegistryVersion;
+	FString CompilerVersion;
+};
+
+bool IsMotionRecipeProvenance(
+	const TSharedPtr<FJsonObject>& Provenance
+)
+{
+	FString SourceType;
+	return
+		Provenance.IsValid() &&
+		Provenance->TryGetStringField(TEXT("source_type"), SourceType) &&
+		SourceType == TEXT("motion_recipe");
+}
+
+bool ValidateMotionRecipeEvidenceEnvelope(
+	const TSharedPtr<FJsonObject>& Provenance,
+	FString& OutError
+)
+{
+	OutError.Reset();
+	if (!IsMotionRecipeProvenance(Provenance))
+	{
+		OutError = TEXT("LLMNPC_RECIPE_PROVENANCE_SOURCE_TYPE_INVALID");
+		return false;
+	}
+	const TSharedPtr<FJsonObject>* Recipe = nullptr;
+	const TSharedPtr<FJsonObject>* License = nullptr;
+	const TSharedPtr<FJsonObject>* Agent = nullptr;
+	const TSharedPtr<FJsonObject>* ImportRecord = nullptr;
+	FString RecipeHash;
+	FString CompiledRecipeHash;
+	FString CapabilityHash;
+	FString RegistryVersion;
+	FString CompilerVersion;
+	FString PromptVersion;
+	FString PromptHash;
+	FString JobHash;
+	FString JobPath;
+	if (
+		!Provenance->TryGetObjectField(
+			TEXT("motion_recipe"),
+			Recipe
+		) ||
+		!Recipe ||
+		!Recipe->IsValid() ||
+		!Provenance->TryGetObjectField(
+			TEXT("source_license"),
+			License
+		) ||
+		!License ||
+		!License->IsValid() ||
+		!Provenance->TryGetObjectField(
+			TEXT("authoring_agent"),
+			Agent
+		) ||
+		!Agent ||
+		!Agent->IsValid() ||
+		!Provenance->TryGetObjectField(
+			TEXT("import_record"),
+			ImportRecord
+		) ||
+		!ImportRecord ||
+		!ImportRecord->IsValid() ||
+		!Provenance->TryGetStringField(
+			TEXT("recipe_hash"),
+			RecipeHash
+		) ||
+		RecipeHash.IsEmpty() ||
+		!Provenance->TryGetStringField(
+			TEXT("compiled_recipe_hash"),
+			CompiledRecipeHash
+		) ||
+		CompiledRecipeHash.IsEmpty() ||
+		!Provenance->TryGetStringField(
+			TEXT("capability_hash"),
+			CapabilityHash
+		) ||
+		CapabilityHash.IsEmpty() ||
+		!Provenance->TryGetStringField(
+			TEXT("primitive_registry_version"),
+			RegistryVersion
+		) ||
+		RegistryVersion.IsEmpty() ||
+		!Provenance->TryGetStringField(
+			TEXT("compiler_version"),
+			CompilerVersion
+		) ||
+		CompilerVersion.IsEmpty() ||
+		!Provenance->TryGetStringField(
+			TEXT("authoring_prompt_version"),
+			PromptVersion
+		) ||
+		PromptVersion != LLMNPCMotionRecipeAuthoring::PromptVersion ||
+		!Provenance->TryGetStringField(
+			TEXT("authoring_prompt_hash"),
+			PromptHash
+		) ||
+		PromptHash.IsEmpty() ||
+		!Provenance->TryGetStringField(
+			TEXT("authoring_job_hash"),
+			JobHash
+		) ||
+		JobHash.IsEmpty() ||
+		!(*ImportRecord)->TryGetStringField(
+			TEXT("draft_source_copy_path"),
+			JobPath
+		) ||
+		JobPath.IsEmpty()
+	)
+	{
+		OutError = TEXT("LLMNPC_RECIPE_PROVENANCE_FIELDS_MISSING");
+		return false;
+	}
+	FString ModelId;
+	FString ProviderId;
+	FString ConfigHash;
+	if (
+		!(*Agent)->TryGetStringField(
+			TEXT("provider_id"),
+			ProviderId
+		) ||
+		ProviderId.IsEmpty() ||
+		!(*Agent)->TryGetStringField(TEXT("model_id"), ModelId) ||
+		ModelId.IsEmpty() ||
+		!(*Agent)->TryGetStringField(
+			TEXT("non_secret_config_hash"),
+			ConfigHash
+		) ||
+		ConfigHash.IsEmpty()
+	)
+	{
+		OutError = TEXT("LLMNPC_RECIPE_PROVENANCE_AGENT_INVALID");
+		return false;
+	}
+	FString JobJson;
+	if (
+		!FFileHelper::LoadFileToString(JobJson, *JobPath) ||
+		FLLMNPCUEPIArtifactAdapter::HashJson(JobJson) != JobHash
+	)
+	{
+		OutError = TEXT("LLMNPC_RECIPE_PROVENANCE_JOB_MISSING_OR_CHANGED");
+		return false;
+	}
+	const FString JobLower = JobJson.ToLower();
+	if (
+		JobLower.Contains(TEXT("openai_api_key")) ||
+		JobLower.Contains(TEXT("authorization")) ||
+		JobLower.Contains(TEXT("bearer "))
+	)
+	{
+		OutError = TEXT("LLMNPC_RECIPE_PROVENANCE_JOB_SECRET_MARKER");
+		return false;
+	}
+	return true;
+}
+
+bool RecompileMotionRecipeTemplate(
+	const ULLMNPCMotionTemplate& Template,
+	const TSharedPtr<FJsonObject>& Provenance,
+	FLLMNPCRecipeQualityIdentity& OutIdentity,
+	FString& OutError
+)
+{
+	OutIdentity = FLLMNPCRecipeQualityIdentity();
+	OutError.Reset();
+	const TSharedPtr<FJsonObject>* RecipeObject = nullptr;
+	if (
+		!IsMotionRecipeProvenance(Provenance) ||
+		!Provenance->TryGetObjectField(
+			TEXT("motion_recipe"),
+			RecipeObject
+		) ||
+		!RecipeObject ||
+		!RecipeObject->IsValid()
+	)
+	{
+		OutError = TEXT("LLMNPC_RECIPE_PROVENANCE_RECIPE_MISSING");
+		return false;
+	}
+	FString RecipeJson;
+	if (!SerializeJsonObject((*RecipeObject).ToSharedRef(), RecipeJson))
+	{
+		OutError = TEXT("LLMNPC_RECIPE_PROVENANCE_RECIPE_SERIALIZE_FAILED");
+		return false;
+	}
+
+	ULLMNPCSkeletonProfile* Profile =
+		FindSkeletonProfile(Template.Metadata.SkeletonProfileId);
+	FString ProfileError;
+	if (!Profile || !Profile->ValidateProfile(ProfileError))
+	{
+		OutError = ProfileError.IsEmpty()
+			? TEXT("LLMNPC_RECIPE_QUALITY_PROFILE_MISSING")
+			: ProfileError;
+		return false;
+	}
+	FLLMNPCSkeletonCapabilitySnapshot Capability;
+	const FLLMNPCSkeletonCapabilityBuildResult CapabilityResult =
+		FLLMNPCSkeletonCapabilityBuilder::Build(
+			*Profile,
+			nullptr,
+			Capability
+		);
+	if (!CapabilityResult.bSucceeded)
+	{
+		OutError = CapabilityResult.Errors.IsEmpty()
+			? TEXT("LLMNPC_RECIPE_QUALITY_CAPABILITY_BUILD_FAILED")
+			: CapabilityResult.Errors[0];
+		return false;
+	}
+
+	FLLMNPCMotionRecipe Recipe;
+	if (!FLLMNPCMotionRecipeParser::Parse(
+		RecipeJson,
+		Recipe,
+		OutError
+	))
+	{
+		return false;
+	}
+	FLLMNPCMotionRecipeCompileContext CompileContext;
+	CompileContext.ValidationContext.Mode =
+		ELLMNPCMotionRecipeMode::AuthoringSandbox;
+	for (const FLLMNPCMotionRecipePrimitive& Primitive : Recipe.Primitives)
+	{
+		if (!Primitive.TargetSlot.IsNone())
+		{
+			OutError =
+				TEXT("LLMNPC_RECIPE_QUALITY_TARGET_SLOT_NOT_SUPPORTED");
+			return false;
+		}
+	}
+	FLLMMotionPlan Plan;
+	FLLMNPCCompiledRecipeMetadata Compiled;
+	if (!FLLMNPCMotionRecipeCompiler::Compile(
+		Recipe,
+		Capability,
+		FLLMNPCMotionPrimitiveRegistry::Get(),
+		CompileContext,
+		Plan,
+		Compiled,
+		OutError
+	))
+	{
+		return false;
+	}
+
+	FString ExpectedRecipeHash;
+	FString ExpectedCompiledHash;
+	FString ExpectedCapabilityHash;
+	FString ExpectedRegistryVersion;
+	FString ExpectedCompilerVersion;
+	if (
+		!Provenance->TryGetStringField(
+			TEXT("recipe_hash"),
+			ExpectedRecipeHash
+		) ||
+		!Provenance->TryGetStringField(
+			TEXT("compiled_recipe_hash"),
+			ExpectedCompiledHash
+		) ||
+		!Provenance->TryGetStringField(
+			TEXT("capability_hash"),
+			ExpectedCapabilityHash
+		) ||
+		!Provenance->TryGetStringField(
+			TEXT("primitive_registry_version"),
+			ExpectedRegistryVersion
+		) ||
+		!Provenance->TryGetStringField(
+			TEXT("compiler_version"),
+			ExpectedCompilerVersion
+		) ||
+		Compiled.RecipeHash != ExpectedRecipeHash ||
+		Compiled.CompiledRecipeHash != ExpectedCompiledHash ||
+		Compiled.CapabilityHash != ExpectedCapabilityHash ||
+		Compiled.PrimitiveRegistryVersion != ExpectedRegistryVersion ||
+		Compiled.CompilerVersion != ExpectedCompilerVersion ||
+		Template.Metadata.SourceRecipeHash != Compiled.RecipeHash
+	)
+	{
+		OutError = TEXT("LLMNPC_RECIPE_QUALITY_IDENTITY_MISMATCH");
+		return false;
+	}
+
+	FString StoredClipJson;
+	FString RecompiledClipJson;
+	if (
+		!FJsonObjectConverter::UStructToJsonObjectString(
+			Template.ProceduralClip,
+			StoredClipJson
+		) ||
+		!FJsonObjectConverter::UStructToJsonObjectString(
+			Plan.Clip,
+			RecompiledClipJson
+		) ||
+		FLLMNPCUEPIArtifactAdapter::HashJson(StoredClipJson) !=
+			FLLMNPCUEPIArtifactAdapter::HashJson(RecompiledClipJson)
+	)
+	{
+		OutError = TEXT("LLMNPC_RECIPE_QUALITY_COMPILED_CLIP_MISMATCH");
+		return false;
+	}
+
+	OutIdentity.RecipeHash = Compiled.RecipeHash;
+	OutIdentity.CompiledRecipeHash = Compiled.CompiledRecipeHash;
+	OutIdentity.CapabilityHash = Compiled.CapabilityHash;
+	OutIdentity.RegistryVersion = Compiled.PrimitiveRegistryVersion;
+	OutIdentity.CompilerVersion = Compiled.CompilerVersion;
+	return true;
 }
 }
 
@@ -935,6 +1296,837 @@ ULLMNPCTemplateAuthoringSubsystem::ImportAnimationDraftJson(
 	);
 }
 
+FLLMNPCAuthoringOperationResult
+ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
+	const FString& RecipeJson,
+	FName SkeletonProfileId,
+	const FLLMNPCMotionRecipeDraftCatalogSpec& CatalogSpec,
+	const FLLMNPCMotionRecipeGenerationEvidence& Evidence,
+	const FString& DestinationPackagePath,
+	const FString& PublicActionDraftDestinationPath
+)
+{
+	FString DirectoryError;
+	if (!EnsureAuthoringDirectories(DirectoryError))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_AUTHORING_DIRECTORY_FAILED"),
+			DirectoryError
+		);
+	}
+	if (
+		SkeletonProfileId.IsNone() ||
+		CatalogSpec.AssetName.TrimStartAndEnd().IsEmpty() ||
+		CatalogSpec.TemplateId.IsNone() ||
+		CatalogSpec.PublicActionId.IsNone() ||
+		CatalogSpec.PublicActionAssetName.TrimStartAndEnd().IsEmpty() ||
+		CatalogSpec.DisplayName.TrimStartAndEnd().IsEmpty() ||
+		CatalogSpec.SelectionSummary.TrimStartAndEnd().IsEmpty() ||
+		CatalogSpec.SelectionSummary.Len() > 240 ||
+		CatalogSpec.VisualDescription.TrimStartAndEnd().IsEmpty() ||
+		CatalogSpec.VisualDescription.Len() > 600 ||
+		CatalogSpec.SuitableWhen.IsEmpty() ||
+		CatalogSpec.AvoidWhen.IsEmpty() ||
+		CatalogSpec.GestureFamily.IsNone() ||
+		CatalogSpec.SemanticEffectTags.IsEmpty()
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_CATALOG_SPEC_INVALID"),
+			TEXT("Motion Recipe catalog metadata is incomplete or exceeds its bounded text limits.")
+		);
+	}
+	if (
+		!Evidence.RequestId.IsValid() ||
+		Evidence.ProviderId.IsNone() ||
+		Evidence.ProviderModelId.TrimStartAndEnd().IsEmpty() ||
+		Evidence.NonSecretConfigHash.TrimStartAndEnd().IsEmpty() ||
+		Evidence.PromptVersion !=
+			LLMNPCMotionRecipeAuthoring::PromptVersion ||
+		Evidence.PromptHash.TrimStartAndEnd().IsEmpty() ||
+		Evidence.SystemPrompt.TrimStartAndEnd().IsEmpty() ||
+		Evidence.UserJson.TrimStartAndEnd().IsEmpty() ||
+		Evidence.RawResponseJson.TrimStartAndEnd().IsEmpty() ||
+		Evidence.GeneratedAtUtc.GetTicks() <= 0
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_ONLINE_EVIDENCE_INVALID"),
+			TEXT("A complete online Authoring Model evidence record is required.")
+		);
+	}
+	const FString StablePrompt = FString::Printf(
+		TEXT("%s\n%s\n%s"),
+		*Evidence.PromptVersion,
+		*Evidence.SystemPrompt,
+		*Evidence.UserJson
+	);
+	const FString ExpectedPromptHash = FString::Printf(
+		TEXT("md5:%s"),
+		*FMD5::HashAnsiString(*StablePrompt)
+	);
+	if (ExpectedPromptHash != Evidence.PromptHash)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_PROMPT_HASH_MISMATCH"),
+			TEXT("The Authoring Prompt no longer matches its evidence hash.")
+		);
+	}
+	const FString EvidenceLower = FString::Printf(
+		TEXT("%s\n%s\n%s\n%s"),
+		*Evidence.SystemPrompt,
+		*Evidence.UserJson,
+		*Evidence.RecipeSchemaJson,
+		*Evidence.CapabilityModelViewJson
+	).ToLower();
+	if (
+		EvidenceLower.Contains(TEXT("openai_api_key")) ||
+		EvidenceLower.Contains(TEXT("authorization")) ||
+		EvidenceLower.Contains(TEXT("bearer "))
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_EVIDENCE_SECRET_MARKER"),
+			TEXT("Authoring evidence contains a forbidden credential marker.")
+		);
+	}
+
+	ULLMNPCSkeletonProfile* SkeletonProfile =
+		FindSkeletonProfile(SkeletonProfileId);
+	FString ProfileError;
+	if (
+		!SkeletonProfile ||
+		!SkeletonProfile->ValidateProfile(ProfileError)
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_SKELETON_PROFILE_INVALID"),
+			ProfileError.IsEmpty()
+				? TEXT("The selected Skeleton Profile was not found.")
+				: ProfileError
+		);
+	}
+	FLLMNPCSkeletonCapabilitySnapshot Capability;
+	const FLLMNPCSkeletonCapabilityBuildResult CapabilityResult =
+		FLLMNPCSkeletonCapabilityBuilder::Build(
+			*SkeletonProfile,
+			nullptr,
+			Capability
+		);
+	if (!CapabilityResult.bSucceeded)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_CAPABILITY_BUILD_FAILED"),
+			CapabilityResult.Errors.IsEmpty()
+				? TEXT("The Skeleton Capability could not be built.")
+				: CapabilityResult.Errors[0]
+		);
+	}
+	if (
+		Evidence.CapabilityHash != Capability.CapabilityHash ||
+		Evidence.RegistryVersion !=
+			FLLMNPCMotionPrimitiveRegistry::Get().GetRegistryVersion()
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_CONTEXT_HASH_MISMATCH"),
+			TEXT("Capability or Primitive Registry changed after online generation.")
+		);
+	}
+	FString RestrictedField;
+	if (
+		FLLMNPCSkeletonCapabilityBuilder::ModelViewContainsRestrictedFields(
+			Evidence.CapabilityModelViewJson,
+			RestrictedField
+		)
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_CAPABILITY_EVIDENCE_RESTRICTED"),
+			FString::Printf(
+				TEXT("Capability evidence exposes a restricted field: %s"),
+				*RestrictedField
+			)
+		);
+	}
+	FString CurrentRecipeSchema;
+	FString ContextError;
+	if (
+		!FLLMNPCMotionPrimitiveRegistry::Get().BuildModelSchemaJson(
+			&Capability,
+			CurrentRecipeSchema,
+			ContextError
+		) ||
+		FLLMNPCUEPIArtifactAdapter::HashJson(CurrentRecipeSchema) !=
+			FLLMNPCUEPIArtifactAdapter::HashJson(
+				Evidence.RecipeSchemaJson
+			)
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_SCHEMA_EVIDENCE_STALE"),
+			ContextError.IsEmpty()
+				? TEXT("The generated Recipe Schema evidence is stale.")
+				: ContextError
+		);
+	}
+
+	FLLMNPCMotionRecipeAuthoringResponse OnlineResponse;
+	FString Error;
+	if (
+		!FLLMNPCMotionRecipeAuthoringPrompt::ParseResponse(
+			Evidence.RawResponseJson,
+			OnlineResponse,
+			Error
+		) ||
+		OnlineResponse.bUnsupported
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_ONLINE_RESPONSE_INVALID"),
+			Error.IsEmpty()
+				? TEXT("The Authoring Model did not return a Recipe.")
+				: Error
+		);
+	}
+
+	const FLLMNPCMotionPrimitiveRegistry& Registry =
+		FLLMNPCMotionPrimitiveRegistry::Get();
+	FLLMNPCMotionRecipeValidationContext ValidationContext;
+	ValidationContext.Mode = ELLMNPCMotionRecipeMode::AuthoringSandbox;
+
+	auto NormalizeRecipe = [&](
+		const FString& SourceJson,
+		FLLMNPCMotionRecipe& OutRecipe,
+		FLLMNPCMotionRecipeValidationResult& OutValidation,
+		FString& OutCanonical,
+		FString& OutNormalizeError
+	)
+	{
+		if (!FLLMNPCMotionRecipeParser::Parse(
+			SourceJson,
+			OutRecipe,
+			OutNormalizeError
+		))
+		{
+			return false;
+		}
+		for (const FLLMNPCMotionRecipePrimitive& Primitive :
+			OutRecipe.Primitives)
+		{
+			if (!Primitive.TargetSlot.IsNone())
+			{
+				OutNormalizeError =
+					TEXT("LLMNPC_RECIPE_DRAFT_TARGET_SLOT_NOT_SUPPORTED");
+				return false;
+			}
+		}
+		if (!FLLMNPCMotionRecipeValidator::ValidateAndNormalize(
+			OutRecipe,
+			Capability,
+			Registry,
+			ValidationContext,
+			OutValidation
+		))
+		{
+			OutNormalizeError = OutValidation.ErrorCode;
+			return false;
+		}
+		return FLLMNPCMotionRecipeCanonicalizer::BuildCanonicalJson(
+			OutRecipe,
+			OutCanonical,
+			OutNormalizeError
+		);
+	};
+
+	FLLMNPCMotionRecipe Recipe;
+	FLLMNPCMotionRecipeValidationResult Validation;
+	FString CanonicalRecipe;
+	if (!NormalizeRecipe(
+		RecipeJson,
+		Recipe,
+		Validation,
+		CanonicalRecipe,
+		Error
+	))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	FLLMNPCMotionRecipe ResponseRecipe;
+	FLLMNPCMotionRecipeValidationResult ResponseValidation;
+	FString CanonicalResponseRecipe;
+	if (!NormalizeRecipe(
+		OnlineResponse.RecipeJson,
+		ResponseRecipe,
+		ResponseValidation,
+		CanonicalResponseRecipe,
+		Error
+	))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_RESPONSE_RECIPE_MISMATCH"),
+			Error
+		);
+	}
+	const bool bHumanParameterEdit =
+		CanonicalResponseRecipe != CanonicalRecipe;
+	if (bHumanParameterEdit)
+	{
+		bool bSameStructure =
+			ResponseRecipe.RecipeId == Recipe.RecipeId &&
+			ResponseRecipe.Intent == Recipe.Intent &&
+			ResponseRecipe.Primitives.Num() ==
+				Recipe.Primitives.Num();
+		for (
+			int32 PrimitiveIndex = 0;
+			bSameStructure &&
+			PrimitiveIndex < Recipe.Primitives.Num();
+			++PrimitiveIndex
+		)
+		{
+			const FLLMNPCMotionRecipePrimitive& Original =
+				ResponseRecipe.Primitives[PrimitiveIndex];
+			const FLLMNPCMotionRecipePrimitive& Edited =
+				Recipe.Primitives[PrimitiveIndex];
+			bSameStructure =
+				Original.PrimitiveId == Edited.PrimitiveId &&
+				Original.Side == Edited.Side &&
+				Original.TargetSlot == Edited.TargetSlot;
+		}
+		if (!bSameStructure)
+		{
+			return ErrorResult(
+				TEXT("LLMNPC_RECIPE_DRAFT_STRUCTURE_EDIT_FORBIDDEN"),
+				TEXT("Workbench correction may tune validated timing and parameters, but changing the online Recipe structure requires a new generation request.")
+			);
+		}
+	}
+	const FString OnlineRecipeHash =
+		FLLMNPCMotionRecipeCanonicalizer::BuildRecipeHash(
+			CanonicalResponseRecipe
+		);
+
+	FLLMNPCMotionRecipeCompileContext CompileContext;
+	CompileContext.ValidationContext = ValidationContext;
+	FLLMMotionPlan Plan;
+	FLLMNPCCompiledRecipeMetadata CompiledMetadata;
+	if (!FLLMNPCMotionRecipeCompiler::Compile(
+		Recipe,
+		Capability,
+		Registry,
+		CompileContext,
+		Plan,
+		CompiledMetadata,
+		Error
+	))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	if (CompiledMetadata.RecipeHash.IsEmpty())
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_COMPILED_HASH_MISSING"),
+			TEXT("The Recipe Compiler did not produce stable identity metadata.")
+		);
+	}
+
+	TSharedPtr<FJsonObject> CanonicalRecipeObject;
+	TSharedPtr<FJsonObject> RawResponseObject;
+	TSharedPtr<FJsonObject> UserRequestObject;
+	if (
+		!ParseJsonObject(CanonicalRecipe, CanonicalRecipeObject) ||
+		!ParseJsonObject(Evidence.RawResponseJson, RawResponseObject) ||
+		!ParseJsonObject(Evidence.UserJson, UserRequestObject)
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_EVIDENCE_JSON_INVALID"),
+			TEXT("Canonical Recipe or online evidence JSON could not be parsed.")
+		);
+	}
+
+	TSharedRef<FJsonObject> Job = MakeShared<FJsonObject>();
+	Job->SetStringField(
+		TEXT("schema_version"),
+		LLMNPCMotionRecipeAuthoring::JobSchemaVersion
+	);
+	Job->SetStringField(
+		TEXT("request_id"),
+		Evidence.RequestId.ToString(EGuidFormats::DigitsWithHyphensLower)
+	);
+	Job->SetStringField(
+		TEXT("generated_at_utc"),
+		Evidence.GeneratedAtUtc.ToIso8601()
+	);
+	Job->SetStringField(
+		TEXT("provider_id"),
+		Evidence.ProviderId.ToString()
+	);
+	Job->SetStringField(
+		TEXT("provider_model_id"),
+		Evidence.ProviderModelId
+	);
+	Job->SetStringField(
+		TEXT("endpoint_origin"),
+		Evidence.EndpointOrigin
+	);
+	Job->SetStringField(
+		TEXT("non_secret_config_hash"),
+		Evidence.NonSecretConfigHash
+	);
+	Job->SetStringField(
+		TEXT("prompt_version"),
+		Evidence.PromptVersion
+	);
+	Job->SetStringField(TEXT("prompt_hash"), Evidence.PromptHash);
+	Job->SetStringField(
+		TEXT("capability_hash"),
+		CompiledMetadata.CapabilityHash
+	);
+	Job->SetStringField(
+		TEXT("primitive_registry_version"),
+		CompiledMetadata.PrimitiveRegistryVersion
+	);
+	Job->SetStringField(
+		TEXT("compiler_version"),
+		CompiledMetadata.CompilerVersion
+	);
+	Job->SetStringField(
+		TEXT("recipe_hash"),
+		CompiledMetadata.RecipeHash
+	);
+	Job->SetStringField(
+		TEXT("online_recipe_hash"),
+		OnlineRecipeHash
+	);
+	Job->SetBoolField(
+		TEXT("human_parameter_edit"),
+		bHumanParameterEdit
+	);
+	Job->SetStringField(
+		TEXT("compiled_recipe_hash"),
+		CompiledMetadata.CompiledRecipeHash
+	);
+	Job->SetStringField(
+		TEXT("system_prompt"),
+		Evidence.SystemPrompt
+	);
+	Job->SetObjectField(
+		TEXT("authoring_request"),
+		UserRequestObject.ToSharedRef()
+	);
+	Job->SetObjectField(
+		TEXT("provider_response"),
+		RawResponseObject.ToSharedRef()
+	);
+	Job->SetObjectField(
+		TEXT("normalized_recipe"),
+		CanonicalRecipeObject.ToSharedRef()
+	);
+	Job->SetNumberField(TEXT("http_status"), Evidence.HttpStatus);
+	Job->SetNumberField(TEXT("attempt_count"), Evidence.AttemptCount);
+	Job->SetNumberField(
+		TEXT("latency_seconds"),
+		Evidence.TotalLatencySeconds
+	);
+	Job->SetNumberField(TEXT("prompt_tokens"), Evidence.PromptTokens);
+	Job->SetNumberField(
+		TEXT("completion_tokens"),
+		Evidence.CompletionTokens
+	);
+	Job->SetNumberField(TEXT("total_tokens"), Evidence.TotalTokens);
+
+	FString JobJson;
+	if (!SerializeJsonObject(Job, JobJson))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_JOB_SERIALIZE_FAILED"),
+			TEXT("The sanitized online Authoring Job could not be serialized.")
+		);
+	}
+	const FString JobPayloadHash =
+		FLLMNPCUEPIArtifactAdapter::HashJson(JobJson);
+	FString SafeRequestId =
+		Evidence.RequestId.ToString(EGuidFormats::Digits).Left(12);
+	const FString JobPath = FPaths::Combine(
+		GetDraftDirectory(),
+		FString::Printf(
+			TEXT("%s_online_%s.json"),
+			*CatalogSpec.AssetName,
+			*SafeRequestId
+		)
+	);
+	if (!FFileHelper::SaveStringToFile(
+		JobJson,
+		*JobPath,
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM
+	))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_JOB_WRITE_FAILED"),
+			TEXT("The sanitized online Authoring Job could not be preserved.")
+		);
+	}
+
+	TSharedRef<FJsonObject> Provenance = MakeShared<FJsonObject>();
+	Provenance->SetStringField(TEXT("source_type"), TEXT("motion_recipe"));
+	Provenance->SetStringField(
+		TEXT("schema_version"),
+		TEXT("llmnpc.motion_recipe_provenance.v1")
+	);
+	Provenance->SetObjectField(
+		TEXT("motion_recipe"),
+		CanonicalRecipeObject.ToSharedRef()
+	);
+	Provenance->SetStringField(
+		TEXT("recipe_hash"),
+		CompiledMetadata.RecipeHash
+	);
+	Provenance->SetStringField(
+		TEXT("online_recipe_hash"),
+		OnlineRecipeHash
+	);
+	Provenance->SetBoolField(
+		TEXT("human_parameter_edit"),
+		bHumanParameterEdit
+	);
+	Provenance->SetStringField(
+		TEXT("compiled_recipe_hash"),
+		CompiledMetadata.CompiledRecipeHash
+	);
+	Provenance->SetStringField(
+		TEXT("capability_hash"),
+		CompiledMetadata.CapabilityHash
+	);
+	Provenance->SetStringField(
+		TEXT("primitive_registry_version"),
+		CompiledMetadata.PrimitiveRegistryVersion
+	);
+	Provenance->SetStringField(
+		TEXT("compiler_version"),
+		CompiledMetadata.CompilerVersion
+	);
+	Provenance->SetStringField(
+		TEXT("authoring_prompt_version"),
+		Evidence.PromptVersion
+	);
+	Provenance->SetStringField(
+		TEXT("authoring_prompt_hash"),
+		Evidence.PromptHash
+	);
+	Provenance->SetStringField(
+		TEXT("authoring_job_hash"),
+		JobPayloadHash
+	);
+	TSharedRef<FJsonObject> License = MakeShared<FJsonObject>();
+	License->SetStringField(
+		TEXT("identifier"),
+		TEXT("project_owned_generated_motion_recipe")
+	);
+	License->SetStringField(TEXT("holder"), TEXT("project_owner"));
+	License->SetBoolField(TEXT("redistribution_allowed"), true);
+	Provenance->SetObjectField(TEXT("source_license"), License);
+	TSharedRef<FJsonObject> Agent = MakeShared<FJsonObject>();
+	Agent->SetStringField(
+		TEXT("provider_id"),
+		Evidence.ProviderId.ToString()
+	);
+	Agent->SetStringField(
+		TEXT("model_id"),
+		Evidence.ProviderModelId
+	);
+	Agent->SetStringField(
+		TEXT("non_secret_config_hash"),
+		Evidence.NonSecretConfigHash
+	);
+	Agent->SetStringField(
+		TEXT("generated_at_utc"),
+		Evidence.GeneratedAtUtc.ToIso8601()
+	);
+	Provenance->SetObjectField(TEXT("authoring_agent"), Agent);
+	TSharedRef<FJsonObject> ImportRecord = MakeShared<FJsonObject>();
+	ImportRecord->SetStringField(
+		TEXT("schema_version"),
+		TEXT("llmnpc.motion_recipe_draft_import.v1")
+	);
+	ImportRecord->SetStringField(
+		TEXT("draft_content_hash"),
+		JobPayloadHash
+	);
+	ImportRecord->SetStringField(
+		TEXT("draft_source_copy_path"),
+		FPaths::ConvertRelativePathToFull(JobPath)
+	);
+	ImportRecord->SetStringField(
+		TEXT("imported_at_utc"),
+		FDateTime::UtcNow().ToIso8601()
+	);
+	Provenance->SetObjectField(TEXT("import_record"), ImportRecord);
+
+	ULLMNPCMotionTemplate* TemplateSeed =
+		NewObject<ULLMNPCMotionTemplate>(GetTransientPackage());
+	TemplateSeed->Kind = ELLMNPCTemplateKind::ProceduralMotion;
+	TemplateSeed->Metadata.TemplateId = CatalogSpec.TemplateId;
+	TemplateSeed->Metadata.PublicActionId = CatalogSpec.PublicActionId;
+	TemplateSeed->Metadata.SemanticVersion = CatalogSpec.SemanticVersion;
+	TemplateSeed->Metadata.CatalogSchemaVersion =
+		LLMNPCCatalog::SchemaVersion;
+	TemplateSeed->Metadata.CatalogRevision = 1;
+	TemplateSeed->Metadata.VariantId = CatalogSpec.VariantId;
+	TemplateSeed->Metadata.VariantWeight = 1.0f;
+	TemplateSeed->Metadata.VariantStyleTags =
+		CatalogSpec.VariantStyleTags;
+	TemplateSeed->Metadata.DisplayName =
+		FText::FromString(CatalogSpec.DisplayName);
+	TemplateSeed->Metadata.Description =
+		FText::FromString(CatalogSpec.SelectionSummary);
+	TemplateSeed->Metadata.VisualDescription =
+		CatalogSpec.VisualDescription;
+	TemplateSeed->Metadata.IntentTags = CatalogSpec.IntentTags;
+	TemplateSeed->Metadata.EmotionTags = CatalogSpec.EmotionTags;
+	TemplateSeed->Metadata.BodyRegionTags =
+		CatalogSpec.BodyRegionTags;
+	TemplateSeed->Metadata.SpatialRequirementTags =
+		CatalogSpec.SpatialRequirementTags;
+	TemplateSeed->Metadata.SemanticEffectTags =
+		CatalogSpec.SemanticEffectTags;
+	TemplateSeed->Metadata.TargetCategoryTags =
+		CatalogSpec.TargetCategoryTags;
+	TemplateSeed->Metadata.RequiredChannels =
+		Validation.RequiredChannels;
+	TemplateSeed->Metadata.BlockedStates = {
+		TEXT("dead"),
+		TEXT("ragdoll"),
+		TEXT("stunned")
+	};
+	for (const FLLMNPCMotionRecipePrimitive& Primitive :
+		Recipe.Primitives)
+	{
+		const FLLMNPCMotionPrimitiveDefinition* Definition =
+			Registry.Find(Primitive.PrimitiveId);
+		TemplateSeed->Metadata.RequiredCapabilities.AddUnique(
+			Primitive.PrimitiveId
+		);
+		if (!Definition)
+		{
+			continue;
+		}
+		for (const FName CapabilityId :
+			Definition->RequiredCapabilities)
+		{
+			TemplateSeed->Metadata.RequiredCapabilities.AddUnique(
+				CapabilityId
+			);
+		}
+		for (const FName BlockedState : Definition->BlockedStates)
+		{
+			TemplateSeed->Metadata.BlockedStates.AddUnique(BlockedState);
+		}
+	}
+	TemplateSeed->Metadata.RequiredCapabilities.Sort(
+		FNameLexicalLess()
+	);
+	TemplateSeed->Metadata.RequiredChannels.Sort(FNameLexicalLess());
+	TemplateSeed->Metadata.BlockedStates.Sort(FNameLexicalLess());
+	TemplateSeed->Metadata.SkeletonProfileId = SkeletonProfileId;
+	TemplateSeed->Metadata.bRequiresTarget = false;
+	TemplateSeed->Metadata.bCanRunWhileMoving =
+		CatalogSpec.bCanRunWhileMoving;
+	TemplateSeed->Metadata.bAllowRuntimeModelSelection = true;
+	TemplateSeed->Metadata.CooldownSeconds = 1.0f;
+	TemplateSeed->Metadata.Expressiveness =
+		FMath::Clamp(CatalogSpec.Expressiveness, 0.0f, 1.0f);
+	TemplateSeed->Metadata.Energy =
+		FMath::Clamp(CatalogSpec.Energy, 0.0f, 1.0f);
+	TemplateSeed->Metadata.SocialIntensity =
+		FMath::Clamp(CatalogSpec.SocialIntensity, 0.0f, 1.0f);
+	TemplateSeed->Metadata.VariantDifference =
+		TEXT("Online model-authored Motion Recipe compiled for the Manny capability profile.");
+	TemplateSeed->Metadata.SourceRecipeHash =
+		CompiledMetadata.RecipeHash;
+	TemplateSeed->Metadata.KinematicReportHash =
+		SkeletonProfile->UpperBodyConstraints.ValidationBaselineHash;
+	TemplateSeed->Metadata.ReviewState =
+		ELLMNPCTemplateReviewState::Generated;
+
+	TemplateSeed->ModifierPolicy.PolicyVersion = 2;
+	TemplateSeed->ModifierPolicy.AmplitudeRange =
+		FVector2D(0.85f, 1.15f);
+	TemplateSeed->ModifierPolicy.SpeedRange =
+		FVector2D(0.9f, 1.1f);
+	TemplateSeed->ModifierPolicy.DurationRange =
+		FVector2D(0.95f, 1.05f);
+	TemplateSeed->ModifierPolicy.bAllowMirror = false;
+	TemplateSeed->ModifierPolicy.AllowedStyleTags =
+		CatalogSpec.VariantStyleTags;
+	TemplateSeed->ModifierPolicy.TorsoParticipationRange =
+		FVector2D(0.8f, 1.0f);
+	TemplateSeed->ModifierPolicy.RandomAmplitudeJitter = 0.015f;
+	TemplateSeed->ModifierPolicy.RandomSpeedJitter = 0.015f;
+	TemplateSeed->ModifierPolicy.RandomFrequencyJitter = 0.0f;
+	TemplateSeed->ModifierPolicy.RandomPhaseJitterRadians = 0.0f;
+	TemplateSeed->ProceduralClip = Plan.Clip;
+	if (!SerializeJsonObject(
+		Provenance,
+		TemplateSeed->SourceProvenanceJson
+	))
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_PROVENANCE_SERIALIZE_FAILED"),
+			TEXT("Motion Recipe provenance could not be serialized.")
+		);
+	}
+	FString TemplateValidationError;
+	if (!TemplateSeed->ValidateTemplate(TemplateValidationError))
+	{
+		return ErrorResult(
+			FName(*TemplateValidationError),
+			TemplateValidationError
+		);
+	}
+
+	ULLMNPCPublicActionDefinition* Definition =
+		FindPublicActionDefinition(CatalogSpec.PublicActionId);
+	TObjectPtr<ULLMNPCPublicActionDefinition> DefinitionSeed;
+	if (Definition)
+	{
+		if (
+			Definition->bRequiresTarget ||
+			Definition->TargetCategoryTags !=
+				CatalogSpec.TargetCategoryTags
+		)
+		{
+			return ErrorResult(
+				TEXT("LLMNPC_RECIPE_DRAFT_PUBLIC_ACTION_CONFLICT"),
+				TEXT("An existing Public Action has an incompatible target contract.")
+			);
+		}
+	}
+	else
+	{
+		DefinitionSeed =
+			NewObject<ULLMNPCPublicActionDefinition>(
+				GetTransientPackage()
+			);
+		DefinitionSeed->PublicActionId =
+			CatalogSpec.PublicActionId;
+		DefinitionSeed->SemanticVersion =
+			CatalogSpec.SemanticVersion;
+		DefinitionSeed->DefinitionRevision = 1;
+		DefinitionSeed->DisplayName =
+			FText::FromString(CatalogSpec.DisplayName);
+		DefinitionSeed->SelectionSummary =
+			CatalogSpec.SelectionSummary;
+		DefinitionSeed->SuitableWhen = CatalogSpec.SuitableWhen;
+		DefinitionSeed->AvoidWhen = CatalogSpec.AvoidWhen;
+		DefinitionSeed->SemanticEffectTags =
+			CatalogSpec.SemanticEffectTags;
+		DefinitionSeed->TargetCategoryTags =
+			CatalogSpec.TargetCategoryTags;
+		DefinitionSeed->GestureFamily =
+			CatalogSpec.GestureFamily;
+		DefinitionSeed->DefaultStyle =
+			CatalogSpec.DefaultStyle;
+		DefinitionSeed->SearchKeywords =
+			CatalogSpec.SearchKeywords;
+		DefinitionSeed->bRequiresTarget = false;
+		DefinitionSeed->CatalogSchemaVersion =
+			LLMNPCCatalog::PublicActionSchemaVersion;
+		DefinitionSeed->ReviewState =
+			ELLMNPCTemplateReviewState::Generated;
+		TSharedRef<FJsonObject> DefinitionReview =
+			MakeShared<FJsonObject>();
+		DefinitionReview->SetStringField(
+			TEXT("schema_version"),
+			TEXT("llmnpc.public_action_review.v1")
+		);
+		DefinitionReview->SetStringField(
+			TEXT("authoring_bundle_id"),
+			CompiledMetadata.CompiledRecipeHash
+		);
+		DefinitionReview->SetStringField(
+			TEXT("source_recipe_hash"),
+			CompiledMetadata.RecipeHash
+		);
+		SerializeJsonObject(
+			DefinitionReview,
+			DefinitionSeed->ReviewRecordJson
+		);
+		DefinitionSeed->ContentHash =
+			ULLMNPCPublicActionDefinition::BuildContentHash(
+				*DefinitionSeed
+			);
+		const ULLMNPCSettings* Settings =
+			GetDefault<ULLMNPCSettings>();
+		ULLMNPCActionVocabulary* Vocabulary =
+			Settings
+				? Settings->ActionVocabulary.LoadSynchronous()
+				: nullptr;
+		FString DefinitionError;
+		if (
+			!Vocabulary ||
+			!DefinitionSeed->ValidateDefinition(
+				Vocabulary,
+				DefinitionError
+			)
+		)
+		{
+			return ErrorResult(
+				DefinitionError.IsEmpty()
+					? TEXT("LLMNPC_RECIPE_DRAFT_VOCABULARY_MISSING")
+					: FName(*DefinitionError),
+				DefinitionError.IsEmpty()
+					? TEXT("The Action Vocabulary is unavailable.")
+					: DefinitionError
+			);
+		}
+	}
+
+	ULLMNPCMotionTemplate* TemplateAsset = nullptr;
+	if (!CreateTemplateAsset(
+		DestinationPackagePath,
+		CatalogSpec.AssetName,
+		*TemplateSeed,
+		TemplateAsset,
+		Error
+	))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+	if (!SaveTemplateAsset(TemplateAsset, Error))
+	{
+		return ErrorResult(FName(*Error), Error);
+	}
+
+	if (DefinitionSeed)
+	{
+		if (!CreatePublicActionAsset(
+			PublicActionDraftDestinationPath,
+			CatalogSpec.PublicActionAssetName,
+			*DefinitionSeed,
+			Definition,
+			Error
+		))
+		{
+			return ErrorResult(FName(*Error), Error);
+		}
+		if (!SavePublicActionAsset(Definition, Error))
+		{
+			return ErrorResult(FName(*Error), Error);
+		}
+	}
+
+	FLLMNPCAuthoringOperationResult Result = SuccessResult(
+		Definition && Definition->IsPublished()
+			? TEXT("Online Motion Recipe compiled as a Generated template; its Public Action is already Published.")
+			: TEXT("Online Motion Recipe compiled as a Generated template with a separate Generated Public Action draft. Neither is runtime-selectable."),
+		TemplateAsset->GetPathName(),
+		TemplateAsset
+	);
+	Result.PublicActionAsset = Definition;
+	return Result;
+}
+
 FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQualityReport(
 	ULLMNPCMotionTemplate* Template,
 	const FString& ReconstructionProfileFilePath,
@@ -1190,6 +2382,51 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 		bProvenanceJsonValid,
 		bProvenanceJsonValid ? TEXT("Provenance JSON parses.") : TEXT("Provenance JSON is invalid.")
 	);
+	const bool bMotionRecipeTemplate =
+		!bAnimationTemplate &&
+		!Template->Metadata.SourceRecipeHash.TrimStartAndEnd().IsEmpty();
+	FLLMNPCRecipeQualityIdentity RecipeIdentity;
+	if (bMotionRecipeTemplate)
+	{
+		FString RecipeEvidenceError;
+		const bool bRecipeEvidenceValid =
+			bProvenanceJsonValid &&
+			ValidateMotionRecipeEvidenceEnvelope(
+				Provenance,
+				RecipeEvidenceError
+			);
+		AddCheck(
+			TEXT("motion_recipe_provenance"),
+			bRecipeEvidenceValid,
+			bRecipeEvidenceValid
+				? TEXT("Online Motion Recipe Job, provider identity, prompt, license, and sanitized source evidence validate.")
+				: (
+					RecipeEvidenceError.IsEmpty()
+						? TEXT("Motion Recipe provenance is invalid.")
+						: RecipeEvidenceError
+				)
+		);
+		FString RecipeCompileError;
+		const bool bRecipeRecompiled =
+			bRecipeEvidenceValid &&
+			RecompileMotionRecipeTemplate(
+				*Template,
+				Provenance,
+				RecipeIdentity,
+				RecipeCompileError
+			);
+		AddCheck(
+			TEXT("motion_recipe_recompile"),
+			bRecipeRecompiled,
+			bRecipeRecompiled
+				? TEXT("Recipe recompiles deterministically to the stored Motion Clip under the current Manny Capability.")
+				: (
+					RecipeCompileError.IsEmpty()
+						? TEXT("Motion Recipe could not be deterministically recompiled.")
+						: RecipeCompileError
+				)
+		);
+	}
 	if (bAnimationTemplate)
 	{
 		FString ImportedAnimationAssetPackageHash;
@@ -1284,6 +2521,15 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 			));
 		}
 	}
+	else if (bMotionRecipeTemplate)
+	{
+		if (bReconstructionRequested)
+		{
+			Warnings.Add(MakeShared<FJsonValueString>(
+				TEXT("Reconstruction Profile input is ignored for a Motion Recipe Draft; deterministic Recipe recompilation is authoritative.")
+			));
+		}
+	}
 	else
 	{
 		AddCheck(
@@ -1311,7 +2557,16 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 	}
 
 	FString FullPoseValidation = TEXT("not_requested");
-	if (!FullPoseArtifactFilePath.TrimStartAndEnd().IsEmpty())
+	if (bMotionRecipeTemplate)
+	{
+		if (!FullPoseArtifactFilePath.TrimStartAndEnd().IsEmpty())
+		{
+			Warnings.Add(MakeShared<FJsonValueString>(
+				TEXT("Full Pose Artifact input is ignored for a Motion Recipe Draft.")
+			));
+		}
+	}
+	else if (!FullPoseArtifactFilePath.TrimStartAndEnd().IsEmpty())
 	{
 		FString FullPoseJson;
 		const bool bFullPoseRead = FFileHelper::LoadFileToString(
@@ -1385,9 +2640,40 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 			? TEXT("animation_asset")
 			: TEXT("procedural_motion")
 	);
+	Report->SetStringField(
+		TEXT("source_type"),
+		bMotionRecipeTemplate
+			? TEXT("motion_recipe")
+			: bAnimationTemplate
+				? TEXT("animation_asset")
+				: TEXT("reconstruction_profile")
+	);
 	Report->SetStringField(TEXT("generated_at_utc"), FDateTime::UtcNow().ToIso8601());
 	Report->SetStringField(TEXT("source_reconstruction_hash"), Summary.ProfileContentHash);
 	Report->SetStringField(TEXT("full_pose_validation"), FullPoseValidation);
+	if (bMotionRecipeTemplate)
+	{
+		Report->SetStringField(
+			TEXT("source_recipe_hash"),
+			RecipeIdentity.RecipeHash
+		);
+		Report->SetStringField(
+			TEXT("compiled_recipe_hash"),
+			RecipeIdentity.CompiledRecipeHash
+		);
+		Report->SetStringField(
+			TEXT("capability_hash"),
+			RecipeIdentity.CapabilityHash
+		);
+		Report->SetStringField(
+			TEXT("primitive_registry_version"),
+			RecipeIdentity.RegistryVersion
+		);
+		Report->SetStringField(
+			TEXT("compiler_version"),
+			RecipeIdentity.CompilerVersion
+		);
+	}
 	if (bAnimationTemplate)
 	{
 		Report->SetStringField(
@@ -2070,6 +3356,24 @@ FString ULLMNPCTemplateAuthoringSubsystem::GetPublishedSourceDirectory()
 	));
 }
 
+FString ULLMNPCTemplateAuthoringSubsystem::
+	GetPublishedPublicActionSourceDirectory()
+{
+	const TSharedPtr<IPlugin> Plugin =
+		IPluginManager::Get().FindPlugin(TEXT("LLMNPCActionLayer"));
+	if (Plugin.IsValid() && !Plugin->GetDescriptor().bInstalled)
+	{
+		return FPaths::ConvertRelativePathToFull(FPaths::Combine(
+			Plugin->GetBaseDir(),
+			TEXT("Resources/PublicActions/Published")
+		));
+	}
+	return FPaths::ConvertRelativePathToFull(FPaths::Combine(
+		FPaths::ProjectDir(),
+		TEXT("LLMNPCSource/PublicActions/Published")
+	));
+}
+
 bool ULLMNPCTemplateAuthoringSubsystem::CompileTemplateForPreview(
 	const ULLMNPCMotionTemplate& Template,
 	FLLMMotionPlan& OutPlan,
@@ -2091,6 +3395,9 @@ bool ULLMNPCTemplateAuthoringSubsystem::CompileTemplateForPreview(
 		GetTransientPackage()
 	);
 	PreviewCopy->Metadata.ReviewState = ELLMNPCTemplateReviewState::Published;
+	PreviewCopy->Metadata.CatalogContentHash.Reset();
+	PreviewCopy->Metadata.CatalogContentHash =
+		ULLMNPCMotionTemplate::BuildCatalogContentHash(*PreviewCopy);
 	return FLLMNPCTemplateCompiler::Compile(
 		*PreviewCopy,
 		FLLMNPCTemplateModifiers(),
@@ -2109,10 +3416,7 @@ bool ULLMNPCTemplateAuthoringSubsystem::EnsureAuthoringDirectories(FString& OutE
 		GetRejectedDirectory(),
 		FPaths::Combine(FPaths::GetPath(GetDraftDirectory()), TEXT("Contexts")),
 		GetPublishedSourceDirectory(),
-		FPaths::ConvertRelativePathToFull(FPaths::Combine(
-			FPaths::ProjectDir(),
-			TEXT("LLMNPCSource/PublicActions/Published")
-		))
+		GetPublishedPublicActionSourceDirectory()
 	};
 	for (const FString& Directory : Directories)
 	{
@@ -2359,10 +3663,7 @@ bool ULLMNPCTemplateAuthoringSubsystem::ExportPublishedPublicActionSource(
 		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_SOURCE_SERIALIZE_FAILED");
 		return false;
 	}
-	const FString Directory = FPaths::ConvertRelativePathToFull(FPaths::Combine(
-		FPaths::ProjectDir(),
-		TEXT("LLMNPCSource/PublicActions/Published")
-	));
+	const FString Directory = GetPublishedPublicActionSourceDirectory();
 	if (!IFileManager::Get().MakeDirectory(*Directory, true))
 	{
 		OutError = TEXT("LLMNPC_AUTHORING_PUBLIC_ACTION_SOURCE_DIRECTORY_FAILED");
@@ -2510,6 +3811,69 @@ bool ULLMNPCTemplateAuthoringSubsystem::HasCurrentPassingQualityReport(
 				static_cast<double>(Sequence->GetPlayLength()),
 				1.e-6
 			)
+		)
+		{
+			OutError = TEXT("LLMNPC_AUTHORING_QUALITY_REPORT_STALE");
+			return false;
+		}
+	}
+	else if (!Template.Metadata.SourceRecipeHash.TrimStartAndEnd().IsEmpty())
+	{
+		TSharedPtr<FJsonObject> Provenance;
+		FLLMNPCRecipeQualityIdentity Identity;
+		FString EvidenceError;
+		FString RecompileError;
+		FString ReportSourceType;
+		FString ReportRecipeHash;
+		FString ReportCompiledHash;
+		FString ReportCapabilityHash;
+		FString ReportRegistryVersion;
+		FString ReportCompilerVersion;
+		if (
+			!ParseJsonObject(
+				Template.SourceProvenanceJson,
+				Provenance
+			) ||
+			!ValidateMotionRecipeEvidenceEnvelope(
+				Provenance,
+				EvidenceError
+			) ||
+			!RecompileMotionRecipeTemplate(
+				Template,
+				Provenance,
+				Identity,
+				RecompileError
+			) ||
+			!Report->TryGetStringField(
+				TEXT("source_type"),
+				ReportSourceType
+			) ||
+			ReportSourceType != TEXT("motion_recipe") ||
+			!Report->TryGetStringField(
+				TEXT("source_recipe_hash"),
+				ReportRecipeHash
+			) ||
+			ReportRecipeHash != Identity.RecipeHash ||
+			!Report->TryGetStringField(
+				TEXT("compiled_recipe_hash"),
+				ReportCompiledHash
+			) ||
+			ReportCompiledHash != Identity.CompiledRecipeHash ||
+			!Report->TryGetStringField(
+				TEXT("capability_hash"),
+				ReportCapabilityHash
+			) ||
+			ReportCapabilityHash != Identity.CapabilityHash ||
+			!Report->TryGetStringField(
+				TEXT("primitive_registry_version"),
+				ReportRegistryVersion
+			) ||
+			ReportRegistryVersion != Identity.RegistryVersion ||
+			!Report->TryGetStringField(
+				TEXT("compiler_version"),
+				ReportCompilerVersion
+			) ||
+			ReportCompilerVersion != Identity.CompilerVersion
 		)
 		{
 			OutError = TEXT("LLMNPC_AUTHORING_QUALITY_REPORT_STALE");

@@ -230,6 +230,17 @@ const TArray<FLLMAnchorDefinition>& BuiltInAnchors()
 			LeftWave.OffsetCS.Y *= -1.0f;
 			Result.Add(LeftWave);
 
+			FLLMAnchorDefinition RightShrug;
+			RightShrug.AnchorId = TEXT("right_shrug");
+			RightShrug.BoneName = TEXT("spine_03");
+			RightShrug.OffsetCS = FVector(-42.0f, 28.0f, -30.0f);
+			Result.Add(RightShrug);
+
+			FLLMAnchorDefinition LeftShrug = RightShrug;
+			LeftShrug.AnchorId = TEXT("left_shrug");
+			LeftShrug.OffsetCS.X *= -1.0f;
+			Result.Add(LeftShrug);
+
 			FLLMAnchorDefinition ChestFront;
 			ChestFront.AnchorId = TEXT("chest_front");
 			ChestFront.BoneName = TEXT("spine_03");

@@ -52,6 +52,10 @@ player text / story command
 - `ILLMNPCModelProvider`
 - `ULLMNPCControlManifest`
 - `ULLMNPCMotionValidator`
+- `FLLMNPCMotionPrimitiveRegistry`
+- `FLLMNPCMotionRecipeParser`
+- `FLLMNPCMotionRecipeValidator`
+- `FLLMNPCMotionRecipeCompiler`
 - `ULLMNPCTemplateLibrarySubsystem`
 - `ULLMNPCMotionTemplate`
 - `ULLMNPCSkeletonProfile`
@@ -70,6 +74,12 @@ head.roll
 chest.pitch
 chest.yaw
 chest.roll
+right_shoulder.pitch
+right_shoulder.yaw
+right_shoulder.roll
+left_shoulder.pitch
+left_shoulder.yaw
+left_shoulder.roll
 right_hand.ik
 right_hand.local_offset.x
 right_hand.local_offset.y
@@ -85,6 +95,7 @@ right_hand.pitch
 right_hand.yaw
 right_hand.roll
 right_fingers.open
+right_fingers.relaxed
 right_fingers.point
 left_hand.ik
 left_hand.local_offset.x
@@ -92,6 +103,7 @@ left_hand.local_offset.y
 left_hand.local_offset.z
 left_hand.palm_target
 left_fingers.open
+left_fingers.relaxed
 left_fingers.point
 gaze.target
 ```
@@ -106,9 +118,14 @@ gesture.wave.right.manny.fk.v1
 gesture.wave.right.manny.procedural.v1
 gesture.point.target.manny.v1
 gesture.wave.right.manny.subtle.v1
+gesture.clap.manny.asset.v1
 ```
 
-Runtime model selection exposes the skeleton-independent public IDs `gesture.nod`, `gesture.wave.right`, and `gesture.point.target`. The faithful FK wave remains available by exact ID for trusted debug and review workflows, but is hidden from model candidate selection. Target Point is offered only while at least one legal scene target exists.
+Runtime model selection exposes skeleton-independent public IDs such as
+`gesture.nod`, `gesture.wave.right`, `gesture.point.target`, and
+`gesture.clap`. The faithful FK wave remains available by exact ID for trusted
+debug and review workflows, but is hidden from model candidate selection.
+Target Point is offered only while at least one legal scene target exists.
 
 ## Restricted Style And Micro Motion
 
@@ -400,17 +417,49 @@ For an editable project plugin, approved canonical JSON is versioned under:
 
 ```text
 Resources/Templates/Published
+Resources/PublicActions/Published
 ```
 
 Installed plugins fall back to
-`<Project>/LLMNPCSource/Templates/Published`, so project authors never need to
-write into a read-only plugin installation. Runtime still loads cooked
-`ULLMNPCMotionTemplate` assets rather than JSON. Licensed raw Animation Assets
-marked as non-redistributable remain host-project dependencies and are not
-copied into the plugin.
+`<Project>/LLMNPCSource/Templates/Published` and
+`<Project>/LLMNPCSource/PublicActions/Published`, so project authors never
+need to write into a read-only plugin installation. Runtime still loads cooked
+Data Assets rather than JSON. Licensed raw Animation Assets marked as
+non-redistributable remain host-project dependencies and are not copied into
+the plugin.
 
 See `Docs/Phases/forward-n4-animation-asset-clap.md` for the accepted online PIE
 evidence and release boundary.
+
+## Forward N5 Motion Recipe Authoring
+
+N5 adds a no-reference procedural authoring path. The online Authoring Model
+receives a capability-filtered semantic Primitive Registry, a strict Motion
+Recipe Schema, the desired action, and bounded Published-template summaries.
+It returns only registered primitives and bounded semantic parameters. Bone
+names, transforms, axes, IK anchors, control IDs, and solver IDs remain private
+to Unreal.
+
+The first Recipe compiler target is a Manny bilateral Shrug with coordinated
+shoulders, upper chest, arm IK, wrists, and calibrated relaxed fingers.
+Generated Recipes are deterministically compiled into quarantined Motion
+Template Drafts. They must pass evidence-bound quality checks, human PIE
+preview, review, and explicit publication before runtime selection can see
+them.
+
+Version-controlled N5 artifacts include:
+
+```text
+Resources/Schemas/llmnpc_motion_recipe_v1.schema.json
+Source/LLMNPCActionLayer/Public/MotionRecipe
+Source/LLMNPCActionLayer/Private/MotionRecipe
+```
+
+Open `Generate` in the Template Workbench for the online authoring flow. The
+checked-in Schema can be refreshed with
+`LLMNPC.ExportMotionRecipeSchema`. See
+`Docs/Phases/forward-n5-motion-recipe-shrug.md` for trust boundaries,
+provenance, quality gates, and acceptance steps.
 
 ## Product Runtime
 

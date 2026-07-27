@@ -1,6 +1,10 @@
 #pragma once
 
+#include "Authoring/LLMNPCMotionRecipeAuthoringPrompt.h"
+#include "Authoring/LLMNPCTemplateAuthoringSubsystem.h"
+#include "Capabilities/LLMNPCSkeletonCapabilityTypes.h"
 #include "CoreMinimal.h"
+#include "Online/LLMNPCAuthoringModelClient.h"
 #include "Templates/LLMNPCTemplateSearchIndex.h"
 #include "UObject/GCObject.h"
 #include "Widgets/SCompoundWidget.h"
@@ -26,6 +30,7 @@ enum class ELLMNPCTemplateWorkbenchPage : uint8
 {
 	Library,
 	Import,
+	Generate,
 	Preview,
 	Quality,
 	Review
@@ -73,7 +78,7 @@ public:
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
-	virtual ~SLLMNPCTemplateWorkbench() override = default;
+	virtual ~SLLMNPCTemplateWorkbench() override;
 
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
 	virtual FString GetReferencerName() const override;
@@ -94,6 +99,17 @@ private:
 	FString CandidateCardJson;
 	FString QualityText;
 	FString SelectedAnimationAssetPath;
+	FString RecipeGenerationSummary;
+	FString GenerationEndpointOrigin;
+	FString GenerationConfigHash;
+	bool bAuthoringRequestPending = false;
+	FGuid ActiveAuthoringRequestId;
+	FDateTime RecipeGeneratedAtUtc;
+	FLLMNPCMotionRecipePromptPackage LastRecipePrompt;
+	FLLMNPCMotionRecipeAuthoringResponse LastRecipeResponse;
+	FLLMNPCSkeletonCapabilitySnapshot LastRecipeCapability;
+	FLLMNPCAuthoringJsonResult LastAuthoringResult;
+	TSharedPtr<FLLMNPCAuthoringModelClient> AuthoringModelClient;
 
 	TArray<UObject*> ReferencedAssets;
 	TArray<TSharedPtr<FLLMNPCTemplateWorkbenchItem>> AllItems;
@@ -104,6 +120,7 @@ private:
 	TArray<TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption>> SkeletonOptions;
 	TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption> SelectedSkeleton;
 	TSharedPtr<SComboBox<TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption>>> SkeletonCombo;
+	TSharedPtr<SComboBox<TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption>>> GenerateSkeletonCombo;
 
 	TArray<TSharedPtr<FLLMNPCTemplateWorkbenchActorOption>> ActorOptions;
 	TSharedPtr<FLLMNPCTemplateWorkbenchActorOption> SelectedActor;
@@ -112,6 +129,10 @@ private:
 	TSharedPtr<SWidgetSwitcher> PageSwitcher;
 	TSharedPtr<SEditableTextBox> AnimationDraftPathBox;
 	TSharedPtr<SEditableTextBox> AnimationDestinationPathBox;
+	TSharedPtr<SMultiLineEditableTextBox> RecipeIntentBox;
+	TSharedPtr<SEditableTextBox> RecipeDestinationPathBox;
+	TSharedPtr<SMultiLineEditableTextBox> RecipeJsonBox;
+	TSharedPtr<SMultiLineEditableTextBox> RecipeEvidenceBox;
 	TSharedPtr<SMultiLineEditableTextBox> CandidateCardBox;
 	TSharedPtr<SMultiLineEditableTextBox> QualityBox;
 	TSharedPtr<SEditableTextBox> ReconstructionPathBox;
@@ -124,6 +145,7 @@ private:
 	TSharedRef<SWidget> BuildToolbar();
 	TSharedRef<SWidget> BuildLibraryPage();
 	TSharedRef<SWidget> BuildImportPage();
+	TSharedRef<SWidget> BuildGeneratePage();
 	TSharedRef<SWidget> BuildPreviewPage();
 	TSharedRef<SWidget> BuildQualityPage();
 	TSharedRef<SWidget> BuildReviewPage();
@@ -154,6 +176,7 @@ private:
 	FText GetSelectedSummaryText() const;
 	FText GetCatalogSummaryText() const;
 	FText GetAnimationImportSummaryText() const;
+	FText GetRecipeGenerationSummaryText() const;
 	FText GetReviewStateText() const;
 	FText GetReviewDestinationText() const;
 	FSlateColor GetStatusColor() const;
@@ -161,6 +184,9 @@ private:
 	ECheckBoxState GetIncludeNonPublishedState() const;
 	bool CanPreviewSelection() const;
 	bool CanImportAnimationDraft() const;
+	bool CanGenerateMotionRecipe() const;
+	bool CanCancelMotionRecipeGeneration() const;
+	bool CanCreateMotionRecipeDraft() const;
 	bool CanGenerateQualityReport() const;
 	bool CanMarkPreviewed() const;
 	bool CanApprove() const;
@@ -197,6 +223,9 @@ private:
 	FReply HandleOpenAsset();
 	FReply HandleBrowseAnimationDraft();
 	FReply HandleImportAnimationDraft();
+	FReply HandleGenerateMotionRecipe();
+	FReply HandleCancelMotionRecipeGeneration();
+	FReply HandleCreateMotionRecipeDraft();
 	FReply HandlePreview();
 	FReply HandleValidate();
 	FReply HandleGenerateQualityReport();

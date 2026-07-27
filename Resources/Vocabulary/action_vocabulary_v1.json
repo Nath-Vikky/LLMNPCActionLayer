@@ -1,9 +1,9 @@
 {
 	"schema_version": "llmnpc.action_vocabulary.v1",
 	"vocabulary_id": "llmnpc.manny_social_actions",
-	"semantic_version": "1.0.0",
-	"revision": 1,
-	"content_hash": "md5:1d842a151f0f80dfb22e261c9223ca0e",
+	"semantic_version": "1.1.0",
+	"revision": 2,
+	"content_hash": "md5:e5e78249e04ddf438470155f9091bdab",
 	"entries": [
 		{
 			"tag": "nod",
@@ -42,6 +42,17 @@
 			"tag": "clap",
 			"display_name_en": "Clap",
 			"display_name_zh": "鼓掌",
+			"synonyms": [],
+			"allowed_fields": [
+				"GestureFamily"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "shrug",
+			"display_name_en": "Shrug",
+			"display_name_zh": "耸肩",
 			"synonyms": [],
 			"allowed_fields": [
 				"GestureFamily"
@@ -183,6 +194,31 @@
 			"replacement_tag": "None"
 		},
 		{
+			"tag": "express_uncertainty",
+			"display_name_en": "Express uncertainty",
+			"display_name_zh": "表达不确定",
+			"synonyms": [
+				"uncertain_response"
+			],
+			"allowed_fields": [
+				"Intent",
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "noncommittal",
+			"display_name_en": "Noncommittal",
+			"display_name_zh": "不置可否",
+			"synonyms": [],
+			"allowed_fields": [
+				"SemanticEffect"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
 			"tag": "neutral",
 			"display_name_en": "Neutral",
 			"display_name_zh": "中性",
@@ -235,6 +271,18 @@
 			"display_name_zh": "轻微",
 			"synonyms": [],
 			"allowed_fields": [
+				"VariantStyle"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "uncertain",
+			"display_name_en": "Uncertain",
+			"display_name_zh": "不确定",
+			"synonyms": [],
+			"allowed_fields": [
+				"Emotion",
 				"VariantStyle"
 			],
 			"deprecated": false,
@@ -321,6 +369,39 @@
 			"tag": "two_hands",
 			"display_name_en": "Two hands",
 			"display_name_zh": "双手",
+			"synonyms": [],
+			"allowed_fields": [
+				"BodyRegion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "shoulders",
+			"display_name_en": "Shoulders",
+			"display_name_zh": "肩部",
+			"synonyms": [],
+			"allowed_fields": [
+				"BodyRegion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "upper_torso",
+			"display_name_en": "Upper torso",
+			"display_name_zh": "上半身",
+			"synonyms": [],
+			"allowed_fields": [
+				"BodyRegion"
+			],
+			"deprecated": false,
+			"replacement_tag": "None"
+		},
+		{
+			"tag": "two_arms",
+			"display_name_en": "Two arms",
+			"display_name_zh": "双臂",
 			"synonyms": [],
 			"allowed_fields": [
 				"BodyRegion"

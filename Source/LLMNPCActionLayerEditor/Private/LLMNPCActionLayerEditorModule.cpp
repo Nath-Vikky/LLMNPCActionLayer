@@ -9,8 +9,10 @@
 #include "Framework/Docking/TabManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Interfaces/IPluginManager.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Misc/Parse.h"
+#include "MotionRecipe/LLMNPCMotionPrimitiveRegistry.h"
 #include "Online/LLMNPCCapabilitySmokeRunner.h"
 #include "Online/LLMNPCCatalogSelectionSmokeRunner.h"
 #include "Online/LLMNPCContextModifierSmokeRunner.h"
@@ -43,6 +45,70 @@ FAutoConsoleCommand OpenTemplateWorkbenchCommand(
 	TEXT("LLMNPC.OpenTemplateWorkbench"),
 	TEXT("Open the LLM NPC Template Workbench Nomad tab."),
 	FConsoleCommandDelegate::CreateStatic(&OpenTemplateWorkbenchTab)
+);
+
+void ExportMotionRecipeSchema()
+{
+	const TSharedPtr<IPlugin> Plugin =
+		IPluginManager::Get().FindPlugin(TEXT("LLMNPCActionLayer"));
+	if (!Plugin.IsValid())
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("Motion Recipe Schema export could not resolve the plugin directory.")
+		);
+		return;
+	}
+	FString SchemaJson;
+	FString Error;
+	if (!FLLMNPCMotionPrimitiveRegistry::Get().BuildModelSchemaJson(
+		nullptr,
+		SchemaJson,
+		Error
+	))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("Motion Recipe Schema export failed: %s"),
+			*Error
+		);
+		return;
+	}
+	const FString OutputPath = FPaths::Combine(
+		Plugin->GetBaseDir(),
+		TEXT("Resources"),
+		TEXT("Schemas"),
+		TEXT("llmnpc_motion_recipe_v1.schema.json")
+	);
+	if (!FFileHelper::SaveStringToFile(
+		SchemaJson,
+		*OutputPath,
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM
+	))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("Motion Recipe Schema could not be written: %s"),
+			*OutputPath
+		);
+		return;
+	}
+	UE_LOG(
+		LogLLMNPCActionLayerEditor,
+		Display,
+		TEXT("Motion Recipe Schema exported. Registry=%s Path=%s"),
+		*FLLMNPCMotionPrimitiveRegistry::Get().GetRegistryVersion(),
+		*OutputPath
+	);
+}
+
+FAutoConsoleCommand ExportMotionRecipeSchemaCommand(
+	TEXT("LLMNPC.ExportMotionRecipeSchema"),
+	TEXT("Export the built-in model-safe Motion Recipe JSON Schema."),
+	FConsoleCommandDelegate::CreateStatic(&ExportMotionRecipeSchema)
 );
 
 void RefreshMannyN1Profile()
