@@ -8,8 +8,9 @@
 - Authoring prompt: `llmnpc.motion_recipe_authoring_prompt.v3`
 - Authoring job: `llmnpc.motion_recipe_authoring_job.v2`
 - Automated N7-A gate: 1/1 passed
-- Real online regeneration, human PIE approval, publication, and runtime reuse:
-  pending human visual acceptance
+- Real online regeneration, human PIE approval, and publication: passed
+  2026-07-27
+- Real online runtime reuse: pending three fresh acceptance turns
 
 ## Goal
 
@@ -97,3 +98,26 @@ LLMNPCActionLayer.ForwardN7.Editor.RejectedDraftRegeneration
 The test proves manual trigger recording, rejected-parent enforcement,
 immutable child identity, trigger lineage in Job and provenance, and
 deterministic Quality acceptance.
+
+## Real Acceptance Evidence
+
+```text
+Provider: deepseek_direct_editor_authoring
+Model: deepseek-v4-flash
+Rejected parent: gesture.shrug.manny.generated.37eb2ce0a588
+Published child: gesture.shrug.manny.generated.5704441acd3d
+Public Action: gesture.shrug 1.0.0 revision 1
+Quality: pass
+Human PIE review: approved with minor detail polish deferred
+```
+
+Canonical sources:
+
+- `Resources/PublicActions/Published/gesture_shrug_1_0_0_r1.json`
+- `Resources/Templates/Published/gesture_shrug_manny_generated_5704441acd3d_1_0_0_r1.json`
+
+The published child retains the rejected-parent Template ID, Recipe hash, and
+bounded human visual feedback. The source files contain no provider credential
+or authorization material. Completion still requires the three real online
+runtime turns listed above to select this Published revision without Mock
+fallback.

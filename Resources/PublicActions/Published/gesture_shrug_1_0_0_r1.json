@@ -1,0 +1,45 @@
+{
+	"schema_version": "llmnpc.published_public_action_source.v1",
+	"asset_path": "/Game/LLMNPCActionLayer/PublicActions/Published/PA_Gesture_Shrug_Draft.PA_Gesture_Shrug_Draft",
+	"content_hash": "md5:c548b0e6fe3c77ec77901be6069782d1",
+	"definition":
+	{
+		"publicActionId": "gesture.shrug",
+		"semanticVersion": "1.0.0",
+		"definitionRevision": 1,
+		"displayName": "Bilateral Shrug Uncertainty",
+		"selectionSummary": "Both shoulders rise together with subtle chest and arm participation, hands relaxed and visible, then return to neutral.",
+		"suitableWhen": [
+			"expressing uncertainty",
+			"showing indifference",
+			"indicating lack of knowledge"
+		],
+		"avoidWhen": [
+			"need for precise pointing",
+			"when hands should be busy",
+			"during lower-body locomotion"
+		],
+		"semanticEffectTags": [
+			"express_uncertainty",
+			"noncommittal"
+		],
+		"targetCategoryTags": [],
+		"gestureFamily": "shrug",
+		"defaultStyle": "uncertain",
+		"incompatibleActionFamilies": [],
+		"searchKeywords": [
+			"shrug",
+			"uncertain",
+			"unsure",
+			"maybe",
+			"do not know"
+		],
+		"bRequiresTarget": false,
+		"catalogSchemaVersion": "llmnpc.public_action_definition.v1",
+		"reviewState": "Published",
+		"contentHash": "md5:c548b0e6fe3c77ec77901be6069782d1",
+		"reviewRecordJson": "{\r\n\t\"schema_version\": \"llmnpc.public_action_review.v1\",\r\n\t\"authoring_bundle_id\": \"md5:bb1c4b0e5e9fe330d545be4c54345d61\",\r\n\t\"source_recipe_hash\": \"md5:ee8d0a786eaaa83b55c07f1d56e0027c\",\r\n\t\"history\": [\r\n\t\t{\r\n\t\t\t\"event\": \"previewed\",\r\n\t\t\t\"reviewer\": \"preview_operator\",\r\n\t\t\t\"notes\": \"Semantic contract approved for expressing uncertainty and noncommittal intent. The action is target-independent and should be avoided when precise pointing or occupied hands are required.\",\r\n\t\t\t\"timestamp_utc\": \"2026-07-27T07:25:29.314Z\",\r\n\t\t\t\"approved\": false\r\n\t\t},\r\n\t\t{\r\n\t\t\t\"event\": \"human_approved\",\r\n\t\t\t\"reviewer\": \"Vikky\",\r\n\t\t\t\"notes\": \"Semantic contract approved for expressing uncertainty and noncommittal intent. The action is target-independent and should be avoided when precise pointing or occupied hands are required.\",\r\n\t\t\t\"timestamp_utc\": \"2026-07-27T07:25:30.246Z\",\r\n\t\t\t\"approved\": true\r\n\t\t}\r\n\t],\r\n\t\"human_review\":\r\n\t{\r\n\t\t\"event\": \"human_approved\",\r\n\t\t\"reviewer\": \"Vikky\",\r\n\t\t\"notes\": \"Semantic contract approved for expressing uncertainty and noncommittal intent. The action is target-independent and should be avoided when precise pointing or occupied hands are required.\",\r\n\t\t\"timestamp_utc\": \"2026-07-27T07:25:30.246Z\",\r\n\t\t\"approved\": true\r\n\t}\r\n}",
+		"assetBundleData": "",
+		"nativeClass": "/Script/CoreUObject.Class'/Script/LLMNPCActionLayer.LLMNPCPublicActionDefinition'"
+	}
+}

@@ -1,0 +1,558 @@
+{
+	"schema_version": "llmnpc.published_template_source.v1",
+	"asset_path": "/Game/LLMNPCActionLayer/MotionTemplates/Published/MT_Shrug_Manny_Generated_5704441acd3d.MT_Shrug_Manny_Generated_5704441acd3d",
+	"catalog_content_hash": "md5:d41d04ecaa5e74e38ca84cdf6351515a",
+	"template_kind": 0,
+	"metadata":
+	{
+		"templateId": "gesture.shrug.manny.generated.5704441acd3d",
+		"publicActionId": "gesture.shrug",
+		"semanticVersion": "1.0.0",
+		"catalogSchemaVersion": "llmnpc.template_catalog.v1",
+		"catalogRevision": 1,
+		"variantId": "generated_recipe",
+		"variantWeight": 1,
+		"variantStyleTags": [
+			"neutral",
+			"subtle",
+			"uncertain"
+		],
+		"displayName": "Manny Both Shoulders Shrug with Subtle Chest and Relaxed Hands",
+		"description": "Both shoulders rise together with subtle chest and arm participation, hands relaxed, then return to neutral.",
+		"visualDescription": "Both shoulders rise together with subtle chest and arm participation, hands relaxed, then return to neutral.",
+		"intentTags": [
+			"express_uncertainty"
+		],
+		"emotionTags": [
+			"uncertain"
+		],
+		"personalityTags": [],
+		"bodyRegionTags": [
+			"shoulders",
+			"upper_torso",
+			"two_arms",
+			"two_hands",
+			"fingers"
+		],
+		"spatialRequirementTags": [
+			"target_independent"
+		],
+		"semanticEffectTags": [
+			"express_uncertainty",
+			"noncommittal"
+		],
+		"targetCategoryTags": [],
+		"requiredCapabilities": [
+			"shoulder.shrug"
+		],
+		"requiredChannels": [
+			"chest",
+			"left_arm_ik",
+			"left_hand_pose",
+			"left_shoulder",
+			"right_arm_ik",
+			"right_hand_pose",
+			"right_shoulder"
+		],
+		"blockedStates": [
+			"dead",
+			"ragdoll",
+			"stunned"
+		],
+		"skeletonProfileId": "ue5_manny.v1",
+		"compatibleSkeletonProfileIds": [],
+		"bRequiresTarget": false,
+		"bCanRunWhileMoving": true,
+		"bAllowRuntimeModelSelection": true,
+		"cooldownSeconds": 1,
+		"expressiveness": 0.60000002384185791,
+		"energy": 0.41999998688697815,
+		"socialIntensity": 0.47999998927116394,
+		"variantDifference": "Online model-authored Motion Recipe compiled for the Manny capability profile.",
+		"sourceRecipeHash": "md5:e4d48775d84addc4f53b68c979abca33",
+		"kinematicReportHash": "md5:09614dd92153bbf5fd3a9f05f4af91bc",
+		"catalogContentHash": "md5:d41d04ecaa5e74e38ca84cdf6351515a",
+		"reviewState": "Published"
+	},
+	"modifier_policy":
+	{
+		"policyVersion": 2,
+		"amplitudeRange":
+		{
+			"x": 0.85000002384185791,
+			"y": 1.1499999761581421
+		},
+		"speedRange":
+		{
+			"x": 0.89999997615814209,
+			"y": 1.1000000238418579
+		},
+		"durationRange":
+		{
+			"x": 0.94999998807907104,
+			"y": 1.0499999523162842
+		},
+		"bAllowMirror": false,
+		"allowedStyleTags": [
+			"neutral",
+			"subtle",
+			"uncertain"
+		],
+		"reachScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"heightScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"lateralScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"cycleCountRange":
+		{
+			"x": 0,
+			"y": 0
+		},
+		"gazeEngagementRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"palmOrientationWeightRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"fingerPoseWeightRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"torsoParticipationRange":
+		{
+			"x": 0.80000001192092896,
+			"y": 1
+		},
+		"blendInScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"blendOutScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"bEnableDynamicTargetTracking": false,
+		"maxTargetFollowSpeedCmPerSecond": 240,
+		"maxTargetAngularSpeedDegreesPerSecond": 180,
+		"targetInterpolationSpeed": 8,
+		"targetTeleportThresholdCm": 250,
+		"targetLostFadeSeconds": 0.18000000715255737,
+		"targetLossPolicy": "FadeOut",
+		"bEnableObstacleAdaptation": false,
+		"minObstacleAmplitudeScale": 0.60000002384185791,
+		"minObstacleReachScale": 0.64999997615814209,
+		"obstacleCancelClearance": 0.20000000298023224,
+		"randomAmplitudeJitter": 0.014999999664723873,
+		"randomSpeedJitter": 0.014999999664723873,
+		"randomFrequencyJitter": 0,
+		"randomPhaseJitterRadians": 0
+	},
+	"procedural_clip":
+	{
+		"clipId": "recipe_a0c54a714f737306",
+		"duration": 1.5,
+		"blendIn": 0,
+		"blendOut": 0,
+		"priority": 0.75,
+		"bInterruptible": true,
+		"tracks": [
+			{
+				"controlId": "right_shoulder.pitch",
+				"trackType": "Hold",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": -14.606249809265137,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "left_shoulder.pitch",
+				"trackType": "Hold",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": 13.893750190734863,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "right_shoulder.yaw",
+				"trackType": "Hold",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": -3.0749998092651367,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "left_shoulder.yaw",
+				"trackType": "Hold",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": 2.9250001907348633,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "chest.pitch",
+				"trackType": "Hold",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": -1.1812499761581421,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "chest.roll",
+				"trackType": "Hold",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": 0.075000002980232239,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "right_hand.ik",
+				"trackType": "Anchor",
+				"valueType": "Vector",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 0.90968745946884155,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "right_shrug",
+				"offset":
+				{
+					"x": 1.4000003337860107,
+					"y": 0,
+					"z": 8
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "left_hand.ik",
+				"trackType": "Anchor",
+				"valueType": "Vector",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 0.86531251668930054,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "left_shrug",
+				"offset":
+				{
+					"x": -1.4000003337860107,
+					"y": 0,
+					"z": 8
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "right_fingers.relaxed",
+				"trackType": "Hold",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": 0.82499998807907104,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "left_fingers.relaxed",
+				"trackType": "Hold",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 1.5,
+				"amplitude": 0.82499998807907104,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			}
+		]
+	},
+	"animation_asset": "",
+	"animation_playback":
+	{
+		"slotName": "DefaultSlot",
+		"blendInSeconds": 0.15000000596046448,
+		"blendOutSeconds": 0.15000000596046448,
+		"startPositionSeconds": 0,
+		"maxDurationSeconds": 10,
+		"bLoop": false,
+		"bInterruptible": true,
+		"bStopOtherMontages": false,
+		"bAllowRootMotion": false
+	},
+	"source_provenance":
+	{
+		"source_type": "motion_recipe",
+		"schema_version": "llmnpc.motion_recipe_provenance.v1",
+		"motion_recipe":
+		{
+			"schema_version": "llmnpc.motion_recipe.v1",
+			"recipe_id": "gesture.shrug.manny.generated.37eb2ce0a589",
+			"intent": "express_uncertainty",
+			"duration": 1.5,
+			"interruptible": true,
+			"primitives": [
+				{
+					"primitive_id": "shoulder.shrug",
+					"side": "none",
+					"start": 0,
+					"end": 1.5,
+					"parameters":
+					{
+						"amplitude": 0.75,
+						"arm_openness": 0.5,
+						"asymmetry": 0.050000000000000003,
+						"palm_openness": 0.75,
+						"speed": 1,
+						"torso_participation": 0.35000000000000003
+					}
+				}
+			]
+		},
+		"recipe_hash": "md5:e4d48775d84addc4f53b68c979abca33",
+		"online_recipe_hash": "md5:e4d48775d84addc4f53b68c979abca33",
+		"human_parameter_edit": false,
+		"compiled_recipe_hash": "md5:a0c54a714f7373061e80475397b17478",
+		"kinematic_report_hash": "md5:09614dd92153bbf5fd3a9f05f4af91bc",
+		"kinematic_baseline_hash": "md5:2e346854d3be9b09e8a666484b5821da",
+		"capability_hash": "md5:9a0b995dac43d28ce4a674fa79d6d532",
+		"primitive_registry_version": "llmnpc.motion_primitives.v1",
+		"compiler_version": "llmnpc.motion_recipe_compiler.v3",
+		"authoring_prompt_version": "llmnpc.motion_recipe_authoring_prompt.v3",
+		"authoring_prompt_hash": "md5:497293871cd3c39ad378c026dce624f8",
+		"authoring_job_hash": "sha1:bfb8e89711df0a1d8c66b5fe62b3ecd99de99739",
+		"authoring_trigger":
+		{
+			"schema_version": "llmnpc.motion_recipe_authoring_trigger.v1",
+			"source": "RegenerateRejectedDraft",
+			"revision_parent":
+			{
+				"template_id": "gesture.shrug.manny.generated.37eb2ce0a588",
+				"recipe_hash": "md5:c26dd80e5e28906d64c8a1423a491cd0",
+				"human_review_feedback": "右手大臂的位置伸展不自然，有点奇怪"
+			}
+		},
+		"source_license":
+		{
+			"identifier": "project_owned_generated_motion_recipe",
+			"holder": "project_owner",
+			"redistribution_allowed": true
+		},
+		"authoring_agent":
+		{
+			"provider_id": "deepseek_direct_editor_authoring",
+			"model_id": "deepseek-v4-flash",
+			"non_secret_config_hash": "bf57dcb49304343a0bd9a95ddea18f88",
+			"generated_at_utc": "2026-07-27T07:07:52.674Z"
+		},
+		"import_record":
+		{
+			"schema_version": "llmnpc.motion_recipe_draft_import.v1",
+			"draft_content_hash": "sha1:bfb8e89711df0a1d8c66b5fe62b3ecd99de99739",
+			"imported_at_utc": "2026-07-27T07:08:15.753Z"
+		},
+		"review_history": [
+			{
+				"event": "previewed",
+				"reviewer": "preview_operator",
+				"notes": "Human PIE accepted as a usable Manny Shrug baseline. Overall shoulder, arm and hand behavior, interruption/recovery, and return to neutral are acceptable. Minor motion-detail polish remains for a later revision.",
+				"timestamp_utc": "2026-07-27T07:17:38.269Z",
+				"approved": false
+			},
+			{
+				"event": "human_approved",
+				"reviewer": "Vikky",
+				"notes": "Human PIE accepted as a usable Manny Shrug baseline. Overall shoulder, arm and hand behavior, interruption/recovery, and return to neutral are acceptable. Minor motion-detail polish remains for a later revision.",
+				"timestamp_utc": "2026-07-27T07:17:40.239Z",
+				"approved": true
+			}
+		],
+		"human_review":
+		{
+			"event": "human_approved",
+			"reviewer": "Vikky",
+			"notes": "Human PIE accepted as a usable Manny Shrug baseline. Overall shoulder, arm and hand behavior, interruption/recovery, and return to neutral are acceptable. Minor motion-detail polish remains for a later revision.",
+			"timestamp_utc": "2026-07-27T07:17:40.239Z",
+			"approved": true
+		}
+	},
+	"quality_report":
+	{
+		"schema_version": "llmnpc.template_quality_report.v1",
+		"status": "pass",
+		"template_id": "gesture.shrug.manny.generated.5704441acd3d",
+		"template_content_hash": "sha1:72b1b1c6bcca90e56234a088e64f21dabd90265c",
+		"template_kind": "procedural_motion",
+		"source_type": "motion_recipe",
+		"generated_at_utc": "2026-07-27T07:14:43.970Z",
+		"source_reconstruction_hash": "",
+		"full_pose_validation": "not_requested",
+		"source_recipe_hash": "md5:e4d48775d84addc4f53b68c979abca33",
+		"compiled_recipe_hash": "md5:a0c54a714f7373061e80475397b17478",
+		"capability_hash": "md5:9a0b995dac43d28ce4a674fa79d6d532",
+		"primitive_registry_version": "llmnpc.motion_primitives.v1",
+		"compiler_version": "llmnpc.motion_recipe_compiler.v3",
+		"checks": [
+			{
+				"id": "template_structure",
+				"passed": true,
+				"message": "Template structure is valid."
+			},
+			{
+				"id": "motion_validator",
+				"passed": true,
+				"message": "Motion tracks pass the Published Template trust boundary."
+			},
+			{
+				"id": "skeleton_profile",
+				"passed": true,
+				"message": "Skeleton Profile exists and validates."
+			},
+			{
+				"id": "provenance_json",
+				"passed": true,
+				"message": "Provenance JSON parses."
+			},
+			{
+				"id": "motion_recipe_provenance",
+				"passed": true,
+				"message": "Online Motion Recipe Job, provider identity, prompt, license, and sanitized source evidence validate."
+			},
+			{
+				"id": "motion_recipe_recompile",
+				"passed": true,
+				"message": "Recipe recompiles deterministically to the stored Motion Clip under the current Manny Capability."
+			}
+		],
+		"warnings": [],
+		"manual_review_required": true
+	}
+}
