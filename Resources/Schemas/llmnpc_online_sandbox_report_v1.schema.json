@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "llmnpc.online_sandbox_report.v1",
+  "title": "LLM NPC Online Authoring Sandbox Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "updated_at_utc",
+    "outcome",
+    "error_code",
+    "provider",
+    "identity",
+    "preflight",
+    "draft_record",
+    "human_visual_review"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "llmnpc.online_sandbox_report.v1"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "started_at_utc": {
+      "type": "string"
+    },
+    "updated_at_utc": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outcome": {
+      "type": "string",
+      "minLength": 1
+    },
+    "error_code": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "object"
+    },
+    "identity": {
+      "type": "object"
+    },
+    "preflight": {
+      "type": "object"
+    },
+    "draft_record": {
+      "type": "object"
+    },
+    "human_visual_review": {
+      "type": "object"
+    }
+  }
+}

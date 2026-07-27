@@ -15,6 +15,7 @@
 #include "Misc/Paths.h"
 #include "MotionRecipe/LLMNPCMotionPrimitiveRegistry.h"
 #include "ObjectTools.h"
+#include "Quality/LLMNPCKinematicValidator.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
@@ -601,6 +602,40 @@ bool FLLMNPCForwardN5RecipeDraftQualityTest::RunTest(
 			TEXT("\"source_type\": \"motion_recipe\"")
 		)
 	);
+	FLLMMotionPlan KinematicPlan;
+	KinematicPlan.Intent = TEXT("express_uncertainty");
+	KinematicPlan.Clip = Draft.TemplateAsset->ProceduralClip;
+	ULLMNPCSkeletonProfile* DraftProfile =
+		LoadObject<ULLMNPCSkeletonProfile>(nullptr, MannyProfilePath);
+	TestNotNull(
+		TEXT("Manny Profile remains available for Draft verification"),
+		DraftProfile
+	);
+	if (DraftProfile)
+	{
+		const FLLMNPCKinematicQualityReport KinematicReport =
+			FLLMNPCKinematicValidator::ValidatePlan(
+				KinematicPlan,
+				*DraftProfile,
+				nullptr,
+				Evidence.CapabilityHash
+			);
+		TestTrue(
+			TEXT("Generated Draft passes deterministic kinematic validation"),
+			KinematicReport.bPassed
+		);
+		TestEqual(
+			TEXT("Generated Draft stores its actual kinematic report hash"),
+			Draft.TemplateAsset->Metadata.KinematicReportHash,
+			KinematicReport.ReportHash
+		);
+		TestTrue(
+			TEXT("Recipe provenance carries the same kinematic report hash"),
+			Draft.TemplateAsset->SourceProvenanceJson.Contains(
+				KinematicReport.ReportHash
+			)
+		);
+	}
 
 	FString JobPath;
 	TestTrue(

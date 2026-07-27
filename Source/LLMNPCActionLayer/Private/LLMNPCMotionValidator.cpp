@@ -110,6 +110,7 @@ bool ULLMNPCMotionValidator::ValidateTrack(
 	if (
 		(
 			Source == ELLMNPCMotionValidationSource::PublishedTemplate ||
+			Source == ELLMNPCMotionValidationSource::AuthoringSandbox ||
 			Source == ELLMNPCMotionValidationSource::ReplicatedAuthority
 		) &&
 		!Def->bAllowTemplateAuthoring

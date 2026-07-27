@@ -27,6 +27,7 @@
 #include "MotionRecipe/LLMNPCMotionRecipeParser.h"
 #include "MotionRecipe/LLMNPCMotionRecipeValidator.h"
 #include "ObjectTools.h"
+#include "Quality/LLMNPCKinematicValidator.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -1629,6 +1630,45 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 			TEXT("The Recipe Compiler did not produce stable identity metadata.")
 		);
 	}
+	if (
+		!Evidence.CompiledRecipeHash.IsEmpty() &&
+		Evidence.CompiledRecipeHash !=
+			CompiledMetadata.CompiledRecipeHash
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_COMPILED_HASH_MISMATCH"),
+			TEXT("The Recipe no longer compiles to the Sandbox-approved Motion Plan.")
+		);
+	}
+	const FLLMNPCKinematicQualityReport KinematicReport =
+		FLLMNPCKinematicValidator::ValidatePlan(
+			Plan,
+			*SkeletonProfile,
+			nullptr,
+			Capability.CapabilityHash
+		);
+	if (
+		!KinematicReport.bPassed ||
+		KinematicReport.ReportHash.IsEmpty()
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_KINEMATIC_PREFLIGHT_FAILED"),
+			TEXT("The compiled Recipe did not pass deterministic kinematic validation.")
+		);
+	}
+	if (
+		!Evidence.KinematicReportHash.IsEmpty() &&
+		Evidence.KinematicReportHash !=
+			KinematicReport.ReportHash
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_KINEMATIC_HASH_MISMATCH"),
+			TEXT("The Recipe kinematic report no longer matches the Sandbox-approved report.")
+		);
+	}
 
 	TSharedPtr<FJsonObject> CanonicalRecipeObject;
 	TSharedPtr<FJsonObject> RawResponseObject;
@@ -1706,6 +1746,14 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	Job->SetStringField(
 		TEXT("compiled_recipe_hash"),
 		CompiledMetadata.CompiledRecipeHash
+	);
+	Job->SetStringField(
+		TEXT("kinematic_report_hash"),
+		KinematicReport.ReportHash
+	);
+	Job->SetStringField(
+		TEXT("kinematic_baseline_hash"),
+		SkeletonProfile->UpperBodyConstraints.ValidationBaselineHash
 	);
 	Job->SetStringField(
 		TEXT("system_prompt"),
@@ -1793,6 +1841,14 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	Provenance->SetStringField(
 		TEXT("compiled_recipe_hash"),
 		CompiledMetadata.CompiledRecipeHash
+	);
+	Provenance->SetStringField(
+		TEXT("kinematic_report_hash"),
+		KinematicReport.ReportHash
+	);
+	Provenance->SetStringField(
+		TEXT("kinematic_baseline_hash"),
+		SkeletonProfile->UpperBodyConstraints.ValidationBaselineHash
 	);
 	Provenance->SetStringField(
 		TEXT("capability_hash"),
@@ -1945,7 +2001,7 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	TemplateSeed->Metadata.SourceRecipeHash =
 		CompiledMetadata.RecipeHash;
 	TemplateSeed->Metadata.KinematicReportHash =
-		SkeletonProfile->UpperBodyConstraints.ValidationBaselineHash;
+		KinematicReport.ReportHash;
 	TemplateSeed->Metadata.ReviewState =
 		ELLMNPCTemplateReviewState::Generated;
 

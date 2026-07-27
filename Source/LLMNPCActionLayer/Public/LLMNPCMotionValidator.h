@@ -23,6 +23,7 @@ enum class ELLMNPCMotionValidationSource : uint8
 {
 	RuntimeModel,
 	PublishedTemplate,
+	AuthoringSandbox,
 	ReplicatedAuthority,
 	InternalDebug
 };

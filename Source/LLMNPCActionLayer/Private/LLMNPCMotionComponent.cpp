@@ -174,6 +174,109 @@ bool ULLMNPCMotionComponent::SubmitCompiledTemplatePlan(FLLMMotionPlan Plan)
 	);
 }
 
+bool ULLMNPCMotionComponent::SubmitAuthoringSandboxPlan(FLLMMotionPlan Plan)
+{
+#if UE_BUILD_SHIPPING
+	LastValidationError = TEXT("LLMNPC_AUTHORING_SANDBOX_SHIPPING_DISABLED");
+	return false;
+#else
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	if (!Settings || !Settings->bEnableAuthoringRuntimeSandbox)
+	{
+		LastValidationError = TEXT("LLMNPC_AUTHORING_SANDBOX_DISABLED");
+		return false;
+	}
+	if (!GetWorld() || !GetWorld()->IsGameWorld())
+	{
+		LastValidationError = TEXT("LLMNPC_AUTHORING_SANDBOX_REQUIRES_GAME_WORLD");
+		return false;
+	}
+	LastRequestedTemplateId = NAME_None;
+	LastResolvedTemplateId = NAME_None;
+	LastRequestedTemplateModifiers = FLLMNPCTemplateModifiers();
+	LastResolvedTemplateModifiers = FLLMNPCTemplateResolvedModifiers();
+	LastContextResolvedModifiers = FLLMNPCResolvedMotionModifiers();
+	LastModifierResolutionTrace = FLLMNPCModifierResolutionTrace();
+	LastExecutionContext = FLLMNPCExecutionContextSnapshot();
+	return SubmitMotionPlanWithSource(
+		MoveTemp(Plan),
+		ELLMNPCMotionValidationSource::AuthoringSandbox
+	);
+#endif
+}
+
+bool ULLMNPCMotionComponent::CancelMotionClip(const FString& ClipId)
+{
+	const FString CleanClipId = ClipId.TrimStartAndEnd();
+	if (CleanClipId.IsEmpty())
+	{
+		return false;
+	}
+
+	const int32 QueuedRemoved = Queue.RemoveAll(
+		[&CleanClipId](const FLLMNPCQueuedMotionPlan& Request)
+		{
+			return Request.Plan.Clip.ClipId == CleanClipId;
+		}
+	);
+	const int32 ActiveRemoved = ActiveMotions.RemoveAll(
+		[&CleanClipId](const FLLMNPCActiveMotionPlan& Active)
+		{
+			return Active.Request.Plan.Clip.ClipId == CleanClipId;
+		}
+	);
+	if (QueuedRemoved == 0 && ActiveRemoved == 0)
+	{
+		return false;
+	}
+
+	bHasActivePlan = !ActiveMotions.IsEmpty();
+	if (bHasActivePlan)
+	{
+		ActiveClipId = ActiveMotions[0].Request.Plan.Clip.ClipId;
+		ActiveTime = ActiveMotions[0].Time;
+	}
+	else
+	{
+		ActiveClipId.Reset();
+		ActiveTime = 0.0f;
+	}
+	if (ActiveMotions.IsEmpty())
+	{
+		CurrentSnapshot = FLLMProceduralPoseSnapshot();
+		CurrentSnapshot.BoneBindings = CachedPoseBoneBindings;
+	}
+	else
+	{
+		UpdateActivePlans(0.0f);
+	}
+	return true;
+}
+
+bool ULLMNPCMotionComponent::IsMotionClipPendingOrActive(
+	const FString& ClipId
+) const
+{
+	const FString CleanClipId = ClipId.TrimStartAndEnd();
+	if (CleanClipId.IsEmpty())
+	{
+		return false;
+	}
+	return
+		Queue.ContainsByPredicate(
+			[&CleanClipId](const FLLMNPCQueuedMotionPlan& Request)
+			{
+				return Request.Plan.Clip.ClipId == CleanClipId;
+			}
+		) ||
+		ActiveMotions.ContainsByPredicate(
+			[&CleanClipId](const FLLMNPCActiveMotionPlan& Active)
+			{
+				return Active.Request.Plan.Clip.ClipId == CleanClipId;
+			}
+		);
+}
+
 bool ULLMNPCMotionComponent::SubmitPublishedTemplate(
 	FName TemplateOrPublicActionId,
 	FLLMNPCTemplateModifiers Modifiers
@@ -516,6 +619,7 @@ bool ULLMNPCMotionComponent::SubmitMotionPlanWithSource(
 	Request.Channels = DeriveMotionChannels(Request.Plan);
 	Request.QueuedAtSeconds = FPlatformTime::Seconds();
 	Request.bReplicateOnStart =
+		Source != ELLMNPCMotionValidationSource::AuthoringSandbox &&
 		bReplicateMotionCommands &&
 		!bApplyingReplicatedCommand &&
 		GetOwner() &&

@@ -41,6 +41,15 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category="LLM API")
 	bool bAllowDirectProviderCallInEditorOnly = false;
 
+	UPROPERTY(Config, EditAnywhere, Category="Authoring|Sandbox")
+	bool bEnableAuthoringRuntimeSandbox = false;
+
+	UPROPERTY(Config, EditAnywhere, Category="Authoring|Sandbox", meta=(ClampMin="2.0", ClampMax="120.0"))
+	float AuthoringSandboxRequestTimeoutSeconds = 30.0f;
+
+	UPROPERTY(Config, EditAnywhere, Category="Authoring|Sandbox", meta=(ClampMin="4.0", ClampMax="30.0"))
+	float AuthoringSandboxPreviewWatchdogSeconds = 8.0f;
+
 	UPROPERTY(Config, EditAnywhere, Category="Runtime", meta=(ClampMin="1.0", ClampMax="60.0"))
 	float RequestTimeoutSeconds = 8.0f;
 

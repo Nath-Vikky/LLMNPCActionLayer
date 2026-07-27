@@ -622,7 +622,7 @@ bool FLLMNPCForwardN5MotionRecipeCompilerTest::RunTest(
 	TestEqual(
 		TEXT("Compilation records the corrected Shrug Solver version"),
 		Metadata.CompilerVersion,
-		FString(TEXT("llmnpc.motion_recipe_compiler.v2"))
+		FString(TEXT("llmnpc.motion_recipe_compiler.v3"))
 	);
 	TestEqual(
 		TEXT("One semantic primitive has one mapping record"),

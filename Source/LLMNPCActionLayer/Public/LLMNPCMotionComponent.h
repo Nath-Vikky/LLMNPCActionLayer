@@ -132,6 +132,15 @@ public:
 
 	bool SubmitCompiledTemplatePlan(FLLMMotionPlan Plan);
 
+	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Authoring Sandbox")
+	bool SubmitAuthoringSandboxPlan(FLLMMotionPlan Plan);
+
+	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Authoring Sandbox")
+	bool CancelMotionClip(const FString& ClipId);
+
+	UFUNCTION(BlueprintPure, Category="LLM NPC Motion|Authoring Sandbox")
+	bool IsMotionClipPendingOrActive(const FString& ClipId) const;
+
 	UFUNCTION(BlueprintCallable, Category="LLM NPC Motion|Templates")
 	bool SubmitPublishedTemplate(FName TemplateOrPublicActionId, FLLMNPCTemplateModifiers Modifiers);
 

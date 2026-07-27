@@ -68,6 +68,24 @@ void AddOscillatorTrack(
 	Track.Envelope = ELLMMotionEnvelope::Smooth;
 }
 
+void AddSmoothPulseTrack(
+	FLLMMotionClip& Clip,
+	FName ControlId,
+	float Value,
+	const FLLMNPCMotionRecipePrimitive& Primitive
+)
+{
+	FLLMMotionTrack& Track = AddBaseTrack(
+		Clip,
+		ControlId,
+		ELLMMotionTrackType::Hold,
+		ELLMMotionValueType::Float,
+		Primitive
+	);
+	Track.Amplitude = Value;
+	Track.Envelope = ELLMMotionEnvelope::EaseInOut;
+}
+
 void AddAnchorTrack(
 	FLLMMotionClip& Clip,
 	FName ControlId,
@@ -310,37 +328,37 @@ void CompileShrugPrimitive(
 	const float Protraction = 1.5f + 3.0f * ArmOpenness;
 	const float RightScale = 1.0f + Asymmetry * 0.5f;
 	const float LeftScale = 1.0f - Asymmetry * 0.5f;
-	AddShapedFloatTrack(
+	AddSmoothPulseTrack(
 		Clip,
 		TEXT("right_shoulder.pitch"),
 		-BaseLift * RightScale,
 		Primitive
 	);
-	AddShapedFloatTrack(
+	AddSmoothPulseTrack(
 		Clip,
 		TEXT("left_shoulder.pitch"),
 		BaseLift * LeftScale,
 		Primitive
 	);
-	AddShapedFloatTrack(
+	AddSmoothPulseTrack(
 		Clip,
 		TEXT("right_shoulder.yaw"),
 		-Protraction * RightScale,
 		Primitive
 	);
-	AddShapedFloatTrack(
+	AddSmoothPulseTrack(
 		Clip,
 		TEXT("left_shoulder.yaw"),
 		Protraction * LeftScale,
 		Primitive
 	);
-	AddShapedFloatTrack(
+	AddSmoothPulseTrack(
 		Clip,
 		TEXT("chest.pitch"),
 		-4.5f * Torso * Amplitude,
 		Primitive
 	);
-	AddShapedFloatTrack(
+	AddSmoothPulseTrack(
 		Clip,
 		TEXT("chest.roll"),
 		1.5f * Asymmetry,
@@ -371,13 +389,13 @@ void CompileShrugPrimitive(
 	);
 
 	const float RelaxedWeight = 0.45f + 0.5f * PalmOpenness;
-	AddShapedFloatTrack(
+	AddSmoothPulseTrack(
 		Clip,
 		TEXT("right_fingers.relaxed"),
 		RelaxedWeight,
 		Primitive
 	);
-	AddShapedFloatTrack(
+	AddSmoothPulseTrack(
 		Clip,
 		TEXT("left_fingers.relaxed"),
 		RelaxedWeight,
@@ -815,20 +833,10 @@ bool FLLMNPCMotionRecipeCompiler::Compile(
 	OutPlan.Clip.Priority = FMath::Clamp(Context.Priority, 0.0f, 1.0f);
 	OutPlan.Clip.bInterruptible = true;
 
-	double AverageSpeed = 0.0;
-	for (const FLLMNPCMotionRecipePrimitive& Primitive : NormalizedRecipe.Primitives)
-	{
-		AverageSpeed += Primitive.GetNumberParameter(TEXT("speed"), 1.0);
-	}
-	AverageSpeed /= NormalizedRecipe.Primitives.Num();
-	OutPlan.Clip.BlendIn = FMath::Min(
-		0.28f / static_cast<float>(AverageSpeed),
-		OutPlan.Clip.Duration * 0.3f
-	);
-	OutPlan.Clip.BlendOut = FMath::Min(
-		0.36f / static_cast<float>(AverageSpeed),
-		OutPlan.Clip.Duration * 0.35f
-	);
+	// Recipe tracks own their entry and exit envelopes. A second clip envelope
+	// creates derivative spikes at the blend boundary during Full Preflight.
+	OutPlan.Clip.BlendIn = 0.0f;
+	OutPlan.Clip.BlendOut = 0.0f;
 
 	TArray<const FLLMNPCMotionRecipePrimitive*> OrderedPrimitives;
 	OrderedPrimitives.Reserve(NormalizedRecipe.Primitives.Num());
@@ -908,6 +916,7 @@ bool FLLMNPCMotionRecipeCompiler::Compile(
 
 	ULLMNPCMotionValidator* MotionValidator =
 		NewObject<ULLMNPCMotionValidator>();
+	MotionValidator->Manifest = Context.ControlManifest;
 	MotionValidator->MaxClipDuration = static_cast<float>(
 		FMath::Min(
 			static_cast<double>(

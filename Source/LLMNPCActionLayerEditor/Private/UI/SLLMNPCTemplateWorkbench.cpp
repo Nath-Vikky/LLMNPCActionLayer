@@ -11,6 +11,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "IDesktopPlatform.h"
 #include "Interfaces/IPluginManager.h"
+#include "HAL/PlatformTime.h"
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCSettings.h"
 #include "Misc/MessageDialog.h"
@@ -228,10 +229,12 @@ void SLLMNPCTemplateWorkbench::Construct(const FArguments& InArgs)
 
 	RefreshCatalog();
 	RefreshPIEActors();
+	UpdateSandboxSummary();
 }
 
 SLLMNPCTemplateWorkbench::~SLLMNPCTemplateWorkbench()
 {
+	CancelActiveSandboxPreview(TEXT("workbench_closed"));
 	if (
 		AuthoringModelClient.IsValid() &&
 		ActiveAuthoringRequestId.IsValid()
@@ -260,12 +263,67 @@ void SLLMNPCTemplateWorkbench::Tick(
 	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
 	ActorRefreshAccumulator += InDeltaTime;
 	if (
-		ActivePage == ELLMNPCTemplateWorkbenchPage::Preview &&
+		(
+			ActivePage == ELLMNPCTemplateWorkbenchPage::Preview ||
+			ActivePage == ELLMNPCTemplateWorkbenchPage::Generate
+		) &&
 		ActorRefreshAccumulator >= 1.0f
 	)
 	{
 		ActorRefreshAccumulator = 0.0f;
 		RefreshPIEActors();
+	}
+
+	if (!ActiveSandboxClipId.IsEmpty())
+	{
+		ULLMNPCMotionComponent* Motion = ActiveSandboxMotion.Get();
+		if (!Motion || !Motion->GetWorld() || !Motion->GetWorld()->IsGameWorld())
+		{
+			ActiveSandboxMotion.Reset();
+			ActiveSandboxClipId.Reset();
+			SandboxReport.Outcome = TEXT("preview_actor_lost");
+			SandboxReport.ErrorCode =
+				TEXT("LLMNPC_AUTHORING_SANDBOX_PREVIEW_ACTOR_LOST");
+			SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+			SaveSandboxReport();
+			UpdateSandboxSummary();
+		}
+		else if (Motion->IsMotionClipPendingOrActive(ActiveSandboxClipId))
+		{
+			const ULLMNPCSettings* Settings =
+				GetDefault<ULLMNPCSettings>();
+			const double WatchdogSeconds = Settings
+				? Settings->AuthoringSandboxPreviewWatchdogSeconds
+				: 8.0;
+			if (
+				SandboxPreviewStartedAtSeconds > 0.0 &&
+				FPlatformTime::Seconds() -
+					SandboxPreviewStartedAtSeconds >
+					WatchdogSeconds
+			)
+			{
+				SandboxReport.ErrorCode =
+					TEXT("LLMNPC_AUTHORING_SANDBOX_PREVIEW_TIMEOUT");
+				CancelActiveSandboxPreview(TEXT("preview_timeout"));
+				SetStatus(
+					LOCTEXT(
+						"SandboxPreviewTimeout",
+						"Sandbox preview exceeded its watchdog and was cancelled."
+					),
+					true
+				);
+			}
+		}
+		else if (SandboxReport.Outcome == TEXT("previewing"))
+		{
+			ActiveSandboxMotion.Reset();
+			ActiveSandboxClipId.Reset();
+			SandboxPreviewStartedAtSeconds = 0.0;
+			SandboxReport.Outcome = TEXT("preview_completed");
+			SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+			SaveSandboxReport();
+			UpdateSandboxSummary();
+		}
 	}
 }
 
@@ -802,6 +860,149 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildGeneratePage()
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
+		.Padding(0.0f, 8.0f, 0.0f, 0.0f)
+		[
+			MakeSectionHeader(
+				LOCTEXT(
+					"RuntimeSandboxHeader",
+					"Authoring Runtime Sandbox"
+				)
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 6.0f, 0.0f, 0.0f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(SCheckBox)
+					.IsChecked(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							GetSandboxEnabledState
+					)
+					.OnCheckStateChanged(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandleSandboxEnabledChanged
+					)
+					[
+						SNew(STextBlock)
+							.Text(
+								LOCTEXT(
+									"EnableRuntimeSandbox",
+									"Enable Sandbox"
+								)
+							)
+					]
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.0f)
+			.Padding(12.0f, 0.0f, 8.0f, 0.0f)
+			[
+				MakeFormRow(
+					LOCTEXT("SandboxActorLabel", "PIE Actor"),
+					SAssignNew(
+						SandboxActorCombo,
+						SComboBox<
+							TSharedPtr<
+								FLLMNPCTemplateWorkbenchActorOption
+							>
+						>
+					)
+						.OptionsSource(&ActorOptions)
+						.OnGenerateWidget(
+							this,
+							&SLLMNPCTemplateWorkbench::
+								GenerateActorOption
+						)
+						.OnSelectionChanged(
+							this,
+							&SLLMNPCTemplateWorkbench::
+								HandleActorChanged
+						)
+						[
+							SNew(STextBlock)
+								.Text_Lambda(
+									[this]()
+									{
+										return SelectedActor.IsValid()
+											? SelectedActor->Label
+											: LOCTEXT(
+												"NoSandboxPIEActor",
+												"No PIE actor"
+											);
+									}
+								)
+						]
+				)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			[
+				SNew(SButton)
+					.IsEnabled(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							CanPreviewMotionRecipeInSandbox
+					)
+					.OnClicked(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandlePreviewMotionRecipeInSandbox
+					)
+					[
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						[
+							SNew(SImage)
+								.Image(
+									FAppStyle::GetBrush("Icons.Play")
+								)
+						]
+						+ SHorizontalBox::Slot()
+						.AutoWidth()
+						.Padding(5.0f, 0.0f, 0.0f, 0.0f)
+						[
+							SNew(STextBlock)
+								.Text(
+									LOCTEXT(
+										"PreviewRecipeSandbox",
+										"Preflight and Preview"
+									)
+								)
+						]
+					]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SButton)
+					.IsEnabled(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							CanStopMotionRecipeSandbox
+					)
+					.OnClicked(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandleStopMotionRecipeSandbox
+					)
+					[
+						SNew(SImage)
+							.Image(
+								FAppStyle::GetBrush("Icons.Stop")
+							)
+					]
+			]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
 		.HAlign(HAlign_Right)
 		.Padding(0.0f, 8.0f, 0.0f, 8.0f)
 		[
@@ -899,6 +1100,11 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildGeneratePage()
 						SMultiLineEditableTextBox
 					)
 						.AutoWrapText(false)
+						.OnTextChanged(
+							this,
+							&SLLMNPCTemplateWorkbench::
+								HandleRecipeJsonChanged
+						)
 				]
 			]
 			+ SSplitter::Slot()
@@ -917,7 +1123,7 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildGeneratePage()
 					)
 				]
 				+ SVerticalBox::Slot()
-				.FillHeight(1.0f)
+				.FillHeight(0.58f)
 				.Padding(8.0f, 0.0f, 0.0f, 0.0f)
 				[
 					SAssignNew(
@@ -932,24 +1138,120 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildGeneratePage()
 								GetRecipeGenerationSummaryText
 						)
 				]
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				.Padding(8.0f, 8.0f, 0.0f, 5.0f)
+				[
+					MakeSectionHeader(
+						LOCTEXT(
+							"SandboxEvidenceHeader",
+							"Sandbox Evidence"
+						)
+					)
+				]
+				+ SVerticalBox::Slot()
+				.FillHeight(0.42f)
+				.Padding(8.0f, 0.0f, 0.0f, 0.0f)
+				[
+					SAssignNew(
+						SandboxEvidenceBox,
+						SMultiLineEditableTextBox
+					)
+						.IsReadOnly(true)
+						.AutoWrapText(true)
+						.Text(
+							this,
+							&SLLMNPCTemplateWorkbench::
+								GetSandboxSummaryText
+						)
+				]
 			]
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
-		.HAlign(HAlign_Right)
 		.Padding(0.0f, 10.0f, 0.0f, 0.0f)
 		[
-			SNew(SButton)
-				.IsEnabled(
-					this,
-					&SLLMNPCTemplateWorkbench::
-						CanCreateMotionRecipeDraft
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.0f)
+			[
+				SAssignNew(
+					SandboxReviewNotesBox,
+					SMultiLineEditableTextBox
 				)
-				.OnClicked(
-					this,
-					&SLLMNPCTemplateWorkbench::
-						HandleCreateMotionRecipeDraft
-				)
+					.HintText(
+						LOCTEXT(
+							"SandboxReviewNotesHint",
+							"Human PIE visual notes"
+						)
+					)
+					.AutoWrapText(true)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(8.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SButton)
+					.IsEnabled(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							CanRecordSandboxVisualReview
+					)
+					.OnClicked(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandleRecordSandboxVisualPass
+					)
+					[
+						SNew(STextBlock)
+							.Text(
+								LOCTEXT(
+									"SandboxVisualPass",
+									"Visual Pass"
+								)
+							)
+					]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SButton)
+					.IsEnabled(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							CanRecordSandboxVisualReview
+					)
+					.OnClicked(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandleRecordSandboxVisualFail
+					)
+					[
+						SNew(STextBlock)
+							.Text(
+								LOCTEXT(
+									"SandboxVisualFail",
+									"Visual Fail"
+								)
+							)
+					]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(10.0f, 0.0f, 0.0f, 0.0f)
+			[
+				SNew(SButton)
+					.IsEnabled(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							CanCreateMotionRecipeDraft
+					)
+					.OnClicked(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandleCreateMotionRecipeDraft
+					)
 				[
 					SNew(SHorizontalBox)
 					+ SHorizontalBox::Slot()
@@ -970,11 +1272,12 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildGeneratePage()
 							.Text(
 								LOCTEXT(
 									"CreateRecipeDraft",
-									"Create Generated Draft"
+									"Send to Generated Draft"
 								)
 							)
 					]
 				]
+			]
 		];
 }
 
@@ -1808,6 +2111,11 @@ void SLLMNPCTemplateWorkbench::RefreshPIEActors()
 		ActorCombo->RefreshOptions();
 		ActorCombo->SetSelectedItem(SelectedActor);
 	}
+	if (SandboxActorCombo)
+	{
+		SandboxActorCombo->RefreshOptions();
+		SandboxActorCombo->SetSelectedItem(SelectedActor);
+	}
 }
 
 void SLLMNPCTemplateWorkbench::SetActivePage(
@@ -1815,7 +2123,10 @@ void SLLMNPCTemplateWorkbench::SetActivePage(
 )
 {
 	ActivePage = Page;
-	if (Page == ELLMNPCTemplateWorkbenchPage::Preview)
+	if (
+		Page == ELLMNPCTemplateWorkbenchPage::Preview ||
+		Page == ELLMNPCTemplateWorkbenchPage::Generate
+	)
 	{
 		RefreshPIEActors();
 	}
@@ -1880,6 +2191,29 @@ ULLMNPCMotionComponent*
 SLLMNPCTemplateWorkbench::GetSelectedMotionComponent() const
 {
 	return SelectedActor.IsValid() ? SelectedActor->MotionComponent.Get() : nullptr;
+}
+
+ULLMNPCSkeletonProfile*
+SLLMNPCTemplateWorkbench::GetSelectedSkeletonProfile() const
+{
+	if (!SelectedSkeleton.IsValid())
+	{
+		return nullptr;
+	}
+	for (UObject* Asset : ReferencedAssets)
+	{
+		if (
+			ULLMNPCSkeletonProfile* Profile =
+				Cast<ULLMNPCSkeletonProfile>(Asset)
+		)
+		{
+			if (Profile->ProfileId == SelectedSkeleton->ProfileId)
+			{
+				return Profile;
+			}
+		}
+	}
+	return nullptr;
 }
 
 FName SLLMNPCTemplateWorkbench::GetSelectedPublicActionId() const
@@ -1999,6 +2333,16 @@ FText SLLMNPCTemplateWorkbench::GetRecipeGenerationSummaryText() const
 	);
 }
 
+FText SLLMNPCTemplateWorkbench::GetSandboxSummaryText() const
+{
+	return SandboxSummary.IsEmpty()
+		? LOCTEXT(
+			"SandboxNotRun",
+			"No Sandbox Preflight has completed."
+		)
+		: FText::FromString(SandboxSummary);
+}
+
 FText SLLMNPCTemplateWorkbench::GetReviewStateText() const
 {
 	return SelectedItem.IsValid()
@@ -2045,6 +2389,17 @@ ECheckBoxState SLLMNPCTemplateWorkbench::GetIncludeNonPublishedState() const
 		: ECheckBoxState::Unchecked;
 }
 
+ECheckBoxState SLLMNPCTemplateWorkbench::GetSandboxEnabledState() const
+{
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	return
+		FLLMNPCAuthoringSandbox::IsBuildAvailable() &&
+		Settings &&
+		Settings->bEnableAuthoringRuntimeSandbox
+			? ECheckBoxState::Checked
+			: ECheckBoxState::Unchecked;
+}
+
 bool SLLMNPCTemplateWorkbench::CanPreviewSelection() const
 {
 	return ResolvePreviewTemplate() && GetSelectedMotionComponent();
@@ -2087,6 +2442,56 @@ CanCancelMotionRecipeGeneration() const
 		AuthoringModelClient.IsValid();
 }
 
+bool SLLMNPCTemplateWorkbench::
+CanPreviewMotionRecipeInSandbox() const
+{
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	return
+		FLLMNPCAuthoringSandbox::IsBuildAvailable() &&
+		Settings &&
+		Settings->bEnableAuthoringRuntimeSandbox &&
+		!bAuthoringRequestPending &&
+		LastAuthoringResult.bSuccess &&
+		!LastRecipeResponse.bUnsupported &&
+		SelectedSkeleton.IsValid() &&
+		RecipeJsonBox.IsValid() &&
+		!RecipeJsonBox->GetText()
+			.ToString()
+			.TrimStartAndEnd()
+			.IsEmpty() &&
+		GetSelectedMotionComponent() &&
+		GetSelectedSkeletonProfile();
+}
+
+bool SLLMNPCTemplateWorkbench::
+CanStopMotionRecipeSandbox() const
+{
+	const ULLMNPCMotionComponent* Motion =
+		ActiveSandboxMotion.Get();
+	return
+		Motion &&
+		!ActiveSandboxClipId.IsEmpty() &&
+		Motion->IsMotionClipPendingOrActive(
+			ActiveSandboxClipId
+		);
+}
+
+bool SLLMNPCTemplateWorkbench::
+CanRecordSandboxVisualReview() const
+{
+	return
+		LastSandboxPreflight.bPassed &&
+		SandboxReport.bTransientPlanSubmitted &&
+		SandboxReport.bDraftRecordSaved &&
+		SandboxReport.RequestId.IsValid() &&
+		!CanStopMotionRecipeSandbox() &&
+		(
+			SandboxReport.Outcome == TEXT("preview_completed") ||
+			SandboxReport.Outcome == TEXT("visual_pass") ||
+			SandboxReport.Outcome == TEXT("visual_fail")
+		);
+}
+
 bool SLLMNPCTemplateWorkbench::CanCreateMotionRecipeDraft() const
 {
 	return
@@ -2103,7 +2508,11 @@ bool SLLMNPCTemplateWorkbench::CanCreateMotionRecipeDraft() const
 		!RecipeDestinationPathBox->GetText()
 			.ToString()
 			.TrimStartAndEnd()
-			.IsEmpty();
+			.IsEmpty() &&
+		LastSandboxPreflight.bPassed &&
+		SandboxReport.bTransientPlanSubmitted &&
+		SandboxReport.bDraftRecordSaved &&
+		SandboxReport.HumanVisualDecision == TEXT("pass");
 }
 
 bool SLLMNPCTemplateWorkbench::CanGenerateQualityReport() const
@@ -2202,6 +2611,14 @@ void SLLMNPCTemplateWorkbench::HandleSearchChanged(const FText& Text)
 	ApplyFilters();
 }
 
+void SLLMNPCTemplateWorkbench::HandleRecipeJsonChanged(
+	const FText& Text
+)
+{
+	static_cast<void>(Text);
+	InvalidateSandboxPreflight(true);
+}
+
 void SLLMNPCTemplateWorkbench::HandleAnimationAssetChanged(
 	const FAssetData& AssetData
 )
@@ -2231,13 +2648,63 @@ void SLLMNPCTemplateWorkbench::HandleIncludeNonPublishedChanged(
 	ApplyFilters();
 }
 
+void SLLMNPCTemplateWorkbench::HandleSandboxEnabledChanged(
+	ECheckBoxState State
+)
+{
+	ULLMNPCSettings* Settings = GetMutableDefault<ULLMNPCSettings>();
+	if (!Settings)
+	{
+		SetStatus(
+			LOCTEXT(
+				"SandboxSettingsUnavailable",
+				"Sandbox settings are unavailable."
+			),
+			true
+		);
+		return;
+	}
+	Settings->bEnableAuthoringRuntimeSandbox =
+		State == ECheckBoxState::Checked;
+	Settings->SaveConfig();
+	if (!Settings->bEnableAuthoringRuntimeSandbox)
+	{
+		CancelActiveSandboxPreview(TEXT("sandbox_disabled"));
+	}
+	UpdateSandboxSummary();
+	SetStatus(
+		Settings->bEnableAuthoringRuntimeSandbox
+			? LOCTEXT(
+				"SandboxEnabled",
+				"Authoring Runtime Sandbox enabled for local development."
+			)
+			: LOCTEXT(
+				"SandboxDisabled",
+				"Authoring Runtime Sandbox disabled. Runtime remains Published-only."
+			),
+		false
+	);
+}
+
 void SLLMNPCTemplateWorkbench::HandleSkeletonChanged(
 	TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption> Option,
 	ESelectInfo::Type SelectInfo
 )
 {
 	static_cast<void>(SelectInfo);
+	const FName PreviousProfile = SelectedSkeleton.IsValid()
+		? SelectedSkeleton->ProfileId
+		: NAME_None;
 	SelectedSkeleton = Option;
+	if (
+		PreviousProfile !=
+			(SelectedSkeleton.IsValid()
+				? SelectedSkeleton->ProfileId
+				: NAME_None)
+	)
+	{
+		InvalidateSandboxPreflight(true);
+	}
 	RefreshDerivedText();
 }
 
@@ -2247,7 +2714,13 @@ void SLLMNPCTemplateWorkbench::HandleActorChanged(
 )
 {
 	static_cast<void>(SelectInfo);
+	ULLMNPCMotionComponent* PreviousMotion =
+		GetSelectedMotionComponent();
 	SelectedActor = Option;
+	if (PreviousMotion != GetSelectedMotionComponent())
+	{
+		InvalidateSandboxPreflight(true);
+	}
 }
 
 FReply SLLMNPCTemplateWorkbench::HandleRefresh()
@@ -2439,10 +2912,28 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 	}
 
 	FLLMNPCSkeletonCapabilitySnapshot Capability;
+	const ULLMNPCControlManifest* GenerationManifest = nullptr;
+	if (
+		ULLMNPCMotionComponent* PreviewMotion =
+			GetSelectedMotionComponent()
+	)
+	{
+		if (
+			const ULLMNPCSkeletonProfile* PreviewProfile =
+				PreviewMotion->SkeletonProfile.LoadSynchronous()
+		)
+		{
+			if (PreviewProfile->ProfileId == Profile->ProfileId)
+			{
+				GenerationManifest =
+					PreviewMotion->ControlManifest;
+			}
+		}
+	}
 	const FLLMNPCSkeletonCapabilityBuildResult CapabilityResult =
 		FLLMNPCSkeletonCapabilityBuilder::Build(
 			*Profile,
-			nullptr,
+			GenerationManifest,
 			Capability
 		);
 	if (!CapabilityResult.bSucceeded)
@@ -2477,6 +2968,23 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 	LastRecipeResponse =
 		FLLMNPCMotionRecipeAuthoringResponse();
 	LastAuthoringResult = FLLMNPCAuthoringJsonResult();
+	CancelActiveSandboxPreview(TEXT("superseded"));
+	LastSandboxPreflight =
+		FLLMNPCAuthoringSandboxPreflightResult();
+	SandboxReport = FLLMNPCOnlineSandboxReportRecord();
+	SandboxReport.PromptVersion =
+		LastRecipePrompt.PromptVersion;
+	SandboxReport.PromptHash = LastRecipePrompt.PromptHash;
+	SandboxReport.CapabilityHash =
+		LastRecipePrompt.CapabilityHash;
+	SandboxReport.RegistryVersion =
+		LastRecipePrompt.RegistryVersion;
+	SandboxReport.EndpointOrigin = OnlineConfig.EndpointOrigin;
+	SandboxReport.NonSecretConfigHash =
+		OnlineConfig.NonSecretConfigHash;
+	SandboxReport.StartedAtUtc = FDateTime::UtcNow();
+	SandboxReport.UpdatedAtUtc = SandboxReport.StartedAtUtc;
+	SandboxReport.Outcome = TEXT("request_pending");
 	RecipeGeneratedAtUtc = FDateTime();
 	GenerationEndpointOrigin = OnlineConfig.EndpointOrigin;
 	GenerationConfigHash = OnlineConfig.NonSecretConfigHash;
@@ -2492,6 +3000,10 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 	{
 		RecipeJsonBox->SetText(FText::GetEmpty());
 	}
+	if (SandboxReviewNotesBox)
+	{
+		SandboxReviewNotesBox->SetText(FText::GetEmpty());
+	}
 	if (RecipeEvidenceBox)
 	{
 		RecipeEvidenceBox->SetText(
@@ -2505,8 +3017,15 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 	Request.UserJson = LastRecipePrompt.UserJson;
 	Request.Temperature = 0.1f;
 	Request.MaxTokens = 1800;
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	Request.TimeoutSeconds = Settings
+		? Settings->AuthoringSandboxRequestTimeoutSeconds
+		: 30.0f;
 	ActiveAuthoringRequestId = Request.RequestId;
+	SandboxReport.RequestId = Request.RequestId;
 	bAuthoringRequestPending = true;
+	SaveSandboxReport();
+	UpdateSandboxSummary();
 	SetStatus(
 		LOCTEXT(
 			"RecipeGenerationStarted",
@@ -2535,6 +3054,10 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 			Self->bAuthoringRequestPending = false;
 			Self->ActiveAuthoringRequestId.Invalidate();
 			Self->LastAuthoringResult = Result;
+			FLLMNPCOnlineSandboxReport::ApplyAuthoringResult(
+				Result,
+				Self->SandboxReport
+			);
 			Self->RecipeGeneratedAtUtc = FDateTime::UtcNow();
 			if (!Result.bSuccess)
 			{
@@ -2555,6 +3078,8 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 					FText::FromName(Result.ErrorCode),
 					true
 				);
+				Self->SaveSandboxReport();
+				Self->UpdateSandboxSummary();
 				return;
 			}
 
@@ -2585,6 +3110,12 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 					FText::FromString(ParseError),
 					true
 				);
+				Self->SandboxReport.Outcome =
+					TEXT("response_invalid");
+				Self->SandboxReport.ErrorCode =
+					TEXT("LLMNPC_RECIPE_AUTHORING_RESPONSE_INVALID");
+				Self->SaveSandboxReport();
+				Self->UpdateSandboxSummary();
 				return;
 			}
 			if (Self->LastRecipeResponse.bUnsupported)
@@ -2608,6 +3139,11 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 					),
 					true
 				);
+				Self->SandboxReport.Outcome = TEXT("unsupported");
+				Self->SandboxReport.ErrorCode =
+					TEXT("LLMNPC_RECIPE_AUTHORING_UNSUPPORTED");
+				Self->SaveSandboxReport();
+				Self->UpdateSandboxSummary();
 				return;
 			}
 
@@ -2655,8 +3191,17 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 					FText::FromString(RecipeValidationError),
 					true
 				);
+				Self->SandboxReport.Outcome =
+					TEXT("recipe_rejected");
+				Self->SandboxReport.ErrorCode =
+					TEXT("LLMNPC_RECIPE_AUTHORING_RECIPE_REJECTED");
+				Self->SaveSandboxReport();
+				Self->UpdateSandboxSummary();
 				return;
 			}
+			Self->SandboxReport.Outcome =
+				TEXT("recipe_accepted");
+			Self->SandboxReport.ErrorCode = NAME_None;
 			Self->RecipeGenerationSummary = FString::Printf(
 				TEXT("Request: accepted\nProvider: %s\nModel: %s\nHTTP: %d\nAttempts: %d\nLatency: %.3fs\nTokens: %d / %d / %d\nCapability: %s\nRegistry: %s\nPrompt: %s"),
 				*Result.ProviderId.ToString(),
@@ -2684,6 +3229,8 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 				),
 				false
 			);
+			Self->SaveSandboxReport();
+			Self->UpdateSandboxSummary();
 		}
 	);
 	return FReply::Handled();
@@ -2699,6 +3246,198 @@ HandleCancelMotionRecipeGeneration()
 	return FReply::Handled();
 }
 
+FReply SLLMNPCTemplateWorkbench::
+HandlePreviewMotionRecipeInSandbox()
+{
+	if (!CanPreviewMotionRecipeInSandbox())
+	{
+		SetStatus(
+			LOCTEXT(
+				"SandboxPreviewUnavailable",
+				"Enable Sandbox, start PIE, select a Manny actor, and generate an accepted Recipe first."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	ULLMNPCMotionComponent* Motion =
+		GetSelectedMotionComponent();
+	ULLMNPCSkeletonProfile* Profile =
+		GetSelectedSkeletonProfile();
+	ULLMNPCSkeletonProfile* ActorProfile =
+		Motion ? Motion->SkeletonProfile.LoadSynchronous() : nullptr;
+	if (
+		!Motion ||
+		!Profile ||
+		!ActorProfile ||
+		ActorProfile->ProfileId != Profile->ProfileId
+	)
+	{
+		SandboxReport.Outcome = TEXT("preflight_rejected");
+		SandboxReport.ErrorCode =
+			TEXT("LLMNPC_AUTHORING_SANDBOX_ACTOR_PROFILE_MISMATCH");
+		SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+		SaveSandboxReport();
+		UpdateSandboxSummary();
+		SetStatus(
+			LOCTEXT(
+				"SandboxActorProfileMismatch",
+				"The selected PIE actor does not use the selected Manny Skeleton Profile."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	FLLMNPCAuthoringSandboxRequest Request;
+	Request.RecipeJson =
+		RecipeJsonBox->GetText().ToString();
+	Request.SkeletonProfile = Profile;
+	Request.ControlManifest = Motion->ControlManifest;
+	LastSandboxPreflight =
+		FLLMNPCAuthoringSandbox::RunFullPreflight(Request);
+	if (
+		LastSandboxPreflight.bPassed &&
+		LastSandboxPreflight.CompiledMetadata.CapabilityHash !=
+			LastRecipePrompt.CapabilityHash
+	)
+	{
+		LastSandboxPreflight.bPassed = false;
+		LastSandboxPreflight.Stage =
+			ELLMNPCAuthoringSandboxStage::Rejected;
+		LastSandboxPreflight.ErrorCode =
+			TEXT("LLMNPC_AUTHORING_SANDBOX_CAPABILITY_STALE");
+		LastSandboxPreflight.ErrorMessage =
+			LastSandboxPreflight.ErrorCode.ToString();
+		LastSandboxPreflight.TransientPlan = FLLMMotionPlan();
+	}
+	FLLMNPCOnlineSandboxReport::ApplyPreflightResult(
+		LastSandboxPreflight,
+		SandboxReport
+	);
+	if (!LastSandboxPreflight.bPassed)
+	{
+		SandboxReport.bTransientPlanSubmitted = false;
+		SandboxReport.bDraftRecordSaved = false;
+		SandboxReport.DraftRecordPath.Reset();
+		SandboxReport.HumanVisualDecision =
+			TEXT("not_recorded");
+		SaveSandboxReport();
+		UpdateSandboxSummary();
+		SetStatus(
+			FText::FromString(
+				LastSandboxPreflight.ErrorMessage.IsEmpty()
+					? LastSandboxPreflight.ErrorCode.ToString()
+					: LastSandboxPreflight.ErrorMessage
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	CancelActiveSandboxPreview(TEXT("superseded"));
+	ActiveSandboxClipId =
+		LastSandboxPreflight.TransientPlan.Clip.ClipId;
+	if (!Motion->SubmitAuthoringSandboxPlan(
+		LastSandboxPreflight.TransientPlan
+	))
+	{
+		ActiveSandboxClipId.Reset();
+		SandboxReport.Outcome = TEXT("submit_rejected");
+		SandboxReport.ErrorCode =
+			FName(*Motion->LastValidationError);
+		SandboxReport.bTransientPlanSubmitted = false;
+		SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+		SaveSandboxReport();
+		UpdateSandboxSummary();
+		SetStatus(
+			FText::FromString(Motion->LastValidationError),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	ActiveSandboxMotion = Motion;
+	SandboxPreviewStartedAtSeconds =
+		FPlatformTime::Seconds();
+	SandboxReport.bTransientPlanSubmitted = true;
+	SandboxReport.HumanVisualDecision =
+		TEXT("not_recorded");
+	SandboxReport.HumanVisualNotes.Reset();
+
+	FString DraftRecordError;
+	if (!FLLMNPCOnlineSandboxReport::SaveDraftRecord(
+		LastSandboxPreflight.CanonicalRecipeJson,
+		SandboxReport,
+		SandboxReport.DraftRecordPath,
+		DraftRecordError
+	))
+	{
+		Motion->CancelMotionClip(ActiveSandboxClipId);
+		ActiveSandboxMotion.Reset();
+		ActiveSandboxClipId.Reset();
+		SandboxPreviewStartedAtSeconds = 0.0;
+		SandboxReport.bTransientPlanSubmitted = false;
+		SandboxReport.bDraftRecordSaved = false;
+		SandboxReport.Outcome = TEXT("draft_record_failed");
+		SandboxReport.ErrorCode = FName(*DraftRecordError);
+		SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+		SaveSandboxReport();
+		UpdateSandboxSummary();
+		SetStatus(FText::FromString(DraftRecordError), true);
+		return FReply::Handled();
+	}
+
+	SandboxReport.bDraftRecordSaved = true;
+	SandboxReport.Outcome = TEXT("previewing");
+	SandboxReport.ErrorCode = NAME_None;
+	SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+	SaveSandboxReport();
+	UpdateSandboxSummary();
+	SetStatus(
+		LOCTEXT(
+			"SandboxPreviewSubmitted",
+			"Full Preflight passed. The transient Recipe is playing on the selected PIE actor."
+		),
+		false
+	);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCTemplateWorkbench::
+HandleStopMotionRecipeSandbox()
+{
+	if (CanStopMotionRecipeSandbox())
+	{
+		SandboxReport.ErrorCode =
+			TEXT("LLMNPC_AUTHORING_SANDBOX_PREVIEW_CANCELLED");
+		CancelActiveSandboxPreview(TEXT("preview_cancelled"));
+		SetStatus(
+			LOCTEXT(
+				"SandboxPreviewCancelled",
+				"Sandbox preview cancelled and its pose contribution was cleared."
+			),
+			false
+		);
+	}
+	return FReply::Handled();
+}
+
+FReply SLLMNPCTemplateWorkbench::
+HandleRecordSandboxVisualPass()
+{
+	RecordSandboxVisualDecision(TEXT("pass"));
+	return FReply::Handled();
+}
+
+FReply SLLMNPCTemplateWorkbench::
+HandleRecordSandboxVisualFail()
+{
+	RecordSandboxVisualDecision(TEXT("fail"));
+	return FReply::Handled();
+}
+
 FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 {
 	if (
@@ -2709,7 +3448,7 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		SetStatus(
 			LOCTEXT(
 				"RecipeDraftInputsUnavailable",
-				"An accepted online Recipe and Draft destination are required."
+				"An accepted Recipe, completed Sandbox preview, Human Visual Pass, and Draft destination are required."
 			),
 			true
 		);
@@ -2833,6 +3572,10 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 	Evidence.CompletionTokens =
 		LastAuthoringResult.CompletionTokens;
 	Evidence.TotalTokens = LastAuthoringResult.TotalTokens;
+	Evidence.CompiledRecipeHash =
+		LastSandboxPreflight.CompiledMetadata.CompiledRecipeHash;
+	Evidence.KinematicReportHash =
+		LastSandboxPreflight.KinematicReport.ReportHash;
 
 	const FScopedTransaction Transaction(
 		LOCTEXT(
@@ -2850,6 +3593,10 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		);
 	if (Result.bSuccess && Result.TemplateAsset)
 	{
+		SandboxReport.Outcome = TEXT("sent_to_generated_draft");
+		SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+		SaveSandboxReport();
+		UpdateSandboxSummary();
 		bIncludeNonPublished = true;
 		RefreshCatalog(Result.TemplateAsset->GetPathName());
 		SetActivePage(ELLMNPCTemplateWorkbenchPage::Quality);
@@ -3136,6 +3883,218 @@ FReply SLLMNPCTemplateWorkbench::HandlePublish()
 	);
 	SetStatus(FText::FromString(Result.Message), !Result.bSuccess);
 	return FReply::Handled();
+}
+
+void SLLMNPCTemplateWorkbench::InvalidateSandboxPreflight(
+	bool bCancelActivePreview
+)
+{
+	const bool bHadSandboxState =
+		LastSandboxPreflight.Stage !=
+			ELLMNPCAuthoringSandboxStage::Idle ||
+		SandboxReport.bTransientPlanSubmitted ||
+		SandboxReport.bDraftRecordSaved ||
+		SandboxReport.HumanVisualDecision != TEXT("not_recorded");
+	if (bCancelActivePreview)
+	{
+		CancelActiveSandboxPreview(TEXT("recipe_or_target_changed"));
+	}
+	LastSandboxPreflight =
+		FLLMNPCAuthoringSandboxPreflightResult();
+	if (bHadSandboxState && SandboxReport.RequestId.IsValid())
+	{
+		SandboxReport.bPreflightPassed = false;
+		SandboxReport.bTransientPlanSubmitted = false;
+		SandboxReport.bDraftRecordSaved = false;
+		SandboxReport.DraftRecordPath.Reset();
+		SandboxReport.RecipeHash.Reset();
+		SandboxReport.CompiledRecipeHash.Reset();
+		SandboxReport.KinematicReportHash.Reset();
+		SandboxReport.PreflightIssueCodes.Reset();
+		SandboxReport.HumanVisualDecision =
+			TEXT("not_recorded");
+		SandboxReport.HumanVisualNotes.Reset();
+		SandboxReport.Outcome =
+			TEXT("recipe_or_target_changed");
+		SandboxReport.ErrorCode =
+			TEXT("LLMNPC_AUTHORING_SANDBOX_PREFLIGHT_STALE");
+		SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+		if (SandboxReviewNotesBox)
+		{
+			SandboxReviewNotesBox->SetText(FText::GetEmpty());
+		}
+		SaveSandboxReport();
+	}
+	UpdateSandboxSummary();
+}
+
+void SLLMNPCTemplateWorkbench::CancelActiveSandboxPreview(
+	FName Outcome
+)
+{
+	if (ActiveSandboxClipId.IsEmpty())
+	{
+		return;
+	}
+	if (ULLMNPCMotionComponent* Motion = ActiveSandboxMotion.Get())
+	{
+		Motion->CancelMotionClip(ActiveSandboxClipId);
+	}
+	ActiveSandboxMotion.Reset();
+	ActiveSandboxClipId.Reset();
+	SandboxPreviewStartedAtSeconds = 0.0;
+	if (SandboxReport.RequestId.IsValid())
+	{
+		SandboxReport.Outcome = Outcome;
+		SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+		SaveSandboxReport();
+		UpdateSandboxSummary();
+	}
+}
+
+void SLLMNPCTemplateWorkbench::UpdateSandboxSummary()
+{
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	const bool bEnabled =
+		FLLMNPCAuthoringSandbox::IsBuildAvailable() &&
+		Settings &&
+		Settings->bEnableAuthoringRuntimeSandbox;
+	if (!SandboxReport.RequestId.IsValid())
+	{
+		SandboxSummary = FString::Printf(
+			TEXT("Mode: %s\nBuild Gate: %s\nStatus: Generate an online Recipe, then run Full Preflight in PIE."),
+			bEnabled ? TEXT("Enabled") : TEXT("Disabled"),
+			FLLMNPCAuthoringSandbox::IsBuildAvailable()
+				? TEXT("Development")
+				: TEXT("Shipping Disabled")
+		);
+	}
+	else
+	{
+		SandboxSummary = FString::Printf(
+			TEXT("Mode: %s\nRequest: %s\nOutcome: %s\nPreflight: %s\nRecipe: %s\nCapability: %s\nKinematic: %s\nTransient Submit: %s\nDraft Record: %s\nHuman Visual: %s\nReport: %s%s"),
+			bEnabled ? TEXT("Enabled") : TEXT("Disabled"),
+			*SandboxReport.RequestId.ToString(
+				EGuidFormats::DigitsWithHyphensLower
+			),
+			*SandboxReport.Outcome.ToString(),
+			SandboxReport.bPreflightPassed
+				? TEXT("Passed")
+				: TEXT("Not Passed"),
+			SandboxReport.RecipeHash.IsEmpty()
+				? TEXT("<none>")
+				: *SandboxReport.RecipeHash,
+			SandboxReport.CapabilityHash.IsEmpty()
+				? TEXT("<none>")
+				: *SandboxReport.CapabilityHash,
+			SandboxReport.KinematicReportHash.IsEmpty()
+				? TEXT("<none>")
+				: *SandboxReport.KinematicReportHash,
+			SandboxReport.bTransientPlanSubmitted
+				? TEXT("Yes")
+				: TEXT("No"),
+			SandboxReport.bDraftRecordSaved
+				? *SandboxReport.DraftRecordPath
+				: TEXT("<none>"),
+			*SandboxReport.HumanVisualDecision.ToString(),
+			SandboxReportPath.IsEmpty()
+				? TEXT("<not written>")
+				: *SandboxReportPath,
+			SandboxReport.ErrorCode.IsNone()
+				? TEXT("")
+				: *FString::Printf(
+					TEXT("\nError: %s"),
+					*SandboxReport.ErrorCode.ToString()
+				)
+		);
+	}
+	if (SandboxEvidenceBox)
+	{
+		SandboxEvidenceBox->SetText(
+			FText::FromString(SandboxSummary)
+		);
+	}
+}
+
+void SLLMNPCTemplateWorkbench::SaveSandboxReport()
+{
+	if (!SandboxReport.RequestId.IsValid())
+	{
+		return;
+	}
+	FString Error;
+	FString Path;
+	if (FLLMNPCOnlineSandboxReport::Save(
+		SandboxReport,
+		Path,
+		Error
+	))
+	{
+		SandboxReportPath = MoveTemp(Path);
+	}
+	else
+	{
+		SandboxReportPath = FString::Printf(
+			TEXT("<write failed: %s>"),
+			*Error
+		);
+	}
+}
+
+void SLLMNPCTemplateWorkbench::RecordSandboxVisualDecision(
+	FName Decision
+)
+{
+	if (
+		!CanRecordSandboxVisualReview() ||
+		(Decision != TEXT("pass") && Decision != TEXT("fail"))
+	)
+	{
+		SetStatus(
+			LOCTEXT(
+				"SandboxVisualReviewUnavailable",
+				"Wait for a completed Sandbox preview before recording the human visual result."
+			),
+			true
+		);
+		return;
+	}
+	FString Notes = SandboxReviewNotesBox.IsValid()
+		? SandboxReviewNotesBox->GetText().ToString().TrimStartAndEnd()
+		: FString();
+	if (Notes.Len() > 1000)
+	{
+		SetStatus(
+			LOCTEXT(
+				"SandboxVisualNotesTooLong",
+				"Human visual notes must be 1000 characters or fewer."
+			),
+			true
+		);
+		return;
+	}
+
+	SandboxReport.HumanVisualDecision = Decision;
+	SandboxReport.HumanVisualNotes = MoveTemp(Notes);
+	SandboxReport.Outcome = Decision == TEXT("pass")
+		? FName(TEXT("visual_pass"))
+		: FName(TEXT("visual_fail"));
+	SandboxReport.ErrorCode = NAME_None;
+	SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+	SaveSandboxReport();
+	UpdateSandboxSummary();
+	SetStatus(
+		Decision == TEXT("pass")
+			? LOCTEXT(
+				"SandboxVisualPassRecorded",
+				"Human visual pass recorded. The Recipe can now be sent to a Generated Draft."
+			)
+			: LOCTEXT(
+				"SandboxVisualFailRecorded",
+				"Human visual failure recorded. Edit or regenerate the Recipe before creating a Draft."
+			),
+		Decision == TEXT("fail")
+	);
 }
 
 #undef LOCTEXT_NAMESPACE

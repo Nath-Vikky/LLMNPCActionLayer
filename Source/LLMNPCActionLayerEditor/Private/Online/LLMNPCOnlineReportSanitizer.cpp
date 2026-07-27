@@ -41,7 +41,14 @@ TSharedPtr<FJsonValue> SanitizeValue(const TSharedPtr<FJsonValue>& Value)
 	case EJson::String:
 		{
 			const FString Text = Value->AsString();
-			return Text.TrimStart().StartsWith(TEXT("Bearer "), ESearchCase::IgnoreCase)
+			const FString Lower = Text.ToLower();
+			const bool bContainsCredential =
+				Lower.Contains(TEXT("bearer ")) ||
+				Lower.Contains(TEXT("openai_api_key")) ||
+				Lower.Contains(TEXT("api_key=")) ||
+				Lower.Contains(TEXT("\"api_key\"")) ||
+				Lower.StartsWith(TEXT("sk-"));
+			return bContainsCredential
 				? MakeShared<FJsonValueString>(TEXT("[REDACTED]"))
 				: MakeShared<FJsonValueString>(Text);
 		}

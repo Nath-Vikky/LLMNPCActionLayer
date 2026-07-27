@@ -6,7 +6,7 @@ namespace LLMNPCMotionRecipe
 {
 inline constexpr const TCHAR* SchemaVersion = TEXT("llmnpc.motion_recipe.v1");
 inline constexpr const TCHAR* RegistryVersion = TEXT("llmnpc.motion_primitives.v1");
-inline constexpr const TCHAR* CompilerVersion = TEXT("llmnpc.motion_recipe_compiler.v2");
+inline constexpr const TCHAR* CompilerVersion = TEXT("llmnpc.motion_recipe_compiler.v3");
 inline constexpr int32 DefaultMaxPrimitiveCount = 12;
 inline constexpr int32 DefaultMaxTargetCount = 1;
 inline constexpr int32 DefaultMaxActiveBodyRegions = 3;

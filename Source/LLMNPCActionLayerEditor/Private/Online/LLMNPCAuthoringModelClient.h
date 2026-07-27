@@ -12,6 +12,7 @@ struct FLLMNPCAuthoringJsonRequest
 	FString UserJson;
 	float Temperature = 0.1f;
 	int32 MaxTokens = 1800;
+	float TimeoutSeconds = 0.0f;
 };
 
 struct FLLMNPCAuthoringJsonResult
@@ -58,6 +59,7 @@ private:
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response,
 		bool bWasSuccessful
 	);
+	void HandleWatchdogTimeout(const FGuid& RequestId);
 	void Complete(
 		const FGuid& RequestId,
 		const FLLMNPCAuthoringJsonResult& Result

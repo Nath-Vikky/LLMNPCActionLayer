@@ -5,6 +5,8 @@
 #include "Capabilities/LLMNPCSkeletonCapabilityTypes.h"
 #include "CoreMinimal.h"
 #include "Online/LLMNPCAuthoringModelClient.h"
+#include "Online/LLMNPCOnlineSandboxReport.h"
+#include "Sandbox/LLMNPCAuthoringSandbox.h"
 #include "Templates/LLMNPCTemplateSearchIndex.h"
 #include "UObject/GCObject.h"
 #include "Widgets/SCompoundWidget.h"
@@ -18,6 +20,7 @@ class UAnimationAsset;
 class ULLMNPCMotionComponent;
 class ULLMNPCMotionTemplate;
 class ULLMNPCPublicActionDefinition;
+class ULLMNPCSkeletonProfile;
 struct FAssetData;
 
 template<typename OptionType>
@@ -109,6 +112,13 @@ private:
 	FLLMNPCMotionRecipeAuthoringResponse LastRecipeResponse;
 	FLLMNPCSkeletonCapabilitySnapshot LastRecipeCapability;
 	FLLMNPCAuthoringJsonResult LastAuthoringResult;
+	FLLMNPCAuthoringSandboxPreflightResult LastSandboxPreflight;
+	FLLMNPCOnlineSandboxReportRecord SandboxReport;
+	FString SandboxSummary;
+	FString SandboxReportPath;
+	TWeakObjectPtr<ULLMNPCMotionComponent> ActiveSandboxMotion;
+	FString ActiveSandboxClipId;
+	double SandboxPreviewStartedAtSeconds = 0.0;
 	TSharedPtr<FLLMNPCAuthoringModelClient> AuthoringModelClient;
 
 	TArray<UObject*> ReferencedAssets;
@@ -125,6 +135,7 @@ private:
 	TArray<TSharedPtr<FLLMNPCTemplateWorkbenchActorOption>> ActorOptions;
 	TSharedPtr<FLLMNPCTemplateWorkbenchActorOption> SelectedActor;
 	TSharedPtr<SComboBox<TSharedPtr<FLLMNPCTemplateWorkbenchActorOption>>> ActorCombo;
+	TSharedPtr<SComboBox<TSharedPtr<FLLMNPCTemplateWorkbenchActorOption>>> SandboxActorCombo;
 
 	TSharedPtr<SWidgetSwitcher> PageSwitcher;
 	TSharedPtr<SEditableTextBox> AnimationDraftPathBox;
@@ -133,6 +144,8 @@ private:
 	TSharedPtr<SEditableTextBox> RecipeDestinationPathBox;
 	TSharedPtr<SMultiLineEditableTextBox> RecipeJsonBox;
 	TSharedPtr<SMultiLineEditableTextBox> RecipeEvidenceBox;
+	TSharedPtr<SMultiLineEditableTextBox> SandboxEvidenceBox;
+	TSharedPtr<SMultiLineEditableTextBox> SandboxReviewNotesBox;
 	TSharedPtr<SMultiLineEditableTextBox> CandidateCardBox;
 	TSharedPtr<SMultiLineEditableTextBox> QualityBox;
 	TSharedPtr<SEditableTextBox> ReconstructionPathBox;
@@ -177,15 +190,20 @@ private:
 	FText GetCatalogSummaryText() const;
 	FText GetAnimationImportSummaryText() const;
 	FText GetRecipeGenerationSummaryText() const;
+	FText GetSandboxSummaryText() const;
 	FText GetReviewStateText() const;
 	FText GetReviewDestinationText() const;
 	FSlateColor GetStatusColor() const;
 	ECheckBoxState GetPageCheckState(ELLMNPCTemplateWorkbenchPage Page) const;
 	ECheckBoxState GetIncludeNonPublishedState() const;
+	ECheckBoxState GetSandboxEnabledState() const;
 	bool CanPreviewSelection() const;
 	bool CanImportAnimationDraft() const;
 	bool CanGenerateMotionRecipe() const;
 	bool CanCancelMotionRecipeGeneration() const;
+	bool CanPreviewMotionRecipeInSandbox() const;
+	bool CanStopMotionRecipeSandbox() const;
+	bool CanRecordSandboxVisualReview() const;
 	bool CanCreateMotionRecipeDraft() const;
 	bool CanGenerateQualityReport() const;
 	bool CanMarkPreviewed() const;
@@ -208,8 +226,10 @@ private:
 		ESelectInfo::Type SelectInfo
 	);
 	void HandleSearchChanged(const FText& Text);
+	void HandleRecipeJsonChanged(const FText& Text);
 	void HandleAnimationAssetChanged(const FAssetData& AssetData);
 	void HandleIncludeNonPublishedChanged(ECheckBoxState State);
+	void HandleSandboxEnabledChanged(ECheckBoxState State);
 	void HandleSkeletonChanged(
 		TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption> Option,
 		ESelectInfo::Type SelectInfo
@@ -225,6 +245,10 @@ private:
 	FReply HandleImportAnimationDraft();
 	FReply HandleGenerateMotionRecipe();
 	FReply HandleCancelMotionRecipeGeneration();
+	FReply HandlePreviewMotionRecipeInSandbox();
+	FReply HandleStopMotionRecipeSandbox();
+	FReply HandleRecordSandboxVisualPass();
+	FReply HandleRecordSandboxVisualFail();
 	FReply HandleCreateMotionRecipeDraft();
 	FReply HandlePreview();
 	FReply HandleValidate();
@@ -235,4 +259,11 @@ private:
 	FReply HandleApprove();
 	FReply HandleReject();
 	FReply HandlePublish();
+
+	ULLMNPCSkeletonProfile* GetSelectedSkeletonProfile() const;
+	void InvalidateSandboxPreflight(bool bCancelActivePreview);
+	void CancelActiveSandboxPreview(FName Outcome);
+	void UpdateSandboxSummary();
+	void SaveSandboxReport();
+	void RecordSandboxVisualDecision(FName Decision);
 };

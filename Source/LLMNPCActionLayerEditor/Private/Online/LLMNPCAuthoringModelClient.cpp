@@ -20,6 +20,7 @@ struct FLLMNPCAuthoringModelClient::FPendingRequest
 	TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> HttpRequest;
 	int32 Attempt = 0;
 	double StartedAtSeconds = 0.0;
+	FTSTicker::FDelegateHandle WatchdogHandle;
 };
 
 namespace
@@ -85,6 +86,30 @@ void FLLMNPCAuthoringModelClient::Send(
 	Pending->Callback = MoveTemp(Callback);
 	Pending->StartedAtSeconds = FPlatformTime::Seconds();
 	PendingRequests.Add(Request.RequestId, Pending);
+	const float WatchdogSeconds = FMath::Clamp(
+		Request.TimeoutSeconds > 0.0f
+			? Request.TimeoutSeconds
+			: Settings->AuthoringSandboxRequestTimeoutSeconds,
+		2.0f,
+		120.0f
+	);
+	const TWeakPtr<FLLMNPCAuthoringModelClient> WeakSelf = AsShared();
+	Pending->WatchdogHandle = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda(
+			[WeakSelf, RequestId = Request.RequestId](float)
+			{
+				if (
+					const TSharedPtr<FLLMNPCAuthoringModelClient> Self =
+						WeakSelf.Pin()
+				)
+				{
+					Self->HandleWatchdogTimeout(RequestId);
+				}
+				return false;
+			}
+		),
+		WatchdogSeconds
+	);
 	StartHttpRequest(Request.RequestId);
 }
 
@@ -98,6 +123,13 @@ void FLLMNPCAuthoringModelClient::Cancel(const FGuid& RequestId)
 	if (Pending->HttpRequest)
 	{
 		Pending->HttpRequest->CancelRequest();
+	}
+	if (Pending->WatchdogHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(
+			Pending->WatchdogHandle
+		);
+		Pending->WatchdogHandle.Reset();
 	}
 	FLLMNPCAuthoringJsonResult Result = MakeFailure(
 		RequestId,
@@ -365,6 +397,38 @@ void FLLMNPCAuthoringModelClient::HandleHttpResponse(
 	Complete(RequestId, Result);
 }
 
+void FLLMNPCAuthoringModelClient::HandleWatchdogTimeout(
+	const FGuid& RequestId
+)
+{
+	TSharedPtr<FPendingRequest>* Found =
+		PendingRequests.Find(RequestId);
+	if (!Found || !Found->IsValid())
+	{
+		return;
+	}
+	const TSharedPtr<FPendingRequest> Pending = *Found;
+	if (Pending->HttpRequest)
+	{
+		Pending->HttpRequest->CancelRequest();
+		Pending->HttpRequest.Reset();
+	}
+	Pending->WatchdogHandle.Reset();
+
+	FLLMNPCAuthoringJsonResult Result = MakeFailure(
+		RequestId,
+		TEXT("LLMNPC_AUTHORING_REQUEST_TIMEOUT")
+	);
+	Result.AttemptCount = Pending->Attempt;
+	Result.TotalLatencySeconds = static_cast<float>(
+		FMath::Max(
+			FPlatformTime::Seconds() - Pending->StartedAtSeconds,
+			0.0
+		)
+	);
+	Complete(RequestId, Result);
+}
+
 void FLLMNPCAuthoringModelClient::Complete(
 	const FGuid& RequestId,
 	const FLLMNPCAuthoringJsonResult& Result
@@ -374,6 +438,13 @@ void FLLMNPCAuthoringModelClient::Complete(
 	if (!PendingRequests.RemoveAndCopyValue(RequestId, Pending) || !Pending)
 	{
 		return;
+	}
+	if (Pending->WatchdogHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(
+			Pending->WatchdogHandle
+		);
+		Pending->WatchdogHandle.Reset();
 	}
 	if (Pending->Callback)
 	{

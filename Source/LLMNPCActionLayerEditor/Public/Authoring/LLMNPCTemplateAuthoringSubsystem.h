@@ -56,6 +56,8 @@ struct FLLMNPCMotionRecipeGenerationEvidence
 	FString RecipeSchemaJson;
 	FString CapabilityModelViewJson;
 	FString RawResponseJson;
+	FString CompiledRecipeHash;
+	FString KinematicReportHash;
 	FDateTime GeneratedAtUtc;
 	int32 HttpStatus = 0;
 	int32 AttemptCount = 0;

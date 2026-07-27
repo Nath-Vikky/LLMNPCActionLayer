@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "llmnpc.sandbox_draft_record.v1",
+  "title": "LLM NPC Authoring Sandbox Draft Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "created_at_utc",
+    "review_state",
+    "capability_hash",
+    "primitive_registry_version",
+    "recipe_hash",
+    "compiled_recipe_hash",
+    "kinematic_report_hash",
+    "motion_recipe"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "llmnpc.sandbox_draft_record.v1"
+    },
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at_utc": {
+      "type": "string",
+      "minLength": 1
+    },
+    "review_state": {
+      "const": "Draft"
+    },
+    "capability_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "primitive_registry_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recipe_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "compiled_recipe_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kinematic_report_hash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "motion_recipe": {
+      "type": "object"
+    }
+  }
+}

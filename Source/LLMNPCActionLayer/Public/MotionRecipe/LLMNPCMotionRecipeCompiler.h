@@ -6,10 +6,13 @@
 #include "MotionRecipe/LLMNPCMotionPrimitiveRegistry.h"
 #include "MotionRecipe/LLMNPCMotionRecipeTypes.h"
 
+class ULLMNPCControlManifest;
+
 struct LLMNPCACTIONLAYER_API FLLMNPCMotionRecipeCompileContext
 {
 	FLLMNPCMotionRecipeValidationContext ValidationContext;
 	TMap<FName, FString> TargetBindings;
+	const ULLMNPCControlManifest* ControlManifest = nullptr;
 	float Priority = 0.75f;
 };
 
