@@ -8,9 +8,11 @@
 - Authoring prompt: `llmnpc.motion_recipe_authoring_prompt.v3`
 - Authoring job: `llmnpc.motion_recipe_authoring_job.v2`
 - Automated N7-A gate: 1/1 passed
+- Full plugin release regression: 102/102 passed
 - Real online regeneration, human PIE approval, and publication: passed
   2026-07-27
-- Real online runtime reuse: pending three fresh acceptance turns
+- Real online runtime reuse: passed 2026-07-27 with three fresh acceptance
+  turns
 
 ## Goal
 
@@ -109,6 +111,10 @@ Published child: gesture.shrug.manny.generated.5704441acd3d
 Public Action: gesture.shrug 1.0.0 revision 1
 Quality: pass
 Human PIE review: approved with minor detail polish deferred
+Runtime report: motion_test_20260727_073605.json
+Runtime provider: deepseek_direct_editor
+Runtime model: deepseek-v4-flash
+Runtime acceptance: 3/3 passed without local fallback
 ```
 
 Canonical sources:
@@ -118,6 +124,17 @@ Canonical sources:
 
 The published child retains the rejected-parent Template ID, Recipe hash, and
 bounded human visual feedback. The source files contain no provider credential
-or authorization material. Completion still requires the three real online
-runtime turns listed above to select this Published revision without Mock
-fallback.
+or authorization material.
+
+The sanitized runtime report remains outside source control at:
+
+```text
+Saved/LLMNPCActionLayer/ForwardN0/Reports/motion_test_20260727_073605.json
+```
+
+All three independent requests offered the same five Published actions,
+selected `gesture.shrug`, resolved the Published child above, passed runtime
+validation, started the behavior, and executed the action. Each result records
+`strict_provider_identity = true` and `used_local_fallback = false`. The user
+completed the corresponding PIE observation and reported no additional visual
+failure. N7-A is complete.

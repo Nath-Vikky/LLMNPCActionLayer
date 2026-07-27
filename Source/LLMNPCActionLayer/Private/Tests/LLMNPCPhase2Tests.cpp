@@ -201,7 +201,7 @@ bool FLLMNPCCandidateBoundaryTest::RunTest(const FString& Parameters)
 
 	TArray<FLLMNPCTemplateCandidate> Candidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), Candidates);
-	TestEqual(TEXT("Manny exposes four public actions"), Candidates.Num(), 4);
+	TestEqual(TEXT("Manny exposes five public actions"), Candidates.Num(), 5);
 	for (const FLLMNPCTemplateCandidate& Candidate : Candidates)
 	{
 		TestFalse(TEXT("Candidate selection IDs are skeleton independent"), Candidate.SelectionId.ToString().Contains(TEXT(".manny.")));
@@ -217,8 +217,10 @@ bool FLLMNPCCandidateBoundaryTest::RunTest(const FString& Parameters)
 	const FString ContextJson = Session->BuildRequestContextJson(FGuid::NewGuid(), Candidates);
 	TestTrue(TEXT("Context includes the public wave action"), ContextJson.Contains(TEXT("gesture.wave.right")));
 	TestTrue(TEXT("Context includes the public Clap action"), ContextJson.Contains(TEXT("gesture.clap")));
+	TestTrue(TEXT("Context includes the public Shrug action"), ContextJson.Contains(TEXT("gesture.shrug")));
 	TestFalse(TEXT("Context does not expose the faithful internal variant"), ContextJson.Contains(TEXT(".fk.v1")));
 	TestFalse(TEXT("Context does not expose the Clap implementation ID"), ContextJson.Contains(TEXT("gesture.clap.manny.asset.v1")));
+	TestFalse(TEXT("Context does not expose the Shrug implementation ID"), ContextJson.Contains(TEXT("gesture.shrug.manny.generated")));
 	TestFalse(TEXT("Context does not expose raw controls"), ContextJson.Contains(TEXT("right_upperarm")));
 
 	FLLMNPCModelTurnDecision UnknownDecision;

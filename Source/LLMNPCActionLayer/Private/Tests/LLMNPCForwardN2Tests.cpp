@@ -258,17 +258,20 @@ bool FLLMNPCForwardN2CandidateAdapterTest::RunTest(const FString& Parameters)
 
 	TArray<FLLMNPCTemplateCandidate> Candidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), Candidates);
-	TestEqual(TEXT("Manny exposes four Public Action candidates"), Candidates.Num(), 4);
+	TestEqual(TEXT("Manny exposes five Public Action candidates"), Candidates.Num(), 5);
 	const FLLMNPCTemplateCandidate* Wave =
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.wave.right"));
 	const FLLMNPCTemplateCandidate* Point =
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.point.target"));
 	const FLLMNPCTemplateCandidate* Clap =
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.clap"));
+	const FLLMNPCTemplateCandidate* Shrug =
+		ForwardN2FindCandidate(Candidates, TEXT("gesture.shrug"));
 	TestNotNull(TEXT("The aggregated Wave Candidate exists"), Wave);
 	TestNotNull(TEXT("The aggregated Point Candidate exists"), Point);
 	TestNotNull(TEXT("The Published Clap Candidate exists"), Clap);
-	if (!Wave || !Point || !Clap)
+	TestNotNull(TEXT("The Published Shrug Candidate exists"), Shrug);
+	if (!Wave || !Point || !Clap || !Shrug)
 	{
 		return false;
 	}
@@ -439,10 +442,16 @@ bool FLLMNPCForwardN2TurnRequestV3PrivacyTest::RunTest(
 	);
 	if (CandidateValues)
 	{
-		TestEqual(TEXT("All four Public Actions are offered"), CandidateValues->Num(), 4);
+		TestEqual(TEXT("All five Public Actions are offered"), CandidateValues->Num(), 5);
+		bool bHasPublishedShrug = false;
 		for (const TSharedPtr<FJsonValue>& Value : *CandidateValues)
 		{
 			const TSharedPtr<FJsonObject> CandidateObject = Value->AsObject();
+			FString SelectionId;
+			bHasPublishedShrug |=
+				CandidateObject.IsValid() &&
+				CandidateObject->TryGetStringField(TEXT("selection_id"), SelectionId) &&
+				SelectionId == TEXT("gesture.shrug");
 			TestTrue(
 				TEXT("v3 Candidate Cards use selection_id"),
 				CandidateObject.IsValid() &&
@@ -459,6 +468,7 @@ bool FLLMNPCForwardN2TurnRequestV3PrivacyTest::RunTest(
 				CandidateObject->HasTypedField<EJson::Array>(TEXT("style_options"))
 			);
 		}
+		TestTrue(TEXT("The request offers the Published Shrug"), bHasPublishedShrug);
 	}
 	for (const TCHAR* Forbidden : {
 		TEXT("clavicle_"),

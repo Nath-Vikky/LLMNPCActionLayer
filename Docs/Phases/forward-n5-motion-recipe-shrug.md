@@ -9,7 +9,7 @@
 - Compiler: `llmnpc.motion_recipe_compiler.v2`
 - Automated N5 gate: 10/10 passed
 - Real online generation, human PIE review, publication, and online runtime
-  selection: pending
+  selection: passed 2026-07-27 through the reviewed N7-A revision
 - Multiplayer scope: deferred
 
 ## Goal
@@ -245,3 +245,24 @@ claim that the motion looks correct.
 - `LLMNPCActionLayer.ForwardN5.MotionRecipe.SafeModelSchema`
 - `LLMNPCActionLayer.ForwardN5.MotionRecipe.ShrugCompiler`
 - `LLMNPCActionLayer.ForwardN5.MotionRecipe.StrictParser`
+
+## Completion Evidence
+
+The accepted final revision was generated with
+`llmnpc.motion_recipe_authoring_prompt.v3`, compiled with
+`llmnpc.motion_recipe_compiler.v3`, reviewed in PIE, and published as:
+
+```text
+Public Action: gesture.shrug
+Motion Template: gesture.shrug.manny.generated.5704441acd3d
+Runtime report: motion_test_20260727_073605.json
+Runtime acceptance: 3/3 passed with deepseek-v4-flash
+```
+
+The runtime report remains under
+`Saved/LLMNPCActionLayer/ForwardN0/Reports`. Every acceptance turn selected the
+Published Shrug from five Published candidates, resolved the final reviewed
+template, executed successfully, and records no local fallback. The user
+completed the associated visual PIE observation. The rejected-parent revision
+lineage and detailed acceptance evidence are documented in
+`forward-n7a-rejected-draft-revision.md`.
