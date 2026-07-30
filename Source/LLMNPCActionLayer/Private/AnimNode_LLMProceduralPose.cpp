@@ -1010,7 +1010,10 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		float HandIKAlpha,
 		float OpenWeight,
 		float RelaxedWeight,
+		float CurlWeight,
 		const FVector& LocalOffsetCS,
+		const FVector& PalmTargetCS,
+		float PalmTargetWeight,
 		const FVector& PalmFacingTargetCS,
 		float PalmFacingWeight,
 		const FBoneReference& LowerArmBone,
@@ -1037,13 +1040,26 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 			0.0f,
 			1.0f
 		);
+		const float CurlAlpha = FMath::Clamp(
+			FMath::Min(HandIKAlpha, CurlWeight) * ActualAlpha,
+			0.0f,
+			1.0f
+		);
+		const float PalmTargetAlpha = FMath::Clamp(
+			FMath::Min(HandIKAlpha, PalmTargetWeight) * ActualAlpha,
+			0.0f,
+			1.0f
+		);
 		const float PalmFacingAlpha = FMath::Clamp(
 			FMath::Min(HandIKAlpha, PalmFacingWeight) * ActualAlpha,
 			0.0f,
 			1.0f
 		);
 		const float OrientationAlpha = FMath::Max(
-			FMath::Max(OpenAlpha, RelaxedAlpha),
+			FMath::Max(
+				FMath::Max(OpenAlpha, RelaxedAlpha),
+				CurlAlpha
+			),
 			PalmFacingAlpha
 		);
 		if (OrientationAlpha <= KINDA_SMALL_NUMBER)
@@ -1149,7 +1165,40 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 				DesiredFingerDirection,
 				DesiredPalmNormal
 			);
-		if (!bHasContactBasis && OpenAlpha >= RelaxedAlpha)
+		const float BeckonPoseAlpha = FMath::Max(
+			RelaxedAlpha,
+			CurlAlpha
+		);
+		const FVector PalmTargetDirection = (
+			PalmTargetCS - HandTM.GetLocation()
+		);
+		const bool bHasBeckonBasis =
+			!bHasContactBasis &&
+			PalmTargetAlpha > KINDA_SMALL_NUMBER &&
+			BeckonPoseAlpha > OpenAlpha &&
+			!PalmTargetDirection.IsNearlyZero();
+		if (bHasBeckonBasis)
+		{
+			const FVector ComponentRight = -ComponentLeft;
+			const FVector Outward =
+				bRightHand ? ComponentRight : ComponentLeft;
+			DesiredPalmNormal = (
+				ComponentUp +
+				Outward * 0.26f
+			).GetSafeNormal();
+			DesiredFingerDirection = FVector::VectorPlaneProject(
+				PalmTargetDirection.GetSafeNormal(),
+				DesiredPalmNormal
+			).GetSafeNormal();
+			if (DesiredFingerDirection.IsNearlyZero())
+			{
+				DesiredFingerDirection = FVector::VectorPlaneProject(
+					ComponentForward + Outward * 0.16f,
+					DesiredPalmNormal
+				).GetSafeNormal();
+			}
+		}
+		else if (!bHasContactBasis && OpenAlpha >= BeckonPoseAlpha)
 		{
 			const float WaveSway = FMath::Clamp(
 				LocalOffsetCS.X / 17.0f,
@@ -1209,7 +1258,10 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		Snapshot.RightHandIKAlpha,
 		Snapshot.RightFingersOpen,
 		Snapshot.RightFingersRelaxed,
+		Snapshot.RightFingersCurl,
 		Snapshot.RightHandLocalOffsetCS,
+		Snapshot.RightHandPalmTargetCS,
+		Snapshot.RightHandPalmAlpha,
 		Snapshot.RightHandPalmFacingTargetCS,
 		Snapshot.RightHandPalmFacingAlpha,
 		RightLowerArmBone,
@@ -1231,7 +1283,10 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		Snapshot.LeftHandIKAlpha,
 		Snapshot.LeftFingersOpen,
 		Snapshot.LeftFingersRelaxed,
+		Snapshot.LeftFingersCurl,
 		Snapshot.LeftHandLocalOffsetCS,
+		Snapshot.LeftHandPalmTargetCS,
+		Snapshot.LeftHandPalmAlpha,
 		Snapshot.LeftHandPalmFacingTargetCS,
 		Snapshot.LeftHandPalmFacingAlpha,
 		LeftLowerArmBone,

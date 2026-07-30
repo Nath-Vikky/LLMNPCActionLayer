@@ -1,0 +1,46 @@
+{
+	"schema_version": "llmnpc.published_public_action_source.v1",
+	"asset_path": "/Game/LLMNPCActionLayer/PublicActions/Published/PA_Gesture_Beckon_Draft.PA_Gesture_Beckon_Draft",
+	"content_hash": "md5:03e4efe3de2e3959b55195c3466c77d1",
+	"definition":
+	{
+		"publicActionId": "gesture.beckon",
+		"semanticVersion": "1.0.0",
+		"definitionRevision": 1,
+		"displayName": "Friendly Beckon to Target",
+		"selectionSummary": "Invite the primary target closer with a right-handed palm-up beckon, two finger curls, then smooth recovery.",
+		"suitableWhen": [
+			"greeting",
+			"inviting",
+			"attracting attention"
+		],
+		"avoidWhen": [
+			"target is far away",
+			"character is holding something"
+		],
+		"semanticEffectTags": [
+			"attract_attention",
+			"direct_attention"
+		],
+		"targetCategoryTags": [
+			"scene_target"
+		],
+		"gestureFamily": "wave",
+		"defaultStyle": "friendly",
+		"incompatibleActionFamilies": [],
+		"searchKeywords": [
+			"beckon",
+			"come closer",
+			"invite",
+			"approach",
+			"follow me"
+		],
+		"bRequiresTarget": true,
+		"catalogSchemaVersion": "llmnpc.public_action_definition.v1",
+		"reviewState": "Published",
+		"contentHash": "md5:03e4efe3de2e3959b55195c3466c77d1",
+		"reviewRecordJson": "{\r\n\t\"schema_version\": \"llmnpc.public_action_review.v1\",\r\n\t\"authoring_bundle_id\": \"md5:b46c8f2b6c59ccae80933631ccd7d8c1\",\r\n\t\"source_recipe_hash\": \"md5:10b324222a58859ca491a5da009c01a4\",\r\n\t\"history\": [\r\n\t\t{\r\n\t\t\t\"event\": \"previewed\",\r\n\t\t\t\"reviewer\": \"preview_operator\",\r\n\t\t\t\"notes\": \"common\",\r\n\t\t\t\"timestamp_utc\": \"2026-07-30T09:00:40.413Z\",\r\n\t\t\t\"approved\": false\r\n\t\t},\r\n\t\t{\r\n\t\t\t\"event\": \"human_approved\",\r\n\t\t\t\"reviewer\": \"Vikky\",\r\n\t\t\t\"notes\": \"common\",\r\n\t\t\t\"timestamp_utc\": \"2026-07-30T09:00:40.930Z\",\r\n\t\t\t\"approved\": true\r\n\t\t}\r\n\t],\r\n\t\"human_review\":\r\n\t{\r\n\t\t\"event\": \"human_approved\",\r\n\t\t\"reviewer\": \"Vikky\",\r\n\t\t\"notes\": \"common\",\r\n\t\t\"timestamp_utc\": \"2026-07-30T09:00:40.930Z\",\r\n\t\t\"approved\": true\r\n\t}\r\n}",
+		"assetBundleData": "",
+		"nativeClass": "/Script/CoreUObject.Class'/Script/LLMNPCActionLayer.LLMNPCPublicActionDefinition'"
+	}
+}

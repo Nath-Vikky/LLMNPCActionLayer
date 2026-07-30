@@ -48,7 +48,7 @@ void AddShapedFloatTrack(
 	};
 }
 
-void AddKeyframedFloatTrack(
+FLLMMotionTrack& AddKeyframedFloatTrack(
 	FLLMMotionClip& Clip,
 	FName ControlId,
 	const TArray<FLLMMotionKeyFloat>& Keys,
@@ -63,6 +63,7 @@ void AddKeyframedFloatTrack(
 		Primitive
 	);
 	Track.FloatKeys = Keys;
+	return Track;
 }
 
 void AddOscillatorTrack(
@@ -712,6 +713,143 @@ void CompileWavePrimitive(
 	}
 }
 
+void CompileBeckonPrimitive(
+	const FLLMNPCMotionRecipePrimitive& Primitive,
+	const FString& TargetRef,
+	FLLMMotionClip& Clip
+)
+{
+	const FString SidePrefix =
+		Primitive.Side == TEXT("right") ? TEXT("right") : TEXT("left");
+	const float Amplitude = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("amplitude"), 0.7)
+	);
+	const float Speed = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("speed"), 1.0)
+	);
+	const int32 Cycles = FMath::RoundToInt(
+		Primitive.GetNumberParameter(TEXT("cycles"), 2.0)
+	);
+	const float CurlAmount = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("curl_amount"), 0.72)
+	);
+	const float Reach = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("reach"), 0.58)
+	);
+	const float Height = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("height"), 0.55)
+	);
+	const float SolverReach = FMath::Lerp(
+		0.18f,
+		0.34f,
+		FMath::Clamp(
+			(Reach - 0.35f) / (0.78f - 0.35f),
+			0.0f,
+			1.0f
+		)
+	);
+	const float OutwardOffset =
+		Primitive.Side == TEXT("right") ? 5.0f : -5.0f;
+
+	const FName IKControl(*FString::Printf(
+		TEXT("%s_hand.ik"),
+		*SidePrefix
+	));
+	AddReachTrack(
+		Clip,
+		IKControl,
+		TargetRef,
+		SolverReach,
+		FVector(
+			0.0f,
+			OutwardOffset,
+			(Height - 0.5f) * 24.0f
+		),
+		0.72f + 0.22f * Amplitude,
+		Primitive
+	);
+	AddLookAtTrack(
+		Clip,
+		FName(*FString::Printf(
+			TEXT("%s_hand.palm_target"),
+			*SidePrefix
+		)),
+		TargetRef,
+		0.68f + 0.22f * Amplitude,
+		Primitive
+	);
+
+	const float StartTime =
+		static_cast<float>(Primitive.StartTimeSeconds);
+	const float EndTime =
+		static_cast<float>(Primitive.EndTimeSeconds);
+	const float Duration = EndTime - StartTime;
+	const float GestureStart = StartTime + Duration * 0.22f;
+	const float GestureEnd = EndTime - Duration * 0.18f;
+	const float CycleDuration =
+		(GestureEnd - GestureStart) /
+		static_cast<float>(FMath::Max(1, Cycles));
+	const float SpeedAlpha = FMath::Clamp(
+		(Speed - 0.7f) / 0.6f,
+		0.0f,
+		1.0f
+	);
+	const float CurlPeakPhase = FMath::Lerp(
+		0.56f,
+		0.38f,
+		SpeedAlpha
+	);
+	const float EffectiveCurl = FMath::Clamp(
+		CurlAmount * FMath::Lerp(0.82f, 1.0f, Amplitude),
+		0.0f,
+		1.0f
+	);
+
+	TArray<FLLMMotionKeyFloat> RelaxedKeys;
+	TArray<FLLMMotionKeyFloat> CurlKeys;
+	RelaxedKeys.Reserve(Cycles * 2 + 3);
+	CurlKeys.Reserve(Cycles * 2 + 3);
+	RelaxedKeys.Add({StartTime, 0.0f});
+	CurlKeys.Add({StartTime, 0.0f});
+	RelaxedKeys.Add({GestureStart, 1.0f});
+	CurlKeys.Add({GestureStart, 0.0f});
+	for (int32 CycleIndex = 0; CycleIndex < Cycles; ++CycleIndex)
+	{
+		const float CycleStart =
+			GestureStart + CycleDuration * CycleIndex;
+		const float CurlPeak =
+			CycleStart + CycleDuration * CurlPeakPhase;
+		const float CycleEnd = CycleStart + CycleDuration;
+		RelaxedKeys.Add({CurlPeak, 1.0f - EffectiveCurl});
+		CurlKeys.Add({CurlPeak, EffectiveCurl});
+		RelaxedKeys.Add({CycleEnd, 1.0f});
+		CurlKeys.Add({CycleEnd, 0.0f});
+	}
+	RelaxedKeys.Add({EndTime, 0.0f});
+	CurlKeys.Add({EndTime, 0.0f});
+
+	FLLMMotionTrack& RelaxedTrack = AddKeyframedFloatTrack(
+		Clip,
+		FName(*FString::Printf(
+			TEXT("%s_fingers.relaxed"),
+			*SidePrefix
+		)),
+		RelaxedKeys,
+		Primitive
+	);
+	RelaxedTrack.TargetRef = TargetRef;
+	FLLMMotionTrack& CurlTrack = AddKeyframedFloatTrack(
+		Clip,
+		FName(*FString::Printf(
+			TEXT("%s_fingers.curl"),
+			*SidePrefix
+		)),
+		CurlKeys,
+		Primitive
+	);
+	CurlTrack.TargetRef = TargetRef;
+}
+
 bool CompileHandPosePrimitive(
 	const FLLMNPCMotionRecipePrimitive& Primitive,
 	FLLMMotionClip& Clip
@@ -826,6 +964,11 @@ bool CompilePrimitive(
 	else if (Primitive.PrimitiveId == TEXT("hand.wave_arc"))
 	{
 		CompileWavePrimitive(Primitive, TargetRef, Clip);
+		bCompiled = true;
+	}
+	else if (Primitive.PrimitiveId == TEXT("hand.beckon"))
+	{
+		CompileBeckonPrimitive(Primitive, TargetRef, Clip);
 		bCompiled = true;
 	}
 	else

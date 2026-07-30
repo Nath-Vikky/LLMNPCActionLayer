@@ -11,8 +11,10 @@
 #include "Capabilities/LLMNPCSkeletonCapabilityBuilder.h"
 #include "Dom/JsonObject.h"
 #include "Engine/AssetManager.h"
+#include "GameFramework/Pawn.h"
 #include "HAL/FileManager.h"
 #include "Interfaces/IPluginManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "JsonObjectConverter.h"
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCMotionValidator.h"
@@ -28,6 +30,7 @@
 #include "MotionRecipe/LLMNPCMotionRecipeValidator.h"
 #include "ObjectTools.h"
 #include "Quality/LLMNPCKinematicValidator.h"
+#include "Sandbox/LLMNPCAuthoringSandbox.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -892,6 +895,9 @@ bool ValidateMotionRecipeEvidenceEnvelope(
 				LLMNPCMotionRecipeAuthoring::PromptVersion &&
 			PromptVersion !=
 				LLMNPCMotionRecipeAuthoring::
+					LegacyPromptVersionV4 &&
+			PromptVersion !=
+				LLMNPCMotionRecipeAuthoring::
 					LegacyPromptVersionV3
 		) ||
 		!Provenance->TryGetStringField(
@@ -1065,14 +1071,45 @@ bool RecompileMotionRecipeTemplate(
 	FLLMNPCMotionRecipeCompileContext CompileContext;
 	CompileContext.ValidationContext.Mode =
 		ELLMNPCMotionRecipeMode::AuthoringSandbox;
-	for (const FLLMNPCMotionRecipePrimitive& Primitive : Recipe.Primitives)
+	const TSharedPtr<FJsonObject>* AuthoringTrigger = nullptr;
+	FString AuthoringContractId;
+	if (
+		!Provenance->TryGetObjectField(
+			TEXT("authoring_trigger"),
+			AuthoringTrigger
+		) ||
+		!AuthoringTrigger ||
+		!AuthoringTrigger->IsValid() ||
+		!(*AuthoringTrigger)->TryGetStringField(
+			TEXT("authoring_contract_id"),
+			AuthoringContractId
+		)
+	)
 	{
-		if (!Primitive.TargetSlot.IsNone())
-		{
-			OutError =
-				TEXT("LLMNPC_RECIPE_QUALITY_TARGET_SLOT_NOT_SUPPORTED");
-			return false;
-		}
+		OutError =
+			TEXT("LLMNPC_RECIPE_QUALITY_AUTHORING_CONTRACT_MISSING");
+		return false;
+	}
+	const FLLMNPCMotionRecipeAuthoringContract* AuthoringContract =
+		FLLMNPCMotionRecipeAuthoringPrompt::FindContract(
+			FName(*AuthoringContractId)
+		);
+	if (!AuthoringContract)
+	{
+		OutError =
+			TEXT("LLMNPC_RECIPE_QUALITY_AUTHORING_CONTRACT_INVALID");
+		return false;
+	}
+	CompileContext.ValidationContext.AllowedTargetSlots =
+		AuthoringContract->AllowedTargetSlots;
+	for (const FName TargetSlot :
+		AuthoringContract->AllowedTargetSlots)
+	{
+		CompileContext.TargetBindings.Add(
+			TargetSlot,
+			FLLMNPCAuthoringSandbox::
+				BuildCanonicalTargetRef(TargetSlot)
+		);
 	}
 	FLLMMotionPlan Plan;
 	FLLMNPCCompiledRecipeMetadata Compiled;
@@ -1856,6 +1893,8 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 		FLLMNPCMotionPrimitiveRegistry::Get();
 	FLLMNPCMotionRecipeValidationContext ValidationContext;
 	ValidationContext.Mode = ELLMNPCMotionRecipeMode::AuthoringSandbox;
+	ValidationContext.AllowedTargetSlots =
+		AuthoringContract->AllowedTargetSlots;
 
 	auto NormalizeRecipe = [&](
 		const FString& SourceJson,
@@ -1872,16 +1911,6 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 		))
 		{
 			return false;
-		}
-		for (const FLLMNPCMotionRecipePrimitive& Primitive :
-			OutRecipe.Primitives)
-		{
-			if (!Primitive.TargetSlot.IsNone())
-			{
-				OutNormalizeError =
-					TEXT("LLMNPC_RECIPE_DRAFT_TARGET_SLOT_NOT_SUPPORTED");
-				return false;
-			}
 		}
 		if (!FLLMNPCMotionRecipeValidator::ValidateAndNormalize(
 			OutRecipe,
@@ -1970,6 +1999,15 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 
 	FLLMNPCMotionRecipeCompileContext CompileContext;
 	CompileContext.ValidationContext = ValidationContext;
+	for (const FName TargetSlot :
+		AuthoringContract->AllowedTargetSlots)
+	{
+		CompileContext.TargetBindings.Add(
+			TargetSlot,
+			FLLMNPCAuthoringSandbox::
+				BuildCanonicalTargetRef(TargetSlot)
+		);
+	}
 	FLLMMotionPlan Plan;
 	FLLMNPCCompiledRecipeMetadata CompiledMetadata;
 	if (!FLLMNPCMotionRecipeCompiler::Compile(
@@ -2347,6 +2385,19 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 		}
 		for (const FName BlockedState : Definition->BlockedStates)
 		{
+			if (
+				(
+					BlockedState == TEXT("left_hand_busy") &&
+					Primitive.Side == TEXT("right")
+				) ||
+				(
+					BlockedState == TEXT("right_hand_busy") &&
+					Primitive.Side == TEXT("left")
+				)
+			)
+			{
+				continue;
+			}
 			TemplateSeed->Metadata.BlockedStates.AddUnique(BlockedState);
 		}
 	}
@@ -2356,7 +2407,8 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	TemplateSeed->Metadata.RequiredChannels.Sort(FNameLexicalLess());
 	TemplateSeed->Metadata.BlockedStates.Sort(FNameLexicalLess());
 	TemplateSeed->Metadata.SkeletonProfileId = SkeletonProfileId;
-	TemplateSeed->Metadata.bRequiresTarget = false;
+	TemplateSeed->Metadata.bRequiresTarget =
+		AuthoringContract->bTargetRequired;
 	TemplateSeed->Metadata.bCanRunWhileMoving =
 		CatalogSpec.bCanRunWhileMoving;
 	TemplateSeed->Metadata.bAllowRuntimeModelSelection = true;
@@ -2367,12 +2419,29 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 		FMath::Clamp(CatalogSpec.Energy, 0.0f, 1.0f);
 	TemplateSeed->Metadata.SocialIntensity =
 		FMath::Clamp(CatalogSpec.SocialIntensity, 0.0f, 1.0f);
-	TemplateSeed->Metadata.VariantDifference =
+	if (
 		Evidence.AuthoringContractId ==
 			LLMNPCMotionRecipeAuthoring::
 				ProceduralClapAuthoringContractId
-		? TEXT("Procedural hands.contact variant for comparison with the reviewed AnimationAsset baseline.")
-		: TEXT("Online model-authored Motion Recipe compiled for the Manny capability profile.");
+	)
+	{
+		TemplateSeed->Metadata.VariantDifference =
+			TEXT("Procedural hands.contact variant for comparison with the reviewed AnimationAsset baseline.");
+	}
+	else if (
+		Evidence.AuthoringContractId ==
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralBeckonAuthoringContractId
+	)
+	{
+		TemplateSeed->Metadata.VariantDifference =
+			TEXT("Target-following Manny beckon with constrained palm-up orientation, bounded finger curl cycles, and occupied-hand mirroring.");
+	}
+	else
+	{
+		TemplateSeed->Metadata.VariantDifference =
+			TEXT("Online model-authored Motion Recipe compiled for the Manny capability profile.");
+	}
 	TemplateSeed->Metadata.SourceRecipeHash =
 		CompiledMetadata.RecipeHash;
 	TemplateSeed->Metadata.KinematicReportHash =
@@ -2387,9 +2456,30 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 		FVector2D(0.9f, 1.1f);
 	TemplateSeed->ModifierPolicy.DurationRange =
 		FVector2D(0.95f, 1.05f);
-	TemplateSeed->ModifierPolicy.bAllowMirror = false;
+	TemplateSeed->ModifierPolicy.bAllowMirror =
+		AuthoringContract->bAllowMirror;
 	TemplateSeed->ModifierPolicy.AllowedStyleTags =
 		CatalogSpec.VariantStyleTags;
+	if (AuthoringContract->bTargetRequired)
+	{
+		TemplateSeed->ModifierPolicy.ReachScaleRange =
+			FVector2D(0.8f, 1.15f);
+		TemplateSeed->ModifierPolicy.HeightScaleRange =
+			FVector2D(0.8f, 1.12f);
+		TemplateSeed->ModifierPolicy.LateralScaleRange =
+			FVector2D(0.85f, 1.0f);
+		TemplateSeed->ModifierPolicy.PalmOrientationWeightRange =
+			FVector2D(0.85f, 1.0f);
+		TemplateSeed->ModifierPolicy.FingerPoseWeightRange =
+			FVector2D(0.85f, 1.0f);
+		TemplateSeed->ModifierPolicy.bEnableDynamicTargetTracking =
+			true;
+		TemplateSeed->ModifierPolicy.TargetLostFadeSeconds = 0.18f;
+		TemplateSeed->ModifierPolicy.TargetLossPolicy =
+			ELLMNPCTargetLossPolicy::FadeOut;
+		TemplateSeed->ModifierPolicy.bEnableObstacleAdaptation =
+			true;
+	}
 	TemplateSeed->ModifierPolicy.TorsoParticipationRange =
 		FVector2D(0.8f, 1.0f);
 	TemplateSeed->ModifierPolicy.RandomAmplitudeJitter = 0.015f;
@@ -2451,7 +2541,8 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	if (Definition)
 	{
 		if (
-			Definition->bRequiresTarget ||
+			Definition->bRequiresTarget !=
+				AuthoringContract->bTargetRequired ||
 			Definition->TargetCategoryTags !=
 				CatalogSpec.TargetCategoryTags
 		)
@@ -2489,7 +2580,8 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 			CatalogSpec.DefaultStyle;
 		DefinitionSeed->SearchKeywords =
 			CatalogSpec.SearchKeywords;
-		DefinitionSeed->bRequiresTarget = false;
+		DefinitionSeed->bRequiresTarget =
+			AuthoringContract->bTargetRequired;
 		DefinitionSeed->CatalogSchemaVersion =
 			LLMNPCCatalog::PublicActionSchemaVersion;
 		DefinitionSeed->ReviewState =
@@ -3729,6 +3821,27 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::PreviewTempla
 			Template
 		);
 	}
+	if (Template->Metadata.bRequiresTarget)
+	{
+		AActor* PreviewTarget = UGameplayStatics::GetPlayerPawn(
+			PreviewActor,
+			0
+		);
+		if (
+			!IsValid(PreviewTarget) ||
+			PreviewTarget == PreviewActor
+		)
+		{
+			return ErrorResult(
+				TEXT("LLMNPC_AUTHORING_PREVIEW_TARGET_UNAVAILABLE"),
+				TEXT("Targeted template preview requires player 0 to be a different PIE Actor from the selected Manny.")
+			);
+		}
+		MotionComponent->RegisterTarget(
+			TEXT("authoring_preview_target"),
+			PreviewTarget
+		);
+	}
 	FLLMMotionPlan Plan;
 	FString Error;
 	if (!CompileTemplateForPreview(*Template, Plan, Error))
@@ -3892,9 +4005,15 @@ bool ULLMNPCTemplateAuthoringSubsystem::CompileTemplateForPreview(
 	PreviewCopy->Metadata.CatalogContentHash.Reset();
 	PreviewCopy->Metadata.CatalogContentHash =
 		ULLMNPCMotionTemplate::BuildCatalogContentHash(*PreviewCopy);
+	FLLMNPCTemplateModifiers Modifiers;
+	if (Template.Metadata.bRequiresTarget)
+	{
+		Modifiers.TargetRef =
+			TEXT("authoring_preview_target");
+	}
 	return FLLMNPCTemplateCompiler::Compile(
 		*PreviewCopy,
-		FLLMNPCTemplateModifiers(),
+		Modifiers,
 		*Profile,
 		OutPlan,
 		OutError

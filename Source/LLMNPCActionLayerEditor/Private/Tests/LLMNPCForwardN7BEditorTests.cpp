@@ -290,7 +290,7 @@ bool FLLMNPCForwardN7BArtifactContractTest::RunTest(
 		)
 	);
 	TestEqual(
-		TEXT("The checked-in Recipe Schema matches Registry v2"),
+		TEXT("The checked-in Recipe Schema matches the current Registry"),
 		FLLMNPCUEPIArtifactAdapter::HashJson(
 			CheckedInSchemaJson
 		),

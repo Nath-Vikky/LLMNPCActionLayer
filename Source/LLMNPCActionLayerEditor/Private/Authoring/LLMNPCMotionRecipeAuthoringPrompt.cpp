@@ -233,6 +233,40 @@ const TArray<FLLMNPCMotionRecipeAuthoringContract>& BuildContracts()
 			TEXT("Create a new Draft. Preserve the clap intent and address only the bounded visual feedback.");
 		Result.Add(MoveTemp(Clap));
 
+		FLLMNPCMotionRecipeAuthoringContract Beckon;
+		Beckon.ContractId =
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralBeckonAuthoringContractId;
+		Beckon.PublicActionId = TEXT("gesture.beckon");
+		Beckon.DisplayName =
+			FText::FromString(TEXT("Procedural Beckon"));
+		Beckon.DefaultDesiredAction =
+			TEXT("Invite the primary scene target to come closer with one friendly palm-up hand. ")
+			TEXT("Reach toward the target, curl the relaxed fingers inward for two readable invitations, ")
+			TEXT("then recover smoothly to neutral.");
+		Beckon.Phase =
+			TEXT("forward_n7c_procedural_beckon");
+		Beckon.RequiredIntent = TEXT("attract_attention");
+		Beckon.AllowedPrimitiveIds = {TEXT("hand.beckon")};
+		Beckon.PrimitiveCount = 1;
+		Beckon.MinDurationSeconds = 0.9;
+		Beckon.MaxDurationSeconds = 3.2;
+		Beckon.AllowedTargetSlots = {TEXT("primary")};
+		Beckon.bTargetRequired = true;
+		Beckon.bAllowMirror = true;
+		Beckon.TargetContract =
+			TEXT("Exactly one semantic scene target is available as target_slot 'primary'. ")
+			TEXT("Use that exact slot on hand.beckon. Unreal binds it to the live Actor, tracks motion, ")
+			TEXT("limits reach and wrist orientation, and fades the gesture if the target is lost.");
+		Beckon.TimingContract =
+			TEXT("Use one hand.beckon primitive from start 0 through the recipe duration. ")
+			TEXT("Set cycles to the requested invitation count. Unreal owns arm reach, palm-up targeting, ")
+			TEXT("relaxed-to-curl finger curves, continuous easing, target tracking, and recovery; ")
+			TEXT("do not create hold, pause, timing, transition, or helper primitives.");
+		Beckon.RevisionPolicy =
+			TEXT("Create a new Draft. Preserve the beckon intent and primary target contract, and address only the bounded visual feedback.");
+		Result.Add(MoveTemp(Beckon));
+
 		return Result;
 	}();
 	return Contracts;
@@ -249,6 +283,107 @@ bool CapabilitySupportsPrimitive(
 			return Capability.CapabilityId == PrimitiveId;
 		}
 	);
+}
+
+bool ValidateRecipeForCapabilityInternal(
+	const FLLMNPCMotionRecipeAuthoringResponse& Response,
+	const FLLMNPCSkeletonCapabilitySnapshot& CapabilitySnapshot,
+	const TSet<FName>& AllowedPrimitiveIds,
+	const TSet<FName>& AllowedTargetSlots,
+	FName RequiredIntent,
+	int32 MaxPrimitiveCount,
+	FString& OutError
+)
+{
+	OutError.Reset();
+	if (
+		Response.bUnsupported ||
+		Response.RecipeJson.IsEmpty() ||
+		AllowedPrimitiveIds.IsEmpty() ||
+		MaxPrimitiveCount <= 0
+	)
+	{
+		OutError = TEXT("LLMNPC_RECIPE_AUTHORING_VALIDATION_INPUT_INVALID");
+		return false;
+	}
+
+	FLLMNPCMotionRecipe Recipe;
+	if (!FLLMNPCMotionRecipeParser::Parse(
+		Response.RecipeJson,
+		Recipe,
+		OutError
+	))
+	{
+		return false;
+	}
+	if (
+		!RequiredIntent.IsNone() &&
+		FName(*Recipe.Intent) != RequiredIntent
+	)
+	{
+		OutError = FString::Printf(
+			TEXT("LLMNPC_RECIPE_AUTHORING_INTENT_MISMATCH:%s"),
+			*Recipe.Intent
+		);
+		return false;
+	}
+	if (Recipe.Primitives.Num() > MaxPrimitiveCount)
+	{
+		OutError =
+			TEXT("LLMNPC_RECIPE_AUTHORING_PRIMITIVE_COUNT_EXCEEDED");
+		return false;
+	}
+	for (
+		const FLLMNPCMotionRecipePrimitive& Primitive :
+		Recipe.Primitives
+	)
+	{
+		if (!AllowedPrimitiveIds.Contains(Primitive.PrimitiveId))
+		{
+			OutError = FString::Printf(
+				TEXT("LLMNPC_RECIPE_AUTHORING_PRIMITIVE_NOT_ALLOWED:%s"),
+				*Primitive.PrimitiveId.ToString()
+			);
+			return false;
+		}
+		if (
+			!Primitive.TargetSlot.IsNone() &&
+			!AllowedTargetSlots.Contains(Primitive.TargetSlot)
+		)
+		{
+			OutError = AllowedTargetSlots.IsEmpty()
+				? TEXT("LLMNPC_RECIPE_AUTHORING_TARGET_SLOT_NOT_ALLOWED")
+				: FString::Printf(
+					TEXT("LLMNPC_RECIPE_AUTHORING_TARGET_SLOT_UNKNOWN:%s"),
+					*Primitive.TargetSlot.ToString()
+				);
+			return false;
+		}
+	}
+
+	FLLMNPCMotionRecipeValidationContext ValidationContext;
+	ValidationContext.Mode =
+		ELLMNPCMotionRecipeMode::AuthoringSandbox;
+	ValidationContext.AllowedTargetSlots = AllowedTargetSlots;
+	ValidationContext.MaxPrimitiveCount = FMath::Min(
+		ValidationContext.MaxPrimitiveCount,
+		MaxPrimitiveCount
+	);
+	FLLMNPCMotionRecipeValidationResult Validation;
+	if (!FLLMNPCMotionRecipeValidator::ValidateAndNormalize(
+		Recipe,
+		CapabilitySnapshot,
+		FLLMNPCMotionPrimitiveRegistry::Get(),
+		ValidationContext,
+		Validation
+	))
+	{
+		OutError = Validation.ErrorCode.IsEmpty()
+			? TEXT("LLMNPC_RECIPE_AUTHORING_VALIDATION_FAILED")
+			: Validation.ErrorCode;
+		return false;
+	}
+	return true;
 }
 }
 
@@ -313,7 +448,13 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 		Contract->PrimitiveCount <= 0 ||
 		Contract->MinDurationSeconds < 0.05 ||
 		Contract->MaxDurationSeconds <
-			Contract->MinDurationSeconds
+			Contract->MinDurationSeconds ||
+		(
+			Contract->bTargetRequired &&
+			Contract->AllowedTargetSlots.IsEmpty()
+		) ||
+		Contract->AllowedTargetSlots.Num() >
+			LLMNPCMotionRecipe::DefaultMaxTargetCount
 	)
 	{
 		OutError =
@@ -457,7 +598,7 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 	}
 	Request->SetStringField(
 		TEXT("target_contract"),
-		TEXT("No scene target is available for this generation request.")
+		Contract->TargetContract
 	);
 	Request->SetObjectField(
 		TEXT("skeleton_capability"),
@@ -513,6 +654,21 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 	AuthoringConstraints->SetArrayField(
 		TEXT("allowed_primitive_ids"),
 		NameValues(AllowedPrimitiveIds)
+	);
+	TArray<FName> AllowedTargetSlots =
+		Contract->AllowedTargetSlots.Array();
+	AllowedTargetSlots.Sort(FNameLexicalLess());
+	AuthoringConstraints->SetArrayField(
+		TEXT("allowed_target_slots"),
+		NameValues(AllowedTargetSlots)
+	);
+	AuthoringConstraints->SetBoolField(
+		TEXT("target_required"),
+		Contract->bTargetRequired
+	);
+	AuthoringConstraints->SetBoolField(
+		TEXT("mirror_allowed_after_authoring"),
+		Contract->bAllowMirror
 	);
 	AuthoringConstraints->SetStringField(
 		TEXT("timing_contract"),
@@ -596,6 +752,8 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 		TEXT("Act as a motion director, not as a skeleton controller. Use only semantic primitives and ")
 		TEXT("bounded parameters present in the supplied JSON Schema. Never invent a primitive, field, ")
 		TEXT("target, solver, asset path, control, joint, pose index, transform, rotation, or root motion. ")
+		TEXT("Use only semantic target slots listed in authoring_constraints.allowed_target_slots; ")
+		TEXT("never substitute an Actor name, asset, coordinate, or invented target. ")
 		TEXT("Copy every primitive_id verbatim from a const value in the supplied Schema and obey the ")
 		TEXT("authoring_constraints exactly. Words from prose are never primitive IDs. Use primitive start ")
 		TEXT("and end values for timing; Unreal owns easing, holds, transitions, and pose synthesis. ")
@@ -639,10 +797,11 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::ValidateRecipeForCapability(
 	FString& OutError
 )
 {
-	if (!ValidateRecipeForCapability(
+	if (!ValidateRecipeForCapabilityInternal(
 		Response,
 		CapabilitySnapshot,
 		Contract.AllowedPrimitiveIds,
+		Contract.AllowedTargetSlots,
 		Contract.RequiredIntent,
 		Contract.PrimitiveCount,
 		OutError
@@ -712,86 +871,15 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::ValidateRecipeForCapability(
 	FString& OutError
 )
 {
-	OutError.Reset();
-	if (
-		Response.bUnsupported ||
-		Response.RecipeJson.IsEmpty() ||
-		AllowedPrimitiveIds.IsEmpty() ||
-		MaxPrimitiveCount <= 0
-	)
-	{
-		OutError = TEXT("LLMNPC_RECIPE_AUTHORING_VALIDATION_INPUT_INVALID");
-		return false;
-	}
-
-	FLLMNPCMotionRecipe Recipe;
-	if (!FLLMNPCMotionRecipeParser::Parse(
-		Response.RecipeJson,
-		Recipe,
-		OutError
-	))
-	{
-		return false;
-	}
-	if (
-		!RequiredIntent.IsNone() &&
-		FName(*Recipe.Intent) != RequiredIntent
-	)
-	{
-		OutError = FString::Printf(
-			TEXT("LLMNPC_RECIPE_AUTHORING_INTENT_MISMATCH:%s"),
-			*Recipe.Intent
-		);
-		return false;
-	}
-	if (Recipe.Primitives.Num() > MaxPrimitiveCount)
-	{
-		OutError = TEXT("LLMNPC_RECIPE_AUTHORING_PRIMITIVE_COUNT_EXCEEDED");
-		return false;
-	}
-	for (
-		const FLLMNPCMotionRecipePrimitive& Primitive :
-		Recipe.Primitives
-	)
-	{
-		if (!AllowedPrimitiveIds.Contains(Primitive.PrimitiveId))
-		{
-			OutError = FString::Printf(
-				TEXT("LLMNPC_RECIPE_AUTHORING_PRIMITIVE_NOT_ALLOWED:%s"),
-				*Primitive.PrimitiveId.ToString()
-			);
-			return false;
-		}
-		if (!Primitive.TargetSlot.IsNone())
-		{
-			OutError =
-				TEXT("LLMNPC_RECIPE_AUTHORING_TARGET_SLOT_NOT_ALLOWED");
-			return false;
-		}
-	}
-
-	FLLMNPCMotionRecipeValidationContext ValidationContext;
-	ValidationContext.Mode =
-		ELLMNPCMotionRecipeMode::AuthoringSandbox;
-	ValidationContext.MaxPrimitiveCount = FMath::Min(
-		ValidationContext.MaxPrimitiveCount,
-		MaxPrimitiveCount
-	);
-	FLLMNPCMotionRecipeValidationResult Validation;
-	if (!FLLMNPCMotionRecipeValidator::ValidateAndNormalize(
-		Recipe,
+	return ValidateRecipeForCapabilityInternal(
+		Response,
 		CapabilitySnapshot,
-		FLLMNPCMotionPrimitiveRegistry::Get(),
-		ValidationContext,
-		Validation
-	))
-	{
-		OutError = Validation.ErrorCode.IsEmpty()
-			? TEXT("LLMNPC_RECIPE_AUTHORING_VALIDATION_FAILED")
-			: Validation.ErrorCode;
-		return false;
-	}
-	return true;
+		AllowedPrimitiveIds,
+		TSet<FName>(),
+		RequiredIntent,
+		MaxPrimitiveCount,
+		OutError
+	);
 }
 
 bool FLLMNPCMotionRecipeAuthoringPrompt::ParseResponse(

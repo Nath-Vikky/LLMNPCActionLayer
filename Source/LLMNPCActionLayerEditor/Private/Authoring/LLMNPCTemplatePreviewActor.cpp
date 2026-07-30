@@ -3,8 +3,11 @@
 #include "Authoring/LLMNPCTemplateAuthoringSubsystem.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/Pawn.h"
+#include "Kismet/GameplayStatics.h"
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCMotionTypes.h"
+#include "Templates/LLMNPCMotionTemplate.h"
 
 ALLMNPCTemplatePreviewActor::ALLMNPCTemplatePreviewActor()
 {
@@ -37,6 +40,21 @@ bool ALLMNPCTemplatePreviewActor::PreviewNow()
 	{
 		LastPreviewError = TEXT("LLMNPC_AUTHORING_PREVIEW_INPUT_MISSING");
 		return false;
+	}
+	if (PreviewTemplate->Metadata.bRequiresTarget)
+	{
+		AActor* PreviewTarget =
+			UGameplayStatics::GetPlayerPawn(this, 0);
+		if (!IsValid(PreviewTarget) || PreviewTarget == this)
+		{
+			LastPreviewError =
+				TEXT("LLMNPC_AUTHORING_PREVIEW_TARGET_UNAVAILABLE");
+			return false;
+		}
+		MotionComponent->RegisterTarget(
+			TEXT("authoring_preview_target"),
+			PreviewTarget
+		);
 	}
 
 	FLLMMotionPlan Plan;

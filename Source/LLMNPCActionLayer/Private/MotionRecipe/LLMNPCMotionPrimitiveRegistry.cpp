@@ -462,6 +462,90 @@ FLLMNPCMotionPrimitiveRegistry::FLLMNPCMotionPrimitiveRegistry()
 
 	{
 		FLLMNPCMotionPrimitiveDefinition Definition = MakeDefinition(
+			TEXT("hand.beckon"),
+			TEXT("hands"),
+			TEXT("solver.hand_beckon.manny.v1"),
+			TEXT("Invite one validated target closer with a palm-up hand and bounded relaxed-to-curl finger cycles.")
+		);
+		Definition.Availability =
+			ELLMNPCMotionPrimitiveAvailability::AuthoringOnly;
+		Definition.AllowedSides = {TEXT("left"), TEXT("right")};
+		Definition.AllowedTargetModes = {TEXT("target_slot")};
+		Definition.bTargetRequired = true;
+		Definition.RequiredCapabilities.Append({
+			TEXT("arm.reach"),
+			TEXT("hand.pose.relaxed"),
+			TEXT("hand.pose.curl")
+		});
+		Definition.RequiredChannelPatterns = {
+			TEXT("{side}_arm_ik"),
+			TEXT("{side}_hand_pose")
+		};
+		Definition.MirroringPolicy = TEXT("semantic_side");
+		Definition.MinDurationSeconds = 0.9;
+		Definition.MaxDurationSeconds = 3.2;
+		Definition.MaxInstancesPerRecipe = 1;
+		Definition.BlockedStates.Append({
+			TEXT("left_hand_busy"),
+			TEXT("right_hand_busy"),
+			TEXT("two_hand_interaction")
+		});
+		Definition.ParameterSchemas = {
+			NumberParameter(
+				TEXT("amplitude"),
+				0.3,
+				1.0,
+				0.7,
+				TEXT("normalized"),
+				TEXT("Overall bounded beckon expressiveness.")
+			),
+			NumberParameter(
+				TEXT("speed"),
+				0.7,
+				1.3,
+				1.0,
+				TEXT("multiplier"),
+				TEXT("Bounded finger curl timing within each authored cycle.")
+			),
+			NumberParameter(
+				TEXT("cycles"),
+				1.0,
+				4.0,
+				2.0,
+				TEXT("count"),
+				TEXT("Whole bounded invitation count."),
+				true
+			),
+			NumberParameter(
+				TEXT("curl_amount"),
+				0.35,
+				0.95,
+				0.72,
+				TEXT("normalized"),
+				TEXT("Maximum calibrated curl-pose contribution.")
+			),
+			NumberParameter(
+				TEXT("reach"),
+				0.35,
+				0.78,
+				0.58,
+				TEXT("normalized"),
+				TEXT("Bounded fraction of arm reach toward the target.")
+			),
+			NumberParameter(
+				TEXT("height"),
+				0.3,
+				0.8,
+				0.55,
+				TEXT("normalized"),
+				TEXT("Relative invitation-hand height.")
+			)
+		};
+		Definitions.Add(MoveTemp(Definition));
+	}
+
+	{
+		FLLMNPCMotionPrimitiveDefinition Definition = MakeDefinition(
 			TEXT("hands.contact"),
 			TEXT("hands"),
 			TEXT("solver.hands_contact.manny.v3"),

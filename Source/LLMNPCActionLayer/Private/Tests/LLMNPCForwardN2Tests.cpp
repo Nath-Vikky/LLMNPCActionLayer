@@ -258,7 +258,7 @@ bool FLLMNPCForwardN2CandidateAdapterTest::RunTest(const FString& Parameters)
 
 	TArray<FLLMNPCTemplateCandidate> Candidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), Candidates);
-	TestEqual(TEXT("Manny exposes five Public Action candidates"), Candidates.Num(), 5);
+	TestEqual(TEXT("Manny exposes six Public Action candidates"), Candidates.Num(), 6);
 	const FLLMNPCTemplateCandidate* Wave =
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.wave.right"));
 	const FLLMNPCTemplateCandidate* Point =
@@ -267,11 +267,14 @@ bool FLLMNPCForwardN2CandidateAdapterTest::RunTest(const FString& Parameters)
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.clap"));
 	const FLLMNPCTemplateCandidate* Shrug =
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.shrug"));
+	const FLLMNPCTemplateCandidate* Beckon =
+		ForwardN2FindCandidate(Candidates, TEXT("gesture.beckon"));
 	TestNotNull(TEXT("The aggregated Wave Candidate exists"), Wave);
 	TestNotNull(TEXT("The aggregated Point Candidate exists"), Point);
 	TestNotNull(TEXT("The Published Clap Candidate exists"), Clap);
 	TestNotNull(TEXT("The Published Shrug Candidate exists"), Shrug);
-	if (!Wave || !Point || !Clap || !Shrug)
+	TestNotNull(TEXT("The Published Beckon Candidate exists"), Beckon);
+	if (!Wave || !Point || !Clap || !Shrug || !Beckon)
 	{
 		return false;
 	}
@@ -280,6 +283,11 @@ bool FLLMNPCForwardN2CandidateAdapterTest::RunTest(const FString& Parameters)
 	TestTrue(
 		TEXT("Point exposes only the model-safe scene_target category"),
 		Point->TargetCategoryTags.Contains(TEXT("scene_target"))
+	);
+	TestTrue(TEXT("Beckon requires a scene target"), Beckon->bRequiresTarget);
+	TestTrue(
+		TEXT("Beckon exposes only the model-safe scene_target category"),
+		Beckon->TargetCategoryTags.Contains(TEXT("scene_target"))
 	);
 
 	FLLMNPCTemplateCandidate V2Wave;
@@ -442,16 +450,18 @@ bool FLLMNPCForwardN2TurnRequestV3PrivacyTest::RunTest(
 	);
 	if (CandidateValues)
 	{
-		TestEqual(TEXT("All five Public Actions are offered"), CandidateValues->Num(), 5);
+		TestEqual(TEXT("All six Public Actions are offered"), CandidateValues->Num(), 6);
 		bool bHasPublishedShrug = false;
+		bool bHasPublishedBeckon = false;
 		for (const TSharedPtr<FJsonValue>& Value : *CandidateValues)
 		{
 			const TSharedPtr<FJsonObject> CandidateObject = Value->AsObject();
 			FString SelectionId;
-			bHasPublishedShrug |=
+			const bool bHasSelectionId =
 				CandidateObject.IsValid() &&
-				CandidateObject->TryGetStringField(TEXT("selection_id"), SelectionId) &&
-				SelectionId == TEXT("gesture.shrug");
+				CandidateObject->TryGetStringField(TEXT("selection_id"), SelectionId);
+			bHasPublishedShrug |= bHasSelectionId && SelectionId == TEXT("gesture.shrug");
+			bHasPublishedBeckon |= bHasSelectionId && SelectionId == TEXT("gesture.beckon");
 			TestTrue(
 				TEXT("v3 Candidate Cards use selection_id"),
 				CandidateObject.IsValid() &&
@@ -469,6 +479,7 @@ bool FLLMNPCForwardN2TurnRequestV3PrivacyTest::RunTest(
 			);
 		}
 		TestTrue(TEXT("The request offers the Published Shrug"), bHasPublishedShrug);
+		TestTrue(TEXT("The request offers the Published Beckon"), bHasPublishedBeckon);
 	}
 	for (const TCHAR* Forbidden : {
 		TEXT("clavicle_"),

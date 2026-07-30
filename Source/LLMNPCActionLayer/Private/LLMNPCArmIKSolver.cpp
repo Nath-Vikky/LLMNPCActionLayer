@@ -4,18 +4,82 @@
 
 namespace
 {
-FVector ProjectOntoBendPlane(const FVector& Direction, const FVector& LimbDirection)
+FVector ProjectOntoBendPlane(
+	const FVector& Direction,
+	const FVector& LimbDirection,
+	float* OutReliability = nullptr
+)
 {
 	const FVector SafeDirection = Direction.GetSafeNormal();
 	if (SafeDirection.IsNearlyZero() || LimbDirection.IsNearlyZero())
 	{
+		if (OutReliability)
+		{
+			*OutReliability = 0.0f;
+		}
 		return SafeDirection;
 	}
 
-	return (
+	const FVector ProjectedDirection = (
 		SafeDirection -
 		LimbDirection * FVector::DotProduct(SafeDirection, LimbDirection)
-	).GetSafeNormal();
+	);
+	const float Reliability = FMath::Clamp(
+		ProjectedDirection.Size(),
+		0.0f,
+		1.0f
+	);
+	if (OutReliability)
+	{
+		*OutReliability = Reliability;
+	}
+	return ProjectedDirection.GetSafeNormal();
+}
+
+float SmoothIKPoleReliability(
+	float Value,
+	float Minimum,
+	float Maximum
+)
+{
+	const float Alpha = FMath::Clamp(
+		(Value - Minimum) / FMath::Max(Maximum - Minimum, UE_SMALL_NUMBER),
+		0.0f,
+		1.0f
+	);
+	return Alpha * Alpha * (3.0f - 2.0f * Alpha);
+}
+
+FVector RotateBendDirectionToward(
+	const FVector& CurrentDirection,
+	const FVector& TargetDirection,
+	const FVector& LimbDirection,
+	float Alpha
+)
+{
+	const FVector Current = CurrentDirection.GetSafeNormal();
+	const FVector Target = TargetDirection.GetSafeNormal();
+	const FVector Limb = LimbDirection.GetSafeNormal();
+	if (
+		Current.IsNearlyZero() ||
+		Target.IsNearlyZero() ||
+		Limb.IsNearlyZero()
+	)
+	{
+		return !Current.IsNearlyZero() ? Current : Target;
+	}
+
+	const float SignedAngle = FMath::Atan2(
+		FVector::DotProduct(
+			Limb,
+			FVector::CrossProduct(Current, Target)
+		),
+		FVector::DotProduct(Current, Target)
+	);
+	return FQuat(
+		Limb,
+		SignedAngle * FMath::Clamp(Alpha, 0.0f, 1.0f)
+	).RotateVector(Current).GetSafeNormal();
 }
 
 FVector ProjectOntoPalmPlane(const FVector& Direction, const FVector& PalmNormal)
@@ -115,31 +179,58 @@ FVector FLLMNPCArmIKSolver::BuildStableJointTarget(
 	float CurrentPoseWeight
 )
 {
-	const FVector LimbDirection = (DesiredEndPosition - RootPosition).GetSafeNormal();
-	FVector ProfileBendDirection = ProjectOntoBendPlane(ConfiguredPoleDirection, LimbDirection);
-	if (ProfileBendDirection.IsNearlyZero())
+	const FVector LimbDirection =
+		(DesiredEndPosition - RootPosition).GetSafeNormal();
+	float ProfileReliability = 0.0f;
+	FVector ProfileBendDirection = ProjectOntoBendPlane(
+		ConfiguredPoleDirection,
+		LimbDirection,
+		&ProfileReliability
+	);
+	float FallbackReliability = 0.0f;
+	const FVector FallbackBendDirection = ProjectOntoBendPlane(
+		FallbackPoleDirection,
+		LimbDirection,
+		&FallbackReliability
+	);
+	if (
+		ProfileBendDirection.IsNearlyZero() &&
+		!FallbackBendDirection.IsNearlyZero()
+	)
 	{
-		ProfileBendDirection = ProjectOntoBendPlane(FallbackPoleDirection, LimbDirection);
+		ProfileBendDirection = FallbackBendDirection;
+		ProfileReliability = FallbackReliability;
 	}
 
 	const FVector CurrentBendDirection = ProjectOntoBendPlane(
 		CurrentJointPosition - RootPosition,
 		LimbDirection
 	);
-	FVector StableBendDirection = ProfileBendDirection;
-	if (StableBendDirection.IsNearlyZero())
+	FVector StableBendDirection;
+	if (!CurrentBendDirection.IsNearlyZero())
 	{
-		StableBendDirection = CurrentBendDirection;
+		const float PoleReliabilityAlpha = SmoothIKPoleReliability(
+			ProfileReliability,
+			0.12f,
+			0.35f
+		);
+		const float ProfileInfluence =
+			(1.0f - FMath::Clamp(
+				CurrentPoseWeight,
+				0.0f,
+				1.0f
+			)) *
+			PoleReliabilityAlpha;
+		StableBendDirection = RotateBendDirectionToward(
+			CurrentBendDirection,
+			ProfileBendDirection,
+			LimbDirection,
+			ProfileInfluence
+		);
 	}
-	else if (
-		!CurrentBendDirection.IsNearlyZero() &&
-		FVector::DotProduct(StableBendDirection, CurrentBendDirection) > 0.0f)
+	else
 	{
-		const float PoseWeight = FMath::Clamp(CurrentPoseWeight, 0.0f, 1.0f);
-		StableBendDirection = (
-			StableBendDirection * (1.0f - PoseWeight) +
-			CurrentBendDirection * PoseWeight
-		).GetSafeNormal();
+		StableBendDirection = ProfileBendDirection;
 	}
 
 	if (StableBendDirection.IsNearlyZero())
@@ -200,6 +291,11 @@ void FLLMNPCArmIKSolver::SolveAtBlendedEffector(
 		DesiredEndPosition,
 		SafeAlpha
 	);
+	const float BlendAwareCurrentPoseWeight = FMath::Lerp(
+		1.0f,
+		FMath::Clamp(CurrentPoseWeight, 0.0f, 1.0f),
+		SafeAlpha
+	);
 	const FVector JointTarget = BuildStableJointTarget(
 		RootPosition,
 		OriginalLower.GetLocation(),
@@ -207,7 +303,7 @@ void FLLMNPCArmIKSolver::SolveAtBlendedEffector(
 		ConfiguredPoleDirection,
 		FallbackPoleDirection,
 		ChainLength,
-		CurrentPoseWeight
+		BlendAwareCurrentPoseWeight
 	);
 
 	AnimationCore::SolveTwoBoneIK(

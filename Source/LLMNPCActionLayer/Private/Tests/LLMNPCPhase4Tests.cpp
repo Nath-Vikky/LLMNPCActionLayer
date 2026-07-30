@@ -128,9 +128,9 @@ bool FLLMNPCPhase4CandidateRetrieverTest::RunTest(const FString& Parameters)
 	TArray<FLLMNPCTemplateCandidate> SourceCandidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), SourceCandidates);
 	TestEqual(
-		TEXT("Phase 4 library exposes nod, wave, point, Clap, and Shrug"),
+		TEXT("Phase 4 library exposes nod, wave, point, Clap, Shrug, and Beckon"),
 		SourceCandidates.Num(),
-		5
+		6
 	);
 	TestNotNull(
 		TEXT("The Published Clap source candidate exists"),
@@ -139,6 +139,10 @@ bool FLLMNPCPhase4CandidateRetrieverTest::RunTest(const FString& Parameters)
 	TestNotNull(
 		TEXT("The Published Shrug source candidate exists"),
 		FindCandidate(SourceCandidates, TEXT("gesture.shrug"))
+	);
+	TestNotNull(
+		TEXT("The Published Beckon source candidate exists"),
+		FindCandidate(SourceCandidates, TEXT("gesture.beckon"))
 	);
 	const FLLMNPCTemplateCandidate* SourcePoint =
 		FindCandidate(SourceCandidates, TEXT("gesture.point.target"));

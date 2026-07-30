@@ -38,6 +38,15 @@ FVector GetBoneLocationCS(USkeletalMeshComponent* Mesh, FName BoneName, const FV
 
 	return Fallback;
 }
+
+bool IsTargetGatedFingerControl(FName ControlId)
+{
+	return
+		ControlId == TEXT("right_fingers.relaxed") ||
+		ControlId == TEXT("right_fingers.curl") ||
+		ControlId == TEXT("left_fingers.relaxed") ||
+		ControlId == TEXT("left_fingers.curl");
+}
 }
 
 void FLLMNPCMotionSampler::SampleClip(
@@ -78,7 +87,29 @@ void FLLMNPCMotionSampler::SampleClip(
 		{
 			OutSnapshot.bLeftArmFKMirroredSource = true;
 		}
-		const float FloatValue = EvaluateFloatTrack(Track, Time) * TrackAlpha;
+		float FloatValue = EvaluateFloatTrack(Track, Time) * TrackAlpha;
+		if (
+			!Track.TargetRef.IsEmpty() &&
+			IsTargetGatedFingerControl(Control)
+		)
+		{
+			FVector IgnoredTargetLocationWS;
+			float TargetAlpha = 0.0f;
+			if (!ResolveTargetLocationWS(
+				Track.TargetRef,
+				TargetMap,
+				RuntimeTargetSamples,
+				IgnoredTargetLocationWS,
+				TargetAlpha
+			))
+			{
+				FloatValue = 0.0f;
+			}
+			else
+			{
+				FloatValue *= TargetAlpha;
+			}
+		}
 
 		if (Control == TEXT("head.pitch"))
 		{
@@ -660,7 +691,19 @@ FVector FLLMNPCMotionSampler::BuildReachTargetCS(
 				ResolvedModifiers->LateralScale;
 	}
 	const FVector Direction = (TargetCS - ShoulderCS).GetSafeNormal();
-	const float ReachDistance = FMath::Lerp(35.0f, 90.0f, Track.Reach);
+	const float ReachScale = ResolvedModifiers
+		? ResolvedModifiers->ReachScale
+		: 1.0f;
+	const float EffectiveReach = FMath::Clamp(
+		Track.Reach * ReachScale,
+		0.0f,
+		1.0f
+	);
+	const float ReachDistance = FMath::Lerp(
+		35.0f,
+		90.0f,
+		EffectiveReach
+	);
 	return ShoulderCS + Direction * ReachDistance + Track.Offset;
 }
 

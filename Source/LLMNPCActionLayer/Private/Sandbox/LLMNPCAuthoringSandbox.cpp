@@ -35,6 +35,15 @@ bool FLLMNPCAuthoringSandbox::IsBuildAvailable()
 #endif
 }
 
+FString FLLMNPCAuthoringSandbox::BuildCanonicalTargetRef(
+	FName TargetSlot
+)
+{
+	return TargetSlot.IsNone()
+		? FString()
+		: TargetSlot.ToString();
+}
+
 FLLMNPCAuthoringSandboxPreflightResult
 FLLMNPCAuthoringSandbox::RunFullPreflight(
 	const FLLMNPCAuthoringSandboxRequest& Request

@@ -9,6 +9,7 @@ namespace
 bool TrackAcceptsResolvedTarget(const FLLMMotionTrack& Track)
 {
 	return
+		!Track.TargetRef.IsEmpty() ||
 		Track.TrackType == ELLMMotionTrackType::IKReach ||
 		Track.TrackType == ELLMMotionTrackType::LookAt ||
 		Track.ControlId == TEXT("right_hand.palm_target") ||

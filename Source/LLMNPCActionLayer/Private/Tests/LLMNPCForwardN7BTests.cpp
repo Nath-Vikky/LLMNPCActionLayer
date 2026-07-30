@@ -495,7 +495,7 @@ bool FLLMNPCForwardN7BClapCompilerTest::RunTest(
 	TestEqual(
 		TEXT("The compiler version records contact synthesis"),
 		Metadata.CompilerVersion,
-		FString(TEXT("llmnpc.motion_recipe_compiler.v4"))
+		FString(LLMNPCMotionRecipe::CompilerVersion)
 	);
 	TestEqual(
 		TEXT("The Registry selects the internal contact Solver"),

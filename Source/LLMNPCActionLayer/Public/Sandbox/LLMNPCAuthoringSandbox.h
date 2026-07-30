@@ -59,6 +59,8 @@ class LLMNPCACTIONLAYER_API FLLMNPCAuthoringSandbox
 public:
 	static bool IsBuildAvailable();
 
+	static FString BuildCanonicalTargetRef(FName TargetSlot);
+
 	static FLLMNPCAuthoringSandboxPreflightResult RunFullPreflight(
 		const FLLMNPCAuthoringSandboxRequest& Request
 	);

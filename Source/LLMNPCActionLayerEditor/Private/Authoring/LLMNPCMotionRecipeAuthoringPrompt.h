@@ -8,6 +8,8 @@ struct FLLMNPCSkeletonCapabilitySnapshot;
 namespace LLMNPCMotionRecipeAuthoring
 {
 inline constexpr const TCHAR* PromptVersion =
+	TEXT("llmnpc.motion_recipe_authoring_prompt.v5");
+inline constexpr const TCHAR* LegacyPromptVersionV4 =
 	TEXT("llmnpc.motion_recipe_authoring_prompt.v4");
 inline constexpr const TCHAR* LegacyPromptVersionV3 =
 	TEXT("llmnpc.motion_recipe_authoring_prompt.v3");
@@ -19,6 +21,8 @@ inline constexpr const TCHAR* DefaultAuthoringContractId =
 	TEXT("gesture.shrug");
 inline constexpr const TCHAR* ProceduralClapAuthoringContractId =
 	TEXT("gesture.clap.procedural");
+inline constexpr const TCHAR* ProceduralBeckonAuthoringContractId =
+	TEXT("gesture.beckon.procedural");
 inline constexpr const TCHAR* ManualTriggerSource =
 	TEXT("ManualWorkbench");
 inline constexpr const TCHAR* RegenerationTriggerSource =
@@ -38,6 +42,11 @@ struct FLLMNPCMotionRecipeAuthoringContract
 	double MinDurationSeconds = 0.05;
 	double MaxDurationSeconds = 4.0;
 	bool bPrimitiveCoversRecipe = true;
+	TSet<FName> AllowedTargetSlots;
+	bool bTargetRequired = false;
+	bool bAllowMirror = false;
+	FString TargetContract =
+		TEXT("No scene target is available for this generation request.");
 	FString TimingContract;
 	FString RevisionPolicy;
 };

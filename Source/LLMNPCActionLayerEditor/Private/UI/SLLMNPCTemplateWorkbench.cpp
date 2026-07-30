@@ -13,6 +13,7 @@
 #include "IDesktopPlatform.h"
 #include "Interfaces/IPluginManager.h"
 #include "HAL/PlatformTime.h"
+#include "Kismet/GameplayStatics.h"
 #include "LLMNPCMotionComponent.h"
 #include "LLMNPCSettings.h"
 #include "Misc/MessageDialog.h"
@@ -49,6 +50,7 @@
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Views/SListView.h"
 #include "Widgets/Views/STableRow.h"
+#include "GameFramework/Pawn.h"
 
 #define LOCTEXT_NAMESPACE "SLLMNPCTemplateWorkbench"
 
@@ -3645,6 +3647,45 @@ HandlePreviewMotionRecipeInSandbox()
 		RecipeJsonBox->GetText().ToString();
 	Request.SkeletonProfile = Profile;
 	Request.ControlManifest = Motion->ControlManifest;
+	if (LastRecipePrompt.AuthoringContract.bTargetRequired)
+	{
+		AActor* PreviewTarget = UGameplayStatics::GetPlayerPawn(
+			Motion,
+			0
+		);
+		if (
+			!IsValid(PreviewTarget) ||
+			PreviewTarget == Motion->GetOwner()
+		)
+		{
+			SandboxReport.Outcome = TEXT("preflight_rejected");
+			SandboxReport.ErrorCode =
+				TEXT("LLMNPC_AUTHORING_SANDBOX_TARGET_UNAVAILABLE");
+			SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
+			SaveSandboxReport();
+			UpdateSandboxSummary();
+			SetStatus(
+				LOCTEXT(
+					"SandboxTargetUnavailable",
+					"Targeted Recipe preview requires player 0 to be a different PIE Actor from the selected Manny."
+				),
+				true
+			);
+			return FReply::Handled();
+		}
+		for (const FName TargetSlot :
+			LastRecipePrompt.AuthoringContract.AllowedTargetSlots)
+		{
+			const FString TargetRef =
+				FLLMNPCAuthoringSandbox::
+					BuildCanonicalTargetRef(TargetSlot);
+			Motion->RegisterTarget(TargetRef, PreviewTarget);
+			Request.TargetBindings.Add(
+				TargetSlot,
+				TargetRef
+			);
+		}
+	}
 	LastSandboxPreflight =
 		FLLMNPCAuthoringSandbox::RunFullPreflight(Request);
 	if (
@@ -3909,6 +3950,60 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		CatalogSpec.Expressiveness = 0.75f;
 		CatalogSpec.Energy = 0.78f;
 		CatalogSpec.SocialIntensity = 0.75f;
+	}
+	else if (
+		Contract->ContractId ==
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralBeckonAuthoringContractId
+	)
+	{
+		CatalogSpec.AssetName = FString::Printf(
+			TEXT("MT_Beckon_Manny_Procedural_Generated_%s"),
+			*Suffix
+		);
+		CatalogSpec.TemplateId = FName(*FString::Printf(
+			TEXT("gesture.beckon.manny.procedural.generated.%s"),
+			*Suffix
+		));
+		CatalogSpec.PublicActionAssetName =
+			TEXT("PA_Gesture_Beckon_Draft");
+		CatalogSpec.VariantId =
+			TEXT("procedural_generated_recipe");
+		CatalogSpec.IntentTags = {TEXT("attract_attention")};
+		CatalogSpec.EmotionTags = {TEXT("friendly")};
+		CatalogSpec.VariantStyleTags = {
+			TEXT("neutral"),
+			TEXT("friendly"),
+			TEXT("subtle")
+		};
+		CatalogSpec.BodyRegionTags = {
+			TEXT("one_arm"),
+			TEXT("hand"),
+			TEXT("fingers")
+		};
+		CatalogSpec.SpatialRequirementTags = {
+			TEXT("target_required")
+		};
+		CatalogSpec.TargetCategoryTags = {
+			TEXT("scene_target")
+		};
+		CatalogSpec.SemanticEffectTags = {
+			TEXT("attract_attention"),
+			TEXT("direct_attention")
+		};
+		CatalogSpec.GestureFamily = TEXT("wave");
+		CatalogSpec.DefaultStyle = TEXT("friendly");
+		CatalogSpec.SearchKeywords = {
+			TEXT("beckon"),
+			TEXT("come closer"),
+			TEXT("invite"),
+			TEXT("approach"),
+			TEXT("follow me")
+		};
+		CatalogSpec.bCanRunWhileMoving = true;
+		CatalogSpec.Expressiveness = 0.68f;
+		CatalogSpec.Energy = 0.58f;
+		CatalogSpec.SocialIntensity = 0.72f;
 	}
 	else
 	{

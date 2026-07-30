@@ -505,6 +505,23 @@ HumanApproved, and Publish.
 See `Docs/Phases/forward-n7b-procedural-clap.md` for protocol versions,
 calibration evidence, automated coverage, and the PIE comparison gate.
 
+## Forward N7-C Procedural Beckon
+
+N7-C adds Authoring-only `hand.beckon` for Manny. The online model chooses a
+side, semantic `primary` target slot, cycle count, reach, height, amplitude,
+speed, and curl amount. Unreal resolves the target and generates constrained
+arm IK, palm orientation, complementary Relaxed/Curl finger curves, target-loss
+fade, interruption, and recovery.
+
+The contract never exposes concrete Actors, coordinates, bones, or wrist
+rotations. The reviewed N7-C result completed human PIE review, Quality,
+Previewed, HumanApproved, and explicit Publish. Runtime selection now exposes
+Public Action `gesture.beckon` and resolves it to the Manny template
+`gesture.beckon.manny.procedural.generated.145355d29de7`.
+
+See `Docs/Phases/forward-n7c-procedural-beckon.md` for the target contract,
+dynamic-target policy, automated coverage, and manual acceptance matrix.
+
 ## Product Runtime
 
 When the owning Actor replicates, `ULLMNPCMotionComponent` replicates only a

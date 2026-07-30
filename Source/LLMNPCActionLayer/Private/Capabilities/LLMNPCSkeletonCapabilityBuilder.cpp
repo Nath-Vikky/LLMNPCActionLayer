@@ -433,6 +433,138 @@ void AddFingerCapability(
 	OutCapabilities.Add(MoveTemp(Capability));
 }
 
+void AddHandBeckonCapability(
+	const ULLMNPCSkeletonProfile& Profile,
+	const ULLMNPCControlManifest* Manifest,
+	TArray<FLLMNPCSemanticCapability>& OutCapabilities
+)
+{
+	FLLMNPCSemanticCapability Beckon = MakeCapability(
+		TEXT("hand.beckon"),
+		TEXT("hands"),
+		TEXT("Invite a validated scene target closer with target-following arm IK, a constrained palm-up wrist, and calibrated relaxed-to-curl finger cycles.")
+	);
+	for (const FName Side : {FName(TEXT("left")), FName(TEXT("right"))})
+	{
+		const FString SideString = Side.ToString();
+		const FName IKControl(*FString::Printf(
+			TEXT("%s_hand.ik"),
+			*SideString
+		));
+		const FName PalmTargetControl(*FString::Printf(
+			TEXT("%s_hand.palm_target"),
+			*SideString
+		));
+		const FName RelaxedControl(*FString::Printf(
+			TEXT("%s_fingers.relaxed"),
+			*SideString
+		));
+		const FName CurlControl(*FString::Printf(
+			TEXT("%s_fingers.curl"),
+			*SideString
+		));
+		const bool bHasArm =
+			HasSemantic(
+				Profile,
+				FName(*FString::Printf(
+					TEXT("upperarm_%s"),
+					*SideString
+				))
+			) &&
+			HasSemantic(
+				Profile,
+				FName(*FString::Printf(
+					TEXT("lowerarm_%s"),
+					*SideString
+				))
+			) &&
+			HasSemantic(
+				Profile,
+				FName(*FString::Printf(
+					TEXT("hand_%s"),
+					*SideString
+				))
+			);
+		if (
+			!bHasArm ||
+			!HasControls(
+				Manifest,
+				{
+					IKControl,
+					PalmTargetControl,
+					RelaxedControl,
+					CurlControl
+				}
+			) ||
+			!ControlAllowsTrack(
+				Manifest,
+				IKControl,
+				ELLMMotionTrackType::IKReach
+			) ||
+			!ControlAllowsTrack(
+				Manifest,
+				PalmTargetControl,
+				ELLMMotionTrackType::LookAt
+			) ||
+			!ControlAllowsTrack(
+				Manifest,
+				RelaxedControl,
+				ELLMMotionTrackType::Keyframes
+			) ||
+			!ControlAllowsTrack(
+				Manifest,
+				CurlControl,
+				ELLMMotionTrackType::Keyframes
+			)
+		)
+		{
+			continue;
+		}
+
+		Beckon.SupportedSides.Add(Side);
+		Beckon.InternalControlIds.Append({
+			IKControl,
+			PalmTargetControl,
+			RelaxedControl,
+			CurlControl
+		});
+	}
+	if (Beckon.SupportedSides.IsEmpty())
+	{
+		return;
+	}
+
+	Beckon.TargetModes = {TEXT("scene_target")};
+	Beckon.Requires = {
+		TEXT("arm.reach"),
+		TEXT("hand.pose.relaxed"),
+		TEXT("hand.pose.curl")
+	};
+	Beckon.ConflictsWith = {
+		TEXT("left_hand_busy"),
+		TEXT("right_hand_busy"),
+		TEXT("two_hand_interaction")
+	};
+	Beckon.ParameterRanges = {
+		NormalizedRange(TEXT("amplitude"), 0.3, 1.0),
+		MakeRange(
+			TEXT("speed"),
+			TEXT("speed_multiplier"),
+			TEXT("multiplier"),
+			0.7,
+			1.3
+		),
+		MakeRange(TEXT("cycles"), TEXT("integer"), TEXT("count"), 1.0, 4.0),
+		NormalizedRange(TEXT("curl_amount"), 0.35, 0.95),
+		NormalizedRange(TEXT("reach"), 0.35, 0.78),
+		NormalizedRange(TEXT("height"), 0.3, 0.8),
+		MakeRange(TEXT("duration"), TEXT("seconds"), TEXT("seconds"), 0.9, 3.2)
+	};
+	Beckon.bRuntimeRecipeAllowed = false;
+	Beckon.bAuthoringOnly = true;
+	OutCapabilities.Add(MoveTemp(Beckon));
+}
+
 void AddHandsContactCapability(
 	const ULLMNPCSkeletonProfile& Profile,
 	const ULLMNPCControlManifest* Manifest,
@@ -570,6 +702,7 @@ void BuildSemanticCapabilities(
 		OutCapabilities
 	);
 	AddArmCapabilities(Profile, Manifest, OutCapabilities);
+	AddHandBeckonCapability(Profile, Manifest, OutCapabilities);
 	AddHandsContactCapability(Profile, Manifest, OutCapabilities);
 
 	FLLMNPCSemanticCapability Hold = MakeCapability(
