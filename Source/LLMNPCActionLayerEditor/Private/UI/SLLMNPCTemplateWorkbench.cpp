@@ -211,6 +211,38 @@ void SLLMNPCTemplateWorkbench::Construct(const FArguments& InArgs)
 	ReviewerBox.Reset();
 	ReviewNotesBox.Reset();
 	AuthoringModelClient = MakeShared<FLLMNPCAuthoringModelClient>();
+	AuthoringContractOptions.Reset();
+	for (
+		const FLLMNPCMotionRecipeAuthoringContract& Contract :
+		FLLMNPCMotionRecipeAuthoringPrompt::GetContracts()
+	)
+	{
+		TSharedPtr<FLLMNPCTemplateWorkbenchContractOption> Option =
+			MakeShared<FLLMNPCTemplateWorkbenchContractOption>();
+		Option->ContractId = Contract.ContractId;
+		Option->Label = Contract.DisplayName;
+		AuthoringContractOptions.Add(Option);
+		if (
+			Contract.ContractId ==
+				LLMNPCMotionRecipeAuthoring::
+					DefaultAuthoringContractId
+		)
+		{
+			SelectedAuthoringContract = Option;
+		}
+	}
+	if (
+		!SelectedAuthoringContract.IsValid() &&
+		!AuthoringContractOptions.IsEmpty()
+	)
+	{
+		SelectedAuthoringContract = AuthoringContractOptions[0];
+	}
+	if (SelectedAuthoringContract.IsValid())
+	{
+		PendingRecipeRequestContext.AuthoringContractId =
+			SelectedAuthoringContract->ContractId;
+	}
 
 	ChildSlot
 	[
@@ -801,10 +833,15 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildImportPage()
 
 TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildGeneratePage()
 {
-	const FString DefaultIntent =
-		TEXT("Express uncertainty with a natural bilateral shrug. Raise both shoulders together, ")
-		TEXT("add subtle chest and arm participation, keep both hands relaxed and visible, ")
-		TEXT("then return smoothly to neutral.");
+	const FLLMNPCMotionRecipeAuthoringContract* DefaultContract =
+		SelectedAuthoringContract.IsValid()
+		? FLLMNPCMotionRecipeAuthoringPrompt::FindContract(
+			SelectedAuthoringContract->ContractId
+		)
+		: nullptr;
+	const FString DefaultIntent = DefaultContract
+		? DefaultContract->DefaultDesiredAction
+		: FString();
 
 	return SNew(SVerticalBox)
 		+ SVerticalBox::Slot()
@@ -853,6 +890,61 @@ TSharedRef<SWidget> SLLMNPCTemplateWorkbench::BuildGeneratePage()
 										: LOCTEXT(
 											"NoRecipeSkeleton",
 											"No profile"
+										);
+								}
+							)
+					]
+			)
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(0.0f, 6.0f, 0.0f, 0.0f)
+		[
+			MakeFormRow(
+				LOCTEXT(
+					"RecipeContractLabel",
+					"Recipe Contract"
+				),
+				SAssignNew(
+					AuthoringContractCombo,
+					SComboBox<
+						TSharedPtr<
+							FLLMNPCTemplateWorkbenchContractOption
+						>
+					>
+				)
+					.OptionsSource(&AuthoringContractOptions)
+					.InitiallySelectedItem(
+						SelectedAuthoringContract
+					)
+					.IsEnabled_Lambda(
+						[this]()
+						{
+							return
+								!bAuthoringRequestPending &&
+								!PendingRecipeRequestContext.IsRegeneration();
+						}
+					)
+					.OnGenerateWidget(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							GenerateAuthoringContractOption
+					)
+					.OnSelectionChanged(
+						this,
+						&SLLMNPCTemplateWorkbench::
+							HandleAuthoringContractChanged
+					)
+					[
+						SNew(STextBlock)
+							.Text_Lambda(
+								[this]()
+								{
+									return SelectedAuthoringContract.IsValid()
+										? SelectedAuthoringContract->Label
+										: LOCTEXT(
+											"NoRecipeContract",
+											"No contract"
 										);
 								}
 							)
@@ -2432,18 +2524,25 @@ FText SLLMNPCTemplateWorkbench::GetRecipeGenerationSummaryText() const
 
 FText SLLMNPCTemplateWorkbench::GetRecipeRequestSourceText() const
 {
+	const FString ContractLabel =
+		SelectedAuthoringContract.IsValid()
+		? SelectedAuthoringContract->Label.ToString()
+		: PendingRecipeRequestContext.AuthoringContractId.ToString();
 	if (PendingRecipeRequestContext.IsRegeneration())
 	{
 		return FText::FromString(FString::Printf(
-			TEXT("%s | %s"),
+			TEXT("%s | %s | %s"),
 			LLMNPCMotionRecipeAuthoring::
 				RegenerationTriggerSource,
-			*PendingRecipeRequestContext.SourceTemplateId.ToString()
+			*PendingRecipeRequestContext.SourceTemplateId.ToString(),
+			*ContractLabel
 		));
 	}
-	return FText::FromString(
-		LLMNPCMotionRecipeAuthoring::ManualTriggerSource
-	);
+	return FText::FromString(FString::Printf(
+		TEXT("%s | %s"),
+		LLMNPCMotionRecipeAuthoring::ManualTriggerSource,
+		*ContractLabel
+	));
 }
 
 FText SLLMNPCTemplateWorkbench::GetSandboxSummaryText() const
@@ -2538,6 +2637,7 @@ bool SLLMNPCTemplateWorkbench::CanGenerateMotionRecipe() const
 	return
 		!bAuthoringRequestPending &&
 		AuthoringModelClient.IsValid() &&
+		SelectedAuthoringContract.IsValid() &&
 		SelectedSkeleton.IsValid() &&
 		RecipeIntentBox.IsValid() &&
 		!RecipeIntentBox->GetText()
@@ -2687,8 +2787,10 @@ bool SLLMNPCTemplateWorkbench::CanReviseOnline() const
 		Template->Kind ==
 			ELLMNPCTemplateKind::ProceduralMotion &&
 		!Template->Metadata.SourceRecipeHash.IsEmpty() &&
-		Template->Metadata.PublicActionId ==
-			TEXT("gesture.shrug") &&
+		FLLMNPCMotionRecipeAuthoringPrompt::
+			FindContractForPublicAction(
+				Template->Metadata.PublicActionId
+			) != nullptr &&
 		Template->Metadata.SkeletonProfileId ==
 			TEXT("ue5_manny.v1") &&
 		!Template->IsPublished() &&
@@ -2713,6 +2815,15 @@ TSharedRef<ITableRow> SLLMNPCTemplateWorkbench::GenerateItemRow(
 
 TSharedRef<SWidget> SLLMNPCTemplateWorkbench::GenerateSkeletonOption(
 	TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption> Option
+) const
+{
+	return SNew(STextBlock)
+		.Text(Option.IsValid() ? Option->Label : FText::GetEmpty());
+}
+
+TSharedRef<SWidget>
+SLLMNPCTemplateWorkbench::GenerateAuthoringContractOption(
+	TSharedPtr<FLLMNPCTemplateWorkbenchContractOption> Option
 ) const
 {
 	return SNew(STextBlock)
@@ -2838,6 +2949,110 @@ void SLLMNPCTemplateWorkbench::HandleSkeletonChanged(
 		InvalidateSandboxPreflight(true);
 	}
 	RefreshDerivedText();
+}
+
+void SLLMNPCTemplateWorkbench::HandleAuthoringContractChanged(
+	TSharedPtr<FLLMNPCTemplateWorkbenchContractOption> Option,
+	ESelectInfo::Type SelectInfo
+)
+{
+	static_cast<void>(SelectInfo);
+	if (!Option.IsValid())
+	{
+		return;
+	}
+	if (
+		PendingRecipeRequestContext.IsRegeneration() &&
+		(
+			!SelectedAuthoringContract.IsValid() ||
+			Option->ContractId !=
+				SelectedAuthoringContract->ContractId
+		)
+	)
+	{
+		if (
+			AuthoringContractCombo.IsValid() &&
+			SelectedAuthoringContract.IsValid()
+		)
+		{
+			AuthoringContractCombo->SetSelectedItem(
+				SelectedAuthoringContract
+			);
+		}
+		return;
+	}
+	if (
+		SelectedAuthoringContract.IsValid() &&
+		SelectedAuthoringContract->ContractId ==
+			Option->ContractId
+	)
+	{
+		return;
+	}
+
+	const FLLMNPCMotionRecipeAuthoringContract* Contract =
+		FLLMNPCMotionRecipeAuthoringPrompt::FindContract(
+			Option->ContractId
+		);
+	if (!Contract)
+	{
+		SetStatus(
+			LOCTEXT(
+				"RecipeContractUnavailable",
+				"The selected Recipe Contract is unavailable."
+			),
+			true
+		);
+		return;
+	}
+
+	SelectedAuthoringContract = Option;
+	PendingRecipeRequestContext =
+		FLLMNPCMotionRecipeRequestContext();
+	PendingRecipeRequestContext.AuthoringContractId =
+		Contract->ContractId;
+	if (RecipeIntentBox)
+	{
+		RecipeIntentBox->SetText(
+			FText::FromString(Contract->DefaultDesiredAction)
+		);
+	}
+
+	CancelActiveSandboxPreview(TEXT("contract_changed"));
+	LastRecipePrompt = FLLMNPCMotionRecipePromptPackage();
+	LastRecipeResponse =
+		FLLMNPCMotionRecipeAuthoringResponse();
+	LastAuthoringResult = FLLMNPCAuthoringJsonResult();
+	LastSandboxPreflight =
+		FLLMNPCAuthoringSandboxPreflightResult();
+	SandboxReport = FLLMNPCOnlineSandboxReportRecord();
+	RecipeGeneratedAtUtc = FDateTime();
+	RecipeGenerationSummary.Reset();
+	if (RecipeJsonBox)
+	{
+		RecipeJsonBox->SetText(FText::GetEmpty());
+	}
+	if (RecipeEvidenceBox)
+	{
+		RecipeEvidenceBox->SetText(
+			GetRecipeGenerationSummaryText()
+		);
+	}
+	if (SandboxReviewNotesBox)
+	{
+		SandboxReviewNotesBox->SetText(FText::GetEmpty());
+	}
+	UpdateSandboxSummary();
+	SetStatus(
+		FText::Format(
+			LOCTEXT(
+				"RecipeContractSelected",
+				"Recipe Contract selected: {0}"
+			),
+			Contract->DisplayName
+		),
+		false
+	);
 }
 
 void SLLMNPCTemplateWorkbench::HandleActorChanged(
@@ -3042,6 +3257,8 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 		);
 		return FReply::Handled();
 	}
+	PendingRecipeRequestContext.AuthoringContractId =
+		SelectedAuthoringContract->ContractId;
 
 	FLLMNPCSkeletonCapabilitySnapshot Capability;
 	const ULLMNPCControlManifest* GenerationManifest = nullptr;
@@ -3122,7 +3339,8 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 	GenerationEndpointOrigin = OnlineConfig.EndpointOrigin;
 	GenerationConfigHash = OnlineConfig.NonSecretConfigHash;
 	RecipeGenerationSummary = FString::Printf(
-		TEXT("Request: pending\nSource: %s\nProfile: %s\nCapability: %s\nRegistry: %s\nPrompt: %s\nExamples: %d"),
+		TEXT("Request: pending\nContract: %s\nSource: %s\nProfile: %s\nCapability: %s\nRegistry: %s\nPrompt: %s\nExamples: %d"),
+		*LastRecipePrompt.AuthoringContract.ContractId.ToString(),
 		*LastRecipePrompt.RequestContext.TriggerSource.ToString(),
 		*SelectedSkeleton->ProfileId.ToString(),
 		*LastRecipePrompt.CapabilityHash,
@@ -3295,9 +3513,7 @@ FReply SLLMNPCTemplateWorkbench::HandleGenerateMotionRecipe()
 					ValidateRecipeForCapability(
 						Self->LastRecipeResponse,
 						Self->LastRecipeCapability,
-						{TEXT("shoulder.shrug")},
-						TEXT("express_uncertainty"),
-						1,
+						Self->LastRecipePrompt.AuthoringContract,
 						RecipeValidationError
 					)
 			)
@@ -3616,22 +3832,24 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		).Left(6).ToLower();
 	const FString Suffix =
 		RequestSuffix + RecipeSuffix;
-	FLLMNPCMotionRecipeDraftCatalogSpec CatalogSpec;
-	CatalogSpec.AssetName =
-		FString::Printf(
-			TEXT("MT_Shrug_Manny_Generated_%s"),
-			*Suffix
+	const FLLMNPCMotionRecipeAuthoringContract* Contract =
+		FLLMNPCMotionRecipeAuthoringPrompt::FindContract(
+			LastRecipePrompt.AuthoringContract.ContractId
 		);
-	CatalogSpec.TemplateId =
-		FName(*FString::Printf(
-			TEXT("gesture.shrug.manny.generated.%s"),
-			*Suffix
-		));
-	CatalogSpec.PublicActionId = TEXT("gesture.shrug");
-	CatalogSpec.PublicActionAssetName =
-		TEXT("PA_Gesture_Shrug_Draft");
+	if (!Contract)
+	{
+		SetStatus(
+			LOCTEXT(
+				"RecipeDraftContractUnavailable",
+				"The generated Recipe Contract is unavailable."
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	FLLMNPCMotionRecipeDraftCatalogSpec CatalogSpec;
 	CatalogSpec.SemanticVersion = TEXT("1.0.0");
-	CatalogSpec.VariantId = TEXT("generated_recipe");
 	CatalogSpec.DisplayName =
 		LastRecipeResponse.CatalogDraft.DisplayName;
 	CatalogSpec.SelectionSummary =
@@ -3642,40 +3860,103 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		LastRecipeResponse.CatalogDraft.SuitableWhen;
 	CatalogSpec.AvoidWhen =
 		LastRecipeResponse.CatalogDraft.AvoidWhen;
-	CatalogSpec.IntentTags = {TEXT("express_uncertainty")};
-	CatalogSpec.EmotionTags = {TEXT("uncertain")};
-	CatalogSpec.VariantStyleTags = {
-		TEXT("neutral"),
-		TEXT("subtle"),
-		TEXT("uncertain")
-	};
-	CatalogSpec.BodyRegionTags = {
-		TEXT("shoulders"),
-		TEXT("upper_torso"),
-		TEXT("two_arms"),
-		TEXT("two_hands"),
-		TEXT("fingers")
-	};
 	CatalogSpec.SpatialRequirementTags = {
 		TEXT("target_independent")
 	};
-	CatalogSpec.SemanticEffectTags = {
-		TEXT("express_uncertainty"),
-		TEXT("noncommittal")
-	};
-	CatalogSpec.GestureFamily = TEXT("shrug");
-	CatalogSpec.DefaultStyle = TEXT("uncertain");
-	CatalogSpec.SearchKeywords = {
-		TEXT("shrug"),
-		TEXT("uncertain"),
-		TEXT("unsure"),
-		TEXT("maybe"),
-		TEXT("do not know")
-	};
-	CatalogSpec.bCanRunWhileMoving = true;
-	CatalogSpec.Expressiveness = 0.6f;
-	CatalogSpec.Energy = 0.42f;
-	CatalogSpec.SocialIntensity = 0.48f;
+	CatalogSpec.PublicActionId = Contract->PublicActionId;
+	if (
+		Contract->ContractId ==
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralClapAuthoringContractId
+	)
+	{
+		CatalogSpec.AssetName = FString::Printf(
+			TEXT("MT_Clap_Manny_Procedural_Generated_%s"),
+			*Suffix
+		);
+		CatalogSpec.TemplateId = FName(*FString::Printf(
+			TEXT("gesture.clap.manny.procedural.generated.%s"),
+			*Suffix
+		));
+		CatalogSpec.PublicActionAssetName =
+			TEXT("PA_Gesture_Clap_Draft");
+		CatalogSpec.VariantId =
+			TEXT("procedural_generated_recipe");
+		CatalogSpec.IntentTags = {TEXT("applaud")};
+		CatalogSpec.EmotionTags = {TEXT("excited")};
+		CatalogSpec.VariantStyleTags = {
+			TEXT("neutral"),
+			TEXT("excited")
+		};
+		CatalogSpec.BodyRegionTags = {
+			TEXT("two_arms"),
+			TEXT("two_hands"),
+			TEXT("fingers")
+		};
+		CatalogSpec.SemanticEffectTags = {
+			TEXT("applaud"),
+			TEXT("acknowledge")
+		};
+		CatalogSpec.GestureFamily = TEXT("clap");
+		CatalogSpec.DefaultStyle = TEXT("excited");
+		CatalogSpec.SearchKeywords = {
+			TEXT("clap"),
+			TEXT("applaud"),
+			TEXT("celebrate"),
+			TEXT("congratulate")
+		};
+		CatalogSpec.bCanRunWhileMoving = false;
+		CatalogSpec.Expressiveness = 0.75f;
+		CatalogSpec.Energy = 0.78f;
+		CatalogSpec.SocialIntensity = 0.75f;
+	}
+	else
+	{
+		CatalogSpec.AssetName = FString::Printf(
+			TEXT("MT_Shrug_Manny_Generated_%s"),
+			*Suffix
+		);
+		CatalogSpec.TemplateId = FName(*FString::Printf(
+			TEXT("gesture.shrug.manny.generated.%s"),
+			*Suffix
+		));
+		CatalogSpec.PublicActionAssetName =
+			TEXT("PA_Gesture_Shrug_Draft");
+		CatalogSpec.VariantId = TEXT("generated_recipe");
+		CatalogSpec.IntentTags = {
+			TEXT("express_uncertainty")
+		};
+		CatalogSpec.EmotionTags = {TEXT("uncertain")};
+		CatalogSpec.VariantStyleTags = {
+			TEXT("neutral"),
+			TEXT("subtle"),
+			TEXT("uncertain")
+		};
+		CatalogSpec.BodyRegionTags = {
+			TEXT("shoulders"),
+			TEXT("upper_torso"),
+			TEXT("two_arms"),
+			TEXT("two_hands"),
+			TEXT("fingers")
+		};
+		CatalogSpec.SemanticEffectTags = {
+			TEXT("express_uncertainty"),
+			TEXT("noncommittal")
+		};
+		CatalogSpec.GestureFamily = TEXT("shrug");
+		CatalogSpec.DefaultStyle = TEXT("uncertain");
+		CatalogSpec.SearchKeywords = {
+			TEXT("shrug"),
+			TEXT("uncertain"),
+			TEXT("unsure"),
+			TEXT("maybe"),
+			TEXT("do not know")
+		};
+		CatalogSpec.bCanRunWhileMoving = true;
+		CatalogSpec.Expressiveness = 0.6f;
+		CatalogSpec.Energy = 0.42f;
+		CatalogSpec.SocialIntensity = 0.48f;
+	}
 
 	FLLMNPCMotionRecipeGenerationEvidence Evidence;
 	Evidence.RequestId = LastAuthoringResult.RequestId;
@@ -3696,6 +3977,8 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		LastRecipePrompt.CapabilityModelViewJson;
 	Evidence.RawResponseJson =
 		LastAuthoringResult.ResponseJson;
+	Evidence.AuthoringContractId =
+		LastRecipePrompt.AuthoringContract.ContractId;
 	Evidence.TriggerSource =
 		LastRecipePrompt.RequestContext.TriggerSource;
 	Evidence.SourceTemplateId =
@@ -3737,6 +4020,11 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 	{
 		PendingRecipeRequestContext =
 			FLLMNPCMotionRecipeRequestContext();
+		PendingRecipeRequestContext.AuthoringContractId =
+			SelectedAuthoringContract.IsValid()
+			? SelectedAuthoringContract->ContractId
+			: LLMNPCMotionRecipeAuthoring::
+				DefaultAuthoringContractId;
 		SandboxReport.Outcome = TEXT("sent_to_generated_draft");
 		SandboxReport.UpdatedAtUtc = FDateTime::UtcNow();
 		SaveSandboxReport();
@@ -4000,7 +4288,7 @@ FReply SLLMNPCTemplateWorkbench::HandleReviseOnline()
 		SetStatus(
 			LOCTEXT(
 				"ReviseOnlineUnavailable",
-				"Only a non-Published Manny Shrug Motion Recipe Draft can start an online revision."
+				"Only a supported non-Published Manny Motion Recipe Draft can start an online revision."
 			),
 			true
 		);
@@ -4183,9 +4471,47 @@ bool SLLMNPCTemplateWorkbench::PrepareRejectedDraftRegeneration(
 		);
 		return false;
 	}
+	const FLLMNPCMotionRecipeAuthoringContract* Contract =
+		FLLMNPCMotionRecipeAuthoringPrompt::
+			FindContractForPublicAction(
+				Template.Metadata.PublicActionId
+			);
+	TSharedPtr<FLLMNPCTemplateWorkbenchContractOption>
+		SourceContractOption;
+	if (Contract)
+	{
+		for (
+			const TSharedPtr<
+				FLLMNPCTemplateWorkbenchContractOption>& Option :
+				AuthoringContractOptions
+		)
+		{
+			if (
+				Option.IsValid() &&
+				Option->ContractId == Contract->ContractId
+			)
+			{
+				SourceContractOption = Option;
+				break;
+			}
+		}
+	}
+	if (!Contract || !SourceContractOption.IsValid())
+	{
+		SetStatus(
+			LOCTEXT(
+				"ReviseOnlineContractMissing",
+				"The rejected Draft does not have a supported Recipe Contract."
+			),
+			true
+		);
+		return false;
+	}
 
 	PendingRecipeRequestContext =
 		FLLMNPCMotionRecipeRequestContext();
+	PendingRecipeRequestContext.AuthoringContractId =
+		Contract->ContractId;
 	PendingRecipeRequestContext.TriggerSource =
 		LLMNPCMotionRecipeAuthoring::
 			RegenerationTriggerSource;
@@ -4195,6 +4521,13 @@ bool SLLMNPCTemplateWorkbench::PrepareRejectedDraftRegeneration(
 		Template.Metadata.SourceRecipeHash;
 	PendingRecipeRequestContext.ReviewFeedback =
 		CleanFeedback;
+	SelectedAuthoringContract = SourceContractOption;
+	if (AuthoringContractCombo)
+	{
+		AuthoringContractCombo->SetSelectedItem(
+			SourceContractOption
+		);
+	}
 	SelectedSkeleton = SourceSkeleton;
 	if (GenerateSkeletonCombo)
 	{

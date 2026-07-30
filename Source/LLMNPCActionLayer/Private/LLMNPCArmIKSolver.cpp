@@ -271,6 +271,50 @@ FQuat FLLMNPCArmIKSolver::BuildPalmFacingRotation(
 	return (FingerAlignment * PalmAlignment * CurrentHandRotation).GetNormalized();
 }
 
+bool FLLMNPCArmIKSolver::BuildStableContactPalmBasis(
+	const FVector& ComponentForwardDirection,
+	const FVector& ComponentUpDirection,
+	const FVector& ContactDirection,
+	bool bRightHand,
+	FVector& OutFingerDirection,
+	FVector& OutPalmNormal
+)
+{
+	const FVector Forward = ComponentForwardDirection.GetSafeNormal();
+	const FVector Up = (
+		ComponentUpDirection -
+		Forward * FVector::DotProduct(ComponentUpDirection, Forward)
+	).GetSafeNormal();
+	const FVector Left = FVector::CrossProduct(Forward, Up).GetSafeNormal();
+	if (Forward.IsNearlyZero() || Up.IsNearlyZero() || Left.IsNearlyZero())
+	{
+		OutFingerDirection = FVector::ZeroVector;
+		OutPalmNormal = FVector::ZeroVector;
+		return false;
+	}
+
+	const float LateralContact = FVector::DotProduct(
+		ContactDirection,
+		Left
+	);
+	const float FacingSign = FMath::Abs(LateralContact) > KINDA_SMALL_NUMBER
+		? FMath::Sign(LateralContact)
+		: (bRightHand ? 1.0f : -1.0f);
+	OutPalmNormal = Left * FacingSign;
+
+	const FVector ReferenceFingerDirection = (
+		Forward * 0.68f +
+		Up * 0.73f
+	).GetSafeNormal();
+	OutFingerDirection = ProjectOntoPalmPlane(
+		ReferenceFingerDirection,
+		OutPalmNormal
+	);
+	return
+		!OutFingerDirection.IsNearlyZero() &&
+		!OutPalmNormal.IsNearlyZero();
+}
+
 float FLLMNPCArmIKSolver::ApplyConstrainedWristOrientation(
 	const FTransform& LowerArmTransform,
 	FTransform& InOutHandTransform,

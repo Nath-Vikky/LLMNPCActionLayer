@@ -99,6 +99,19 @@ bool HasControls(
 	return true;
 }
 
+bool ControlAllowsTrack(
+	const ULLMNPCControlManifest* Manifest,
+	FName ControlId,
+	ELLMMotionTrackType TrackType
+)
+{
+	const FLLMControlDefinition* Control =
+		FindControl(Manifest, ControlId);
+	return
+		Control &&
+		Control->AllowedTrackTypes.Contains(TrackType);
+}
+
 void AddCommonMotionRanges(FLLMNPCSemanticCapability& Capability)
 {
 	Capability.ParameterRanges = {
@@ -420,6 +433,101 @@ void AddFingerCapability(
 	OutCapabilities.Add(MoveTemp(Capability));
 }
 
+void AddHandsContactCapability(
+	const ULLMNPCSkeletonProfile& Profile,
+	const ULLMNPCControlManifest* Manifest,
+	TArray<FLLMNPCSemanticCapability>& OutCapabilities
+)
+{
+	const bool bHasBothArms =
+		HasSemantic(Profile, TEXT("upperarm_left")) &&
+		HasSemantic(Profile, TEXT("lowerarm_left")) &&
+		HasSemantic(Profile, TEXT("hand_left")) &&
+		HasSemantic(Profile, TEXT("upperarm_right")) &&
+		HasSemantic(Profile, TEXT("lowerarm_right")) &&
+		HasSemantic(Profile, TEXT("hand_right"));
+	const std::initializer_list<FName> RequiredControls = {
+		TEXT("right_hand.ik"),
+		TEXT("left_hand.ik"),
+		TEXT("right_hand.local_offset.x"),
+		TEXT("left_hand.local_offset.x"),
+		TEXT("right_hand.palm_facing"),
+		TEXT("left_hand.palm_facing"),
+		TEXT("right_fingers.contact"),
+		TEXT("left_fingers.contact")
+	};
+	if (
+		!bHasBothArms ||
+		!HasFingerPose(Profile, TEXT("open")) ||
+		!HasControls(Manifest, RequiredControls) ||
+		!ControlAllowsTrack(
+			Manifest,
+			TEXT("right_hand.ik"),
+			ELLMMotionTrackType::Anchor
+		) ||
+		!ControlAllowsTrack(
+			Manifest,
+			TEXT("left_hand.ik"),
+			ELLMMotionTrackType::Anchor
+		) ||
+		!ControlAllowsTrack(
+			Manifest,
+			TEXT("right_hand.palm_facing"),
+			ELLMMotionTrackType::Anchor
+		) ||
+		!ControlAllowsTrack(
+			Manifest,
+			TEXT("left_hand.palm_facing"),
+			ELLMMotionTrackType::Anchor
+		)
+	)
+	{
+		return;
+	}
+
+	FLLMNPCSemanticCapability Contact = MakeCapability(
+		TEXT("hands.contact"),
+		TEXT("hands"),
+		TEXT("Bring both open hands together in front of the chest for bounded rhythmic contact, then release.")
+	);
+	Contact.SupportedSides = {TEXT("both")};
+	Contact.TargetModes = {TEXT("none")};
+	Contact.Requires = {TEXT("hand.pose.open")};
+	Contact.ConflictsWith = {
+		TEXT("left_hand_busy"),
+		TEXT("right_hand_busy"),
+		TEXT("two_hand_interaction")
+	};
+	Contact.InternalControlIds = {
+		TEXT("right_hand.ik"),
+		TEXT("left_hand.ik"),
+		TEXT("right_hand.local_offset.x"),
+		TEXT("left_hand.local_offset.x"),
+		TEXT("right_hand.palm_facing"),
+		TEXT("left_hand.palm_facing"),
+		TEXT("right_fingers.contact"),
+		TEXT("left_fingers.contact")
+	};
+	Contact.ParameterRanges = {
+		NormalizedRange(TEXT("amplitude"), 0.3, 1.0),
+		MakeRange(
+			TEXT("speed"),
+			TEXT("speed_multiplier"),
+			TEXT("multiplier"),
+			0.7,
+			1.3
+		),
+		MakeRange(TEXT("cycles"), TEXT("integer"), TEXT("count"), 1.0, 3.0),
+		NormalizedRange(TEXT("contact_height"), 0.35, 0.75),
+		NormalizedRange(TEXT("separation"), 0.2, 1.0),
+		NormalizedRange(TEXT("palm_openness"), 0.5, 1.0),
+		MakeRange(TEXT("duration"), TEXT("seconds"), TEXT("seconds"), 0.8, 3.2)
+	};
+	Contact.bRuntimeRecipeAllowed = false;
+	Contact.bAuthoringOnly = true;
+	OutCapabilities.Add(MoveTemp(Contact));
+}
+
 void BuildSemanticCapabilities(
 	const ULLMNPCSkeletonProfile& Profile,
 	const ULLMNPCControlManifest* Manifest,
@@ -462,6 +570,7 @@ void BuildSemanticCapabilities(
 		OutCapabilities
 	);
 	AddArmCapabilities(Profile, Manifest, OutCapabilities);
+	AddHandsContactCapability(Profile, Manifest, OutCapabilities);
 
 	FLLMNPCSemanticCapability Hold = MakeCapability(
 		TEXT("hold"),

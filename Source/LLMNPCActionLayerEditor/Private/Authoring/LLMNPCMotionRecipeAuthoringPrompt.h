@@ -8,19 +8,44 @@ struct FLLMNPCSkeletonCapabilitySnapshot;
 namespace LLMNPCMotionRecipeAuthoring
 {
 inline constexpr const TCHAR* PromptVersion =
+	TEXT("llmnpc.motion_recipe_authoring_prompt.v4");
+inline constexpr const TCHAR* LegacyPromptVersionV3 =
 	TEXT("llmnpc.motion_recipe_authoring_prompt.v3");
 inline constexpr const TCHAR* ResponseSchemaVersion =
 	TEXT("llmnpc.motion_recipe_authoring_response.v1");
 inline constexpr const TCHAR* JobSchemaVersion =
 	TEXT("llmnpc.motion_recipe_authoring_job.v2");
+inline constexpr const TCHAR* DefaultAuthoringContractId =
+	TEXT("gesture.shrug");
+inline constexpr const TCHAR* ProceduralClapAuthoringContractId =
+	TEXT("gesture.clap.procedural");
 inline constexpr const TCHAR* ManualTriggerSource =
 	TEXT("ManualWorkbench");
 inline constexpr const TCHAR* RegenerationTriggerSource =
 	TEXT("RegenerateRejectedDraft");
 }
 
+struct FLLMNPCMotionRecipeAuthoringContract
+{
+	FName ContractId = NAME_None;
+	FName PublicActionId = NAME_None;
+	FText DisplayName;
+	FString DefaultDesiredAction;
+	FName Phase = NAME_None;
+	FName RequiredIntent = NAME_None;
+	TSet<FName> AllowedPrimitiveIds;
+	int32 PrimitiveCount = 1;
+	double MinDurationSeconds = 0.05;
+	double MaxDurationSeconds = 4.0;
+	bool bPrimitiveCoversRecipe = true;
+	FString TimingContract;
+	FString RevisionPolicy;
+};
+
 struct FLLMNPCMotionRecipeRequestContext
 {
+	FName AuthoringContractId =
+		LLMNPCMotionRecipeAuthoring::DefaultAuthoringContractId;
 	FName TriggerSource =
 		LLMNPCMotionRecipeAuthoring::ManualTriggerSource;
 	FName SourceTemplateId = NAME_None;
@@ -47,6 +72,7 @@ struct FLLMNPCMotionRecipePromptPackage
 	FString CapabilityHash;
 	FString RegistryVersion;
 	int32 SimilarTemplateCount = 0;
+	FLLMNPCMotionRecipeAuthoringContract AuthoringContract;
 	FLLMNPCMotionRecipeRequestContext RequestContext;
 };
 
@@ -70,6 +96,16 @@ struct FLLMNPCMotionRecipeAuthoringResponse
 class FLLMNPCMotionRecipeAuthoringPrompt
 {
 public:
+	static const TArray<FLLMNPCMotionRecipeAuthoringContract>&
+		GetContracts();
+
+	static const FLLMNPCMotionRecipeAuthoringContract* FindContract(
+		FName ContractId
+	);
+
+	static const FLLMNPCMotionRecipeAuthoringContract*
+		FindContractForPublicAction(FName PublicActionId);
+
 	static bool Build(
 		const FString& DesiredAction,
 		const FLLMNPCSkeletonCapabilitySnapshot& CapabilitySnapshot,
@@ -92,6 +128,13 @@ public:
 		const TSet<FName>& AllowedPrimitiveIds,
 		FName RequiredIntent,
 		int32 MaxPrimitiveCount,
+		FString& OutError
+	);
+
+	static bool ValidateRecipeForCapability(
+		const FLLMNPCMotionRecipeAuthoringResponse& Response,
+		const FLLMNPCSkeletonCapabilitySnapshot& CapabilitySnapshot,
+		const FLLMNPCMotionRecipeAuthoringContract& Contract,
 		FString& OutError
 	);
 };

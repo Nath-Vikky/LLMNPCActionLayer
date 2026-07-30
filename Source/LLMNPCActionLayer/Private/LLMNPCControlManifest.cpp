@@ -121,12 +121,28 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 
 			FLLMControlDefinition RightHandPalmTarget = Gaze;
 			RightHandPalmTarget.ControlId = TEXT("right_hand.palm_target");
-			RightHandPalmTarget.bRequiresTarget = true;
+			RightHandPalmTarget.AllowedTrackTypes = {
+				ELLMMotionTrackType::Anchor,
+				ELLMMotionTrackType::LookAt
+			};
+			RightHandPalmTarget.bRequiresTarget = false;
 			Result.Add(RightHandPalmTarget);
 
 			FLLMControlDefinition LeftHandPalmTarget = RightHandPalmTarget;
 			LeftHandPalmTarget.ControlId = TEXT("left_hand.palm_target");
 			Result.Add(LeftHandPalmTarget);
+
+			FLLMControlDefinition RightHandPalmFacing =
+				RightHandPalmTarget;
+			RightHandPalmFacing.ControlId =
+				TEXT("right_hand.palm_facing");
+			Result.Add(RightHandPalmFacing);
+
+			FLLMControlDefinition LeftHandPalmFacing =
+				RightHandPalmFacing;
+			LeftHandPalmFacing.ControlId =
+				TEXT("left_hand.palm_facing");
+			Result.Add(LeftHandPalmFacing);
 
 			FLLMControlDefinition RightHandOffsetX;
 			RightHandOffsetX.ControlId = TEXT("right_hand.local_offset.x");
@@ -171,6 +187,10 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			FingersPoint.ControlId = TEXT("right_fingers.point");
 			Result.Add(FingersPoint);
 
+			FLLMControlDefinition FingersContact = FingersOpen;
+			FingersContact.ControlId = TEXT("right_fingers.contact");
+			Result.Add(FingersContact);
+
 			FLLMControlDefinition FingersRelaxed = FingersOpen;
 			FingersRelaxed.ControlId = TEXT("right_fingers.relaxed");
 			Result.Add(FingersRelaxed);
@@ -186,6 +206,10 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			FLLMControlDefinition LeftFingersPoint = FingersOpen;
 			LeftFingersPoint.ControlId = TEXT("left_fingers.point");
 			Result.Add(LeftFingersPoint);
+
+			FLLMControlDefinition LeftFingersContact = FingersOpen;
+			LeftFingersContact.ControlId = TEXT("left_fingers.contact");
+			Result.Add(LeftFingersContact);
 
 			FLLMControlDefinition LeftFingersRelaxed = FingersOpen;
 			LeftFingersRelaxed.ControlId = TEXT("left_fingers.relaxed");
@@ -240,6 +264,22 @@ const TArray<FLLMAnchorDefinition>& BuiltInAnchors()
 			LeftShrug.AnchorId = TEXT("left_shrug");
 			LeftShrug.OffsetCS.X *= -1.0f;
 			Result.Add(LeftShrug);
+
+			FLLMAnchorDefinition RightClap;
+			RightClap.AnchorId = TEXT("right_clap");
+			RightClap.BoneName = TEXT("spine_03");
+			RightClap.OffsetCS = FVector(-4.0f, 27.0f, 18.0f);
+			Result.Add(RightClap);
+
+			FLLMAnchorDefinition LeftClap = RightClap;
+			LeftClap.AnchorId = TEXT("left_clap");
+			LeftClap.OffsetCS.X *= -1.0f;
+			Result.Add(LeftClap);
+
+			FLLMAnchorDefinition ClapCenter = RightClap;
+			ClapCenter.AnchorId = TEXT("clap_center");
+			ClapCenter.OffsetCS.X = 0.0f;
+			Result.Add(ClapCenter);
 
 			FLLMAnchorDefinition ChestFront;
 			ChestFront.AnchorId = TEXT("chest_front");
@@ -314,6 +354,6 @@ const TArray<FLLMAnchorDefinition>& ULLMNPCControlManifest::GetBuiltInAnchors()
 
 const FString& ULLMNPCControlManifest::GetBuiltInManifestVersion()
 {
-	static const FString Version(TEXT("llmnpc.control_manifest.v1"));
+	static const FString Version(TEXT("llmnpc.control_manifest.v2"));
 	return Version;
 }

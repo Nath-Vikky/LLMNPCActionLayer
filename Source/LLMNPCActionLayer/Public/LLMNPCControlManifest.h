@@ -102,7 +102,7 @@ class LLMNPCACTIONLAYER_API ULLMNPCControlManifest : public UDataAsset
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
-	FString ManifestVersion = TEXT("llmnpc.control_manifest.v1");
+	FString ManifestVersion = TEXT("llmnpc.control_manifest.v2");
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="LLM NPC Motion")
 	TArray<FLLMControlDefinition> Controls;

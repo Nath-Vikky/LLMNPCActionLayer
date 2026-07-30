@@ -176,6 +176,8 @@ FLLMNPCMotionRecipeGenerationEvidence BuildForwardN7Evidence(
 	Evidence.CapabilityModelViewJson =
 		Prompt.CapabilityModelViewJson;
 	Evidence.RawResponseJson = BuildForwardN7Response();
+	Evidence.AuthoringContractId =
+		Prompt.AuthoringContract.ContractId;
 	Evidence.TriggerSource =
 		Prompt.RequestContext.TriggerSource;
 	Evidence.SourceTemplateId =

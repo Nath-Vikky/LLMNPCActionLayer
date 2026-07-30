@@ -248,6 +248,11 @@ FLLMNPCPoseBoneBindings ULLMNPCSkeletonProfile::BuildPoseBoneBindings() const
 		{
 			return Pose.PoseId == TEXT("point") || Pose.PoseId == TEXT("fingers_point");
 		});
+	const FLLMNPCFingerPoseProfile* ContactPose = FingerPoses.FindByPredicate(
+		[](const FLLMNPCFingerPoseProfile& Pose)
+		{
+			return Pose.PoseId == TEXT("contact") || Pose.PoseId == TEXT("fingers_contact");
+		});
 	const FLLMNPCFingerPoseProfile* RelaxedPose = FingerPoses.FindByPredicate(
 		[](const FLLMNPCFingerPoseProfile& Pose)
 		{
@@ -299,6 +304,17 @@ FLLMNPCPoseBoneBindings ULLMNPCSkeletonProfile::BuildPoseBoneBindings() const
 			if (const FRotator* Rotation = PointPose->SemanticBoneRotations.Find(LeftSemantic))
 			{
 				Bindings.LeftFingerPointRotations[Index] = *Rotation;
+			}
+		}
+		if (ContactPose)
+		{
+			if (const FRotator* Rotation = ContactPose->SemanticBoneRotations.Find(RightSemantic))
+			{
+				Bindings.RightFingerContactRotations[Index] = *Rotation;
+			}
+			if (const FRotator* Rotation = ContactPose->SemanticBoneRotations.Find(LeftSemantic))
+			{
+				Bindings.LeftFingerContactRotations[Index] = *Rotation;
 			}
 		}
 		if (RelaxedPose)

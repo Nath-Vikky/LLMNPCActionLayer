@@ -2466,6 +2466,16 @@ void ULLMNPCMotionComponent::MergeSnapshot(
 		InOutSnapshot.RightHandPalmAlpha = Snapshot.RightHandPalmAlpha;
 		InOutSnapshot.RightHandPalmTargetCS = Snapshot.RightHandPalmTargetCS;
 	}
+	if (
+		Snapshot.RightHandPalmFacingAlpha >
+			InOutSnapshot.RightHandPalmFacingAlpha
+	)
+	{
+		InOutSnapshot.RightHandPalmFacingAlpha =
+			Snapshot.RightHandPalmFacingAlpha;
+		InOutSnapshot.RightHandPalmFacingTargetCS =
+			Snapshot.RightHandPalmFacingTargetCS;
+	}
 	if (Snapshot.LeftHandIKAlpha > InOutSnapshot.LeftHandIKAlpha)
 	{
 		InOutSnapshot.LeftHandIKAlpha = Snapshot.LeftHandIKAlpha;
@@ -2477,6 +2487,16 @@ void ULLMNPCMotionComponent::MergeSnapshot(
 		InOutSnapshot.LeftHandPalmAlpha = Snapshot.LeftHandPalmAlpha;
 		InOutSnapshot.LeftHandPalmTargetCS = Snapshot.LeftHandPalmTargetCS;
 	}
+	if (
+		Snapshot.LeftHandPalmFacingAlpha >
+			InOutSnapshot.LeftHandPalmFacingAlpha
+	)
+	{
+		InOutSnapshot.LeftHandPalmFacingAlpha =
+			Snapshot.LeftHandPalmFacingAlpha;
+		InOutSnapshot.LeftHandPalmFacingTargetCS =
+			Snapshot.LeftHandPalmFacingTargetCS;
+	}
 	if (Snapshot.GazeAlpha > InOutSnapshot.GazeAlpha)
 	{
 		InOutSnapshot.GazeAlpha = Snapshot.GazeAlpha;
@@ -2485,10 +2505,12 @@ void ULLMNPCMotionComponent::MergeSnapshot(
 
 	InOutSnapshot.RightFingersOpen = FMath::Max(InOutSnapshot.RightFingersOpen, Snapshot.RightFingersOpen);
 	InOutSnapshot.RightFingersPoint = FMath::Max(InOutSnapshot.RightFingersPoint, Snapshot.RightFingersPoint);
+	InOutSnapshot.RightFingersContact = FMath::Max(InOutSnapshot.RightFingersContact, Snapshot.RightFingersContact);
 	InOutSnapshot.RightFingersRelaxed = FMath::Max(InOutSnapshot.RightFingersRelaxed, Snapshot.RightFingersRelaxed);
 	InOutSnapshot.RightFingersCurl = FMath::Max(InOutSnapshot.RightFingersCurl, Snapshot.RightFingersCurl);
 	InOutSnapshot.LeftFingersOpen = FMath::Max(InOutSnapshot.LeftFingersOpen, Snapshot.LeftFingersOpen);
 	InOutSnapshot.LeftFingersPoint = FMath::Max(InOutSnapshot.LeftFingersPoint, Snapshot.LeftFingersPoint);
+	InOutSnapshot.LeftFingersContact = FMath::Max(InOutSnapshot.LeftFingersContact, Snapshot.LeftFingersContact);
 	InOutSnapshot.LeftFingersRelaxed = FMath::Max(InOutSnapshot.LeftFingersRelaxed, Snapshot.LeftFingersRelaxed);
 	InOutSnapshot.LeftFingersCurl = FMath::Max(InOutSnapshot.LeftFingersCurl, Snapshot.LeftFingersCurl);
 }

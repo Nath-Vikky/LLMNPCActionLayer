@@ -538,6 +538,8 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 	OpenPose.PoseId = TEXT("open");
 	FLLMNPCFingerPoseProfile PointPose;
 	PointPose.PoseId = TEXT("point");
+	FLLMNPCFingerPoseProfile ContactPose;
+	ContactPose.PoseId = TEXT("contact");
 	FLLMNPCFingerPoseProfile RelaxedPose;
 	RelaxedPose.PoseId = TEXT("relaxed");
 	FLLMNPCFingerPoseProfile CurlPose;
@@ -546,6 +548,8 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 		FindFingerPose(ExistingFingerPoses, TEXT("open"));
 	const FLLMNPCFingerPoseProfile* ExistingPoint =
 		FindFingerPose(ExistingFingerPoses, TEXT("point"));
+	const FLLMNPCFingerPoseProfile* ExistingContact =
+		FindFingerPose(ExistingFingerPoses, TEXT("contact"));
 	const FLLMNPCFingerPoseProfile* ExistingRelaxed =
 		FindFingerPose(ExistingFingerPoses, TEXT("relaxed"));
 	const FLLMNPCFingerPoseProfile* ExistingCurl =
@@ -579,6 +583,14 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 					bPreserveExistingCalibration ? ExistingPoint : nullptr,
 					RightSemantic,
 					DefaultBindings.RightFingerPointRotations[Index]
+				)
+			);
+			ContactPose.SemanticBoneRotations.Add(
+				RightSemantic,
+				ResolveFingerCalibration(
+					bPreserveExistingCalibration ? ExistingContact : nullptr,
+					RightSemantic,
+					DefaultBindings.RightFingerContactRotations[Index]
 				)
 			);
 			RelaxedPose.SemanticBoneRotations.Add(
@@ -617,6 +629,14 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 					DefaultBindings.LeftFingerPointRotations[Index]
 				)
 			);
+			ContactPose.SemanticBoneRotations.Add(
+				LeftSemantic,
+				ResolveFingerCalibration(
+					bPreserveExistingCalibration ? ExistingContact : nullptr,
+					LeftSemantic,
+					DefaultBindings.LeftFingerContactRotations[Index]
+				)
+			);
 			RelaxedPose.SemanticBoneRotations.Add(
 				LeftSemantic,
 				ResolveFingerCalibration(
@@ -635,7 +655,13 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 			);
 		}
 	}
-	Profile.FingerPoses = {OpenPose, PointPose, RelaxedPose, CurlPose};
+	Profile.FingerPoses = {
+		OpenPose,
+		PointPose,
+		ContactPose,
+		RelaxedPose,
+		CurlPose
+	};
 
 	Profile.IKChains.Reset();
 	FLLMNPCIKChainProfile& RightArm = Profile.IKChains.AddDefaulted_GetRef();

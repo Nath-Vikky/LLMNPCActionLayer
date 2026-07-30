@@ -48,6 +48,23 @@ void AddShapedFloatTrack(
 	};
 }
 
+void AddKeyframedFloatTrack(
+	FLLMMotionClip& Clip,
+	FName ControlId,
+	const TArray<FLLMMotionKeyFloat>& Keys,
+	const FLLMNPCMotionRecipePrimitive& Primitive
+)
+{
+	FLLMMotionTrack& Track = AddBaseTrack(
+		Clip,
+		ControlId,
+		ELLMMotionTrackType::Keyframes,
+		ELLMMotionValueType::Float,
+		Primitive
+	);
+	Track.FloatKeys = Keys;
+}
+
 void AddOscillatorTrack(
 	FLLMMotionClip& Clip,
 	FName ControlId,
@@ -92,7 +109,8 @@ void AddAnchorTrack(
 	FName Anchor,
 	const FVector& Offset,
 	float Strength,
-	const FLLMNPCMotionRecipePrimitive& Primitive
+	const FLLMNPCMotionRecipePrimitive& Primitive,
+	ELLMMotionEnvelope Envelope = ELLMMotionEnvelope::EaseInOut
 )
 {
 	FLLMMotionTrack& Track = AddBaseTrack(
@@ -105,7 +123,7 @@ void AddAnchorTrack(
 	Track.Anchor = Anchor;
 	Track.Offset = Offset;
 	Track.Strength = FMath::Clamp(Strength, 0.0f, 1.0f);
-	Track.Envelope = ELLMMotionEnvelope::EaseInOut;
+	Track.Envelope = Envelope;
 }
 
 void AddReachTrack(
@@ -403,6 +421,147 @@ void CompileShrugPrimitive(
 	);
 }
 
+void AddContactSeparationTrack(
+	FLLMMotionClip& Clip,
+	FName ControlId,
+	float SignedOpenOffset,
+	int32 Cycles,
+	const FLLMNPCMotionRecipePrimitive& Primitive
+)
+{
+	const float StartTime =
+		static_cast<float>(Primitive.StartTimeSeconds);
+	const float EndTime =
+		static_cast<float>(Primitive.EndTimeSeconds);
+	const float Duration = EndTime - StartTime;
+	const int32 SegmentCount = FMath::Max(1, Cycles) * 2 + 2;
+	TArray<FLLMMotionKeyFloat> Keys;
+	Keys.Reserve(SegmentCount + 1);
+	Keys.Add({StartTime, 0.0f});
+	for (int32 SegmentIndex = 1; SegmentIndex < SegmentCount; ++SegmentIndex)
+	{
+		const float Alpha =
+			static_cast<float>(SegmentIndex) /
+			static_cast<float>(SegmentCount);
+		Keys.Add(
+			{
+				FMath::Lerp(StartTime, EndTime, Alpha),
+				SegmentIndex % 2 == 1 ? SignedOpenOffset : 0.0f
+			}
+		);
+	}
+	Keys.Add({EndTime, 0.0f});
+	AddKeyframedFloatTrack(
+		Clip,
+		ControlId,
+		Keys,
+		Primitive
+	);
+}
+
+void CompileHandsContactPrimitive(
+	const FLLMNPCMotionRecipePrimitive& Primitive,
+	FLLMMotionClip& Clip
+)
+{
+	const float Amplitude = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("amplitude"), 0.75)
+	);
+	const float Speed = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("speed"), 1.0)
+	);
+	const int32 Cycles = FMath::RoundToInt(
+		Primitive.GetNumberParameter(TEXT("cycles"), 2.0)
+	);
+	const float ContactHeight = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("contact_height"), 0.55)
+	);
+	const float Separation = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("separation"), 0.65)
+	);
+	const float PalmOpenness = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("palm_openness"), 0.9)
+	);
+
+	const float HeightOffset = (ContactHeight - 0.55f) * 32.0f;
+	const float IKStrength = 0.78f + 0.18f * Amplitude;
+	AddAnchorTrack(
+		Clip,
+		TEXT("right_hand.ik"),
+		TEXT("right_clap"),
+		FVector(0.0f, 0.0f, HeightOffset),
+		IKStrength,
+		Primitive,
+		ELLMMotionEnvelope::Sustain
+	);
+	AddAnchorTrack(
+		Clip,
+		TEXT("left_hand.ik"),
+		TEXT("left_clap"),
+		FVector(0.0f, 0.0f, HeightOffset),
+		IKStrength,
+		Primitive,
+		ELLMMotionEnvelope::Sustain
+	);
+
+	const float OpenOffset =
+		FMath::Lerp(4.25f, 8.5f, Separation) *
+		FMath::Lerp(0.8f, 1.1f, Amplitude) *
+		FMath::Lerp(
+			0.9f,
+			1.1f,
+			FMath::Clamp((Speed - 0.7f) / 0.6f, 0.0f, 1.0f)
+		);
+	AddContactSeparationTrack(
+		Clip,
+		TEXT("right_hand.local_offset.x"),
+		-OpenOffset,
+		Cycles,
+		Primitive
+	);
+	AddContactSeparationTrack(
+		Clip,
+		TEXT("left_hand.local_offset.x"),
+		OpenOffset,
+		Cycles,
+		Primitive
+	);
+
+	const float PalmStrength = 0.72f + 0.25f * PalmOpenness;
+	AddAnchorTrack(
+		Clip,
+		TEXT("right_hand.palm_facing"),
+		TEXT("clap_center"),
+		FVector(0.0f, 0.0f, HeightOffset),
+		PalmStrength,
+		Primitive,
+		ELLMMotionEnvelope::Sustain
+	);
+	AddAnchorTrack(
+		Clip,
+		TEXT("left_hand.palm_facing"),
+		TEXT("clap_center"),
+		FVector(0.0f, 0.0f, HeightOffset),
+		PalmStrength,
+		Primitive,
+		ELLMMotionEnvelope::Sustain
+	);
+
+	const float ContactPoseWeight = 0.85f + 0.15f * PalmOpenness;
+	AddShapedFloatTrack(
+		Clip,
+		TEXT("right_fingers.contact"),
+		ContactPoseWeight,
+		Primitive
+	);
+	AddShapedFloatTrack(
+		Clip,
+		TEXT("left_fingers.contact"),
+		ContactPoseWeight,
+		Primitive
+	);
+}
+
 bool CompileArmPrimitive(
 	const FLLMNPCMotionRecipePrimitive& Primitive,
 	const FString& TargetRef,
@@ -650,6 +809,11 @@ bool CompilePrimitive(
 	else if (Primitive.PrimitiveId == TEXT("shoulder.shrug"))
 	{
 		CompileShrugPrimitive(Primitive, Clip);
+		bCompiled = true;
+	}
+	else if (Primitive.PrimitiveId == TEXT("hands.contact"))
+	{
+		CompileHandsContactPrimitive(Primitive, Clip);
 		bCompiled = true;
 	}
 	else if (

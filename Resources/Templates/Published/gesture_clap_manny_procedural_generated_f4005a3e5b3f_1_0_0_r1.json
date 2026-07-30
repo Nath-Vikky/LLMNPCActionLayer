@@ -1,0 +1,622 @@
+{
+	"schema_version": "llmnpc.published_template_source.v1",
+	"asset_path": "/Game/LLMNPCActionLayer/MotionTemplates/Published/MT_Clap_Manny_Procedural_Generated_f4005a3e5b3f.MT_Clap_Manny_Procedural_Generated_f4005a3e5b3f",
+	"catalog_content_hash": "md5:d9ddab83429b3ddac9df9983dfa7a24c",
+	"template_kind": 0,
+	"metadata":
+	{
+		"templateId": "gesture.clap.manny.procedural.generated.f4005a3e5b3f",
+		"publicActionId": "gesture.clap",
+		"semanticVersion": "1.0.0",
+		"catalogSchemaVersion": "llmnpc.template_catalog.v1",
+		"catalogRevision": 1,
+		"variantId": "procedural_generated_recipe",
+		"variantWeight": 1,
+		"variantStyleTags": [
+			"neutral",
+			"excited"
+		],
+		"displayName": "Two Celebratory Claps",
+		"description": "Both hands clap twice in front of the chest with open palms, then recover to neutral.",
+		"visualDescription": "The character brings both open hands together in front of the chest for two clear, rhythmic claps, with a visible separation between contacts, then smoothly returns to a neutral upper-body pose.",
+		"intentTags": [
+			"applaud"
+		],
+		"emotionTags": [
+			"excited"
+		],
+		"personalityTags": [],
+		"bodyRegionTags": [
+			"two_arms",
+			"two_hands",
+			"fingers"
+		],
+		"spatialRequirementTags": [
+			"target_independent"
+		],
+		"semanticEffectTags": [
+			"applaud",
+			"acknowledge"
+		],
+		"targetCategoryTags": [],
+		"requiredCapabilities": [
+			"hand.pose.open",
+			"hands.contact"
+		],
+		"requiredChannels": [
+			"left_arm_ik",
+			"left_hand_pose",
+			"right_arm_ik",
+			"right_hand_pose"
+		],
+		"blockedStates": [
+			"dead",
+			"left_hand_busy",
+			"ragdoll",
+			"right_hand_busy",
+			"stunned",
+			"two_hand_interaction"
+		],
+		"skeletonProfileId": "ue5_manny.v1",
+		"compatibleSkeletonProfileIds": [],
+		"bRequiresTarget": false,
+		"bCanRunWhileMoving": false,
+		"bAllowRuntimeModelSelection": true,
+		"cooldownSeconds": 1,
+		"expressiveness": 0.75,
+		"energy": 0.77999997138977051,
+		"socialIntensity": 0.75,
+		"variantDifference": "Procedural hands.contact variant for comparison with the reviewed AnimationAsset baseline.",
+		"sourceRecipeHash": "md5:7a032d476ce2456c157623f079a0a106",
+		"kinematicReportHash": "md5:fb791c6cd3887fcd48c8f0b47e9f4c23",
+		"catalogContentHash": "md5:d9ddab83429b3ddac9df9983dfa7a24c",
+		"reviewState": "Published"
+	},
+	"modifier_policy":
+	{
+		"policyVersion": 2,
+		"amplitudeRange":
+		{
+			"x": 0.85000002384185791,
+			"y": 1.1499999761581421
+		},
+		"speedRange":
+		{
+			"x": 0.89999997615814209,
+			"y": 1.1000000238418579
+		},
+		"durationRange":
+		{
+			"x": 0.94999998807907104,
+			"y": 1.0499999523162842
+		},
+		"bAllowMirror": false,
+		"allowedStyleTags": [
+			"neutral",
+			"excited"
+		],
+		"reachScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"heightScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"lateralScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"cycleCountRange":
+		{
+			"x": 0,
+			"y": 0
+		},
+		"gazeEngagementRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"palmOrientationWeightRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"fingerPoseWeightRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"torsoParticipationRange":
+		{
+			"x": 0.80000001192092896,
+			"y": 1
+		},
+		"blendInScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"blendOutScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"bEnableDynamicTargetTracking": false,
+		"maxTargetFollowSpeedCmPerSecond": 240,
+		"maxTargetAngularSpeedDegreesPerSecond": 180,
+		"targetInterpolationSpeed": 8,
+		"targetTeleportThresholdCm": 250,
+		"targetLostFadeSeconds": 0.18000000715255737,
+		"targetLossPolicy": "FadeOut",
+		"bEnableObstacleAdaptation": false,
+		"minObstacleAmplitudeScale": 0.60000002384185791,
+		"minObstacleReachScale": 0.64999997615814209,
+		"obstacleCancelClearance": 0.20000000298023224,
+		"randomAmplitudeJitter": 0.014999999664723873,
+		"randomSpeedJitter": 0.014999999664723873,
+		"randomFrequencyJitter": 0,
+		"randomPhaseJitterRadians": 0
+	},
+	"procedural_clip":
+	{
+		"clipId": "recipe_16999bf1dee5c588",
+		"duration": 2,
+		"blendIn": 0,
+		"blendOut": 0,
+		"priority": 0.75,
+		"bInterruptible": true,
+		"tracks": [
+			{
+				"controlId": "right_hand.ik",
+				"trackType": "Anchor",
+				"valueType": "Vector",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "Sustain",
+				"strength": 0.92399996519088745,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "right_clap",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "left_hand.ik",
+				"trackType": "Anchor",
+				"valueType": "Vector",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "Sustain",
+				"strength": 0.92399996519088745,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "left_clap",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "right_hand.local_offset.x",
+				"trackType": "Keyframes",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "None",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": [
+					{
+						"t": 0,
+						"v": 0
+					},
+					{
+						"t": 0.3333333432674408,
+						"v": -7.2930002212524414
+					},
+					{
+						"t": 0.66666668653488159,
+						"v": 0
+					},
+					{
+						"t": 1,
+						"v": -7.2930002212524414
+					},
+					{
+						"t": 1.3333333730697632,
+						"v": 0
+					},
+					{
+						"t": 1.6666667461395264,
+						"v": -7.2930002212524414
+					},
+					{
+						"t": 2,
+						"v": 0
+					}
+				]
+			},
+			{
+				"controlId": "left_hand.local_offset.x",
+				"trackType": "Keyframes",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "None",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": [
+					{
+						"t": 0,
+						"v": 0
+					},
+					{
+						"t": 0.3333333432674408,
+						"v": 7.2930002212524414
+					},
+					{
+						"t": 0.66666668653488159,
+						"v": 0
+					},
+					{
+						"t": 1,
+						"v": 7.2930002212524414
+					},
+					{
+						"t": 1.3333333730697632,
+						"v": 0
+					},
+					{
+						"t": 1.6666667461395264,
+						"v": 7.2930002212524414
+					},
+					{
+						"t": 2,
+						"v": 0
+					}
+				]
+			},
+			{
+				"controlId": "right_hand.palm_facing",
+				"trackType": "Anchor",
+				"valueType": "Vector",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "Sustain",
+				"strength": 0.9450000524520874,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "clap_center",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "left_hand.palm_facing",
+				"trackType": "Anchor",
+				"valueType": "Vector",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "Sustain",
+				"strength": 0.9450000524520874,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "clap_center",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "right_fingers.contact",
+				"trackType": "Keyframes",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "None",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": [
+					{
+						"t": 0,
+						"v": 0
+					},
+					{
+						"t": 0.47999998927116394,
+						"v": 0.98500001430511475
+					},
+					{
+						"t": 1.5199999809265137,
+						"v": 0.98500001430511475
+					},
+					{
+						"t": 2,
+						"v": 0
+					}
+				]
+			},
+			{
+				"controlId": "left_fingers.contact",
+				"trackType": "Keyframes",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "None",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": [
+					{
+						"t": 0,
+						"v": 0
+					},
+					{
+						"t": 0.47999998927116394,
+						"v": 0.98500001430511475
+					},
+					{
+						"t": 1.5199999809265137,
+						"v": 0.98500001430511475
+					},
+					{
+						"t": 2,
+						"v": 0
+					}
+				]
+			}
+		]
+	},
+	"animation_asset": "",
+	"animation_playback":
+	{
+		"slotName": "DefaultSlot",
+		"blendInSeconds": 0.15000000596046448,
+		"blendOutSeconds": 0.15000000596046448,
+		"startPositionSeconds": 0,
+		"maxDurationSeconds": 10,
+		"bLoop": false,
+		"bInterruptible": true,
+		"bStopOtherMontages": false,
+		"bAllowRootMotion": false
+	},
+	"source_provenance":
+	{
+		"source_type": "motion_recipe",
+		"schema_version": "llmnpc.motion_recipe_provenance.v1",
+		"motion_recipe":
+		{
+			"schema_version": "llmnpc.motion_recipe.v1",
+			"recipe_id": "gesture.clap.celebratory.v1",
+			"intent": "applaud",
+			"duration": 2,
+			"interruptible": true,
+			"primitives": [
+				{
+					"primitive_id": "hands.contact",
+					"side": "none",
+					"start": 0,
+					"end": 2,
+					"parameters":
+					{
+						"amplitude": 0.80000000000000004,
+						"contact_height": 0.55000000000000004,
+						"cycles": 2,
+						"palm_openness": 0.90000000000000002,
+						"separation": 0.65000000000000002,
+						"speed": 1
+					}
+				}
+			]
+		},
+		"recipe_hash": "md5:7a032d476ce2456c157623f079a0a106",
+		"online_recipe_hash": "md5:7a032d476ce2456c157623f079a0a106",
+		"human_parameter_edit": false,
+		"compiled_recipe_hash": "md5:16999bf1dee5c5888b7aaef350daf198",
+		"kinematic_report_hash": "md5:fb791c6cd3887fcd48c8f0b47e9f4c23",
+		"kinematic_baseline_hash": "md5:2e346854d3be9b09e8a666484b5821da",
+		"capability_hash": "md5:8d3a6de58151a2e79ac83e27cfb1e79f",
+		"primitive_registry_version": "llmnpc.motion_primitives.v2",
+		"compiler_version": "llmnpc.motion_recipe_compiler.v4",
+		"authoring_prompt_version": "llmnpc.motion_recipe_authoring_prompt.v4",
+		"authoring_prompt_hash": "md5:c95d66bdb9d2c0c3bed6193d4eaacdaf",
+		"authoring_job_hash": "sha1:47e1911b0775aa2bd44ad6df4c3c53f73c4fb02b",
+		"authoring_trigger":
+		{
+			"schema_version": "llmnpc.motion_recipe_authoring_trigger.v1",
+			"source": "ManualWorkbench",
+			"authoring_contract_id": "gesture.clap.procedural"
+		},
+		"source_license":
+		{
+			"identifier": "project_owned_generated_motion_recipe",
+			"holder": "project_owner",
+			"redistribution_allowed": true
+		},
+		"authoring_agent":
+		{
+			"provider_id": "deepseek_direct_editor_authoring",
+			"model_id": "deepseek-v4-flash",
+			"non_secret_config_hash": "bf57dcb49304343a0bd9a95ddea18f88",
+			"generated_at_utc": "2026-07-29T23:20:19.812Z"
+		},
+		"import_record":
+		{
+			"schema_version": "llmnpc.motion_recipe_draft_import.v1",
+			"draft_content_hash": "sha1:47e1911b0775aa2bd44ad6df4c3c53f73c4fb02b",
+			"imported_at_utc": "2026-07-29T23:25:43.381Z"
+		},
+		"review_history": [
+			{
+				"event": "previewed",
+				"reviewer": "preview_operator",
+				"notes": "Procedural Clap previewed in PIE; visual result accepted with minor detail polish remaining.",
+				"timestamp_utc": "2026-07-29T23:31:54.727Z",
+				"approved": false
+			},
+			{
+				"event": "human_approved",
+				"reviewer": "Vikky",
+				"notes": "Procedural Clap previewed in PIE; visual result accepted with minor detail polish remaining.",
+				"timestamp_utc": "2026-07-29T23:32:59.556Z",
+				"approved": true
+			},
+			{
+				"event": "previewed",
+				"reviewer": "preview_operator",
+				"notes": "Procedural Clap previewed in PIE; visual result accepted with minor detail polish remaining.",
+				"timestamp_utc": "2026-07-29T23:56:35.058Z",
+				"approved": false
+			},
+			{
+				"event": "human_approved",
+				"reviewer": "Vikky",
+				"notes": "Procedural Clap previewed in PIE; visual result accepted with minor detail polish remaining.",
+				"timestamp_utc": "2026-07-29T23:56:36.077Z",
+				"approved": true
+			}
+		],
+		"human_review":
+		{
+			"event": "human_approved",
+			"reviewer": "Vikky",
+			"notes": "Procedural Clap previewed in PIE; visual result accepted with minor detail polish remaining.",
+			"timestamp_utc": "2026-07-29T23:56:36.077Z",
+			"approved": true
+		}
+	},
+	"quality_report":
+	{
+		"schema_version": "llmnpc.template_quality_report.v1",
+		"status": "pass",
+		"template_id": "gesture.clap.manny.procedural.generated.f4005a3e5b3f",
+		"template_content_hash": "sha1:61c1b645b34e05a1f491c0b3d65e28ecd4608e94",
+		"template_kind": "procedural_motion",
+		"source_type": "motion_recipe",
+		"generated_at_utc": "2026-07-29T23:54:25.317Z",
+		"source_reconstruction_hash": "",
+		"full_pose_validation": "not_requested",
+		"source_recipe_hash": "md5:7a032d476ce2456c157623f079a0a106",
+		"compiled_recipe_hash": "md5:16999bf1dee5c5888b7aaef350daf198",
+		"capability_hash": "md5:8d3a6de58151a2e79ac83e27cfb1e79f",
+		"primitive_registry_version": "llmnpc.motion_primitives.v2",
+		"compiler_version": "llmnpc.motion_recipe_compiler.v4",
+		"checks": [
+			{
+				"id": "template_structure",
+				"passed": true,
+				"message": "Template structure is valid."
+			},
+			{
+				"id": "action_vocabulary",
+				"passed": true,
+				"message": "Action Vocabulary exists and validates."
+			},
+			{
+				"id": "template_vocabulary_tags",
+				"passed": true,
+				"message": "Template catalog tags use the controlled Action Vocabulary."
+			},
+			{
+				"id": "motion_validator",
+				"passed": true,
+				"message": "Motion tracks pass the Published Template trust boundary."
+			},
+			{
+				"id": "skeleton_profile",
+				"passed": true,
+				"message": "Skeleton Profile exists and validates."
+			},
+			{
+				"id": "provenance_json",
+				"passed": true,
+				"message": "Provenance JSON parses."
+			},
+			{
+				"id": "motion_recipe_provenance",
+				"passed": true,
+				"message": "Online Motion Recipe Job, provider identity, prompt, license, and sanitized source evidence validate."
+			},
+			{
+				"id": "motion_recipe_recompile",
+				"passed": true,
+				"message": "Recipe recompiles deterministically to the stored Motion Clip under the current Manny Capability."
+			}
+		],
+		"warnings": [],
+		"manual_review_required": true
+	}
+}

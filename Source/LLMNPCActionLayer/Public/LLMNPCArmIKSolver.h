@@ -41,6 +41,15 @@ public:
 		const FVector& DesiredPalmNormal
 	);
 
+	static bool BuildStableContactPalmBasis(
+		const FVector& ComponentForwardDirection,
+		const FVector& ComponentUpDirection,
+		const FVector& ContactDirection,
+		bool bRightHand,
+		FVector& OutFingerDirection,
+		FVector& OutPalmNormal
+	);
+
 	static float ApplyConstrainedWristOrientation(
 		const FTransform& LowerArmTransform,
 		FTransform& InOutHandTransform,

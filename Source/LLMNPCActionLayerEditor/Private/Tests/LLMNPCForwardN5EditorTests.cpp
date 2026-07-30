@@ -547,6 +547,8 @@ bool FLLMNPCForwardN5RecipeDraftQualityTest::RunTest(
 	Evidence.CapabilityModelViewJson =
 		Prompt.CapabilityModelViewJson;
 	Evidence.RawResponseJson = ResponseJson;
+	Evidence.AuthoringContractId =
+		Prompt.AuthoringContract.ContractId;
 	Evidence.GeneratedAtUtc = FDateTime::UtcNow();
 	Evidence.HttpStatus = 200;
 	Evidence.AttemptCount = 1;
@@ -557,6 +559,35 @@ bool FLLMNPCForwardN5RecipeDraftQualityTest::RunTest(
 
 	ULLMNPCTemplateAuthoringSubsystem* Authoring =
 		NewObject<ULLMNPCTemplateAuthoringSubsystem>();
+	FLLMNPCMotionRecipeDraftCatalogSpec InvalidVocabularySpec =
+		BuildForwardN5CatalogSpec();
+	InvalidVocabularySpec.VariantStyleTags.Add(
+		TEXT("unknown_generated_style")
+	);
+	const FLLMNPCAuthoringOperationResult InvalidVocabularyDraft =
+		Authoring->CreateMotionRecipeDraft(
+			ValidShrugRecipe,
+			TEXT("ue5_manny.v1"),
+			InvalidVocabularySpec,
+			Evidence,
+			TEXT("/Game/LLMNPCAutomation/ForwardN5"),
+			TEXT("/Game/LLMNPCAutomation/ForwardN5")
+		);
+	TestFalse(
+		TEXT("Recipe Draft creation rejects unknown catalog tags"),
+		InvalidVocabularyDraft.bSuccess
+	);
+	TestEqual(
+		TEXT("Unknown Recipe Draft tags return the vocabulary error"),
+		InvalidVocabularyDraft.ErrorCode,
+		FName(
+			TEXT(
+				"LLMNPC_VOCABULARY_TAG_INVALID:"
+				"VariantStyle:unknown_generated_style"
+			)
+		)
+	);
+
 	const FLLMNPCAuthoringOperationResult Draft =
 		Authoring->CreateMotionRecipeDraft(
 			ValidShrugRecipe,
@@ -664,6 +695,37 @@ bool FLLMNPCForwardN5RecipeDraftQualityTest::RunTest(
 			)
 		);
 	}
+
+	Draft.TemplateAsset->Metadata.VariantStyleTags.Add(
+		TEXT("unknown_generated_style")
+	);
+	Draft.TemplateAsset->ModifierPolicy.AllowedStyleTags.Add(
+		TEXT("unknown_generated_style")
+	);
+	const FLLMNPCAuthoringOperationResult InvalidVocabularyQuality =
+		Authoring->GenerateQualityReport(
+			Draft.TemplateAsset,
+			TEXT("")
+		);
+	TestFalse(
+		TEXT("Quality rejects a Draft with an unknown catalog tag"),
+		InvalidVocabularyQuality.bSuccess
+	);
+	TestTrue(
+		TEXT("Quality records the controlled vocabulary failure"),
+		Draft.TemplateAsset->ValidationReportJson.Contains(
+			TEXT("template_vocabulary_tags")
+		) &&
+			Draft.TemplateAsset->ValidationReportJson.Contains(
+				TEXT("unknown_generated_style")
+			)
+	);
+	Draft.TemplateAsset->Metadata.VariantStyleTags.Remove(
+		TEXT("unknown_generated_style")
+	);
+	Draft.TemplateAsset->ModifierPolicy.AllowedStyleTags.Remove(
+		TEXT("unknown_generated_style")
+	);
 
 	const FLLMNPCAuthoringOperationResult Quality =
 		Authoring->GenerateQualityReport(

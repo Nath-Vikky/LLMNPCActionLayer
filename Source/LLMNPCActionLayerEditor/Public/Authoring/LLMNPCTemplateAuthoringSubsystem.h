@@ -56,6 +56,7 @@ struct FLLMNPCMotionRecipeGenerationEvidence
 	FString RecipeSchemaJson;
 	FString CapabilityModelViewJson;
 	FString RawResponseJson;
+	FName AuthoringContractId = TEXT("gesture.shrug");
 	FName TriggerSource = TEXT("ManualWorkbench");
 	FName SourceTemplateId = NAME_None;
 	FString SourceRecipeHash;

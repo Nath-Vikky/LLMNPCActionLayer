@@ -12,7 +12,9 @@ bool TrackAcceptsResolvedTarget(const FLLMMotionTrack& Track)
 		Track.TrackType == ELLMMotionTrackType::IKReach ||
 		Track.TrackType == ELLMMotionTrackType::LookAt ||
 		Track.ControlId == TEXT("right_hand.palm_target") ||
-		Track.ControlId == TEXT("left_hand.palm_target");
+		Track.ControlId == TEXT("left_hand.palm_target") ||
+		Track.ControlId == TEXT("right_hand.palm_facing") ||
+		Track.ControlId == TEXT("left_hand.palm_facing");
 }
 
 bool MirrorTrack(FLLMMotionTrack& Track)
@@ -39,8 +41,10 @@ bool MirrorTrack(FLLMMotionTrack& Track)
 		{TEXT("right_hand.local_offset.y"), TEXT("left_hand.local_offset.y")},
 		{TEXT("right_hand.local_offset.z"), TEXT("left_hand.local_offset.z")},
 		{TEXT("right_hand.palm_target"), TEXT("left_hand.palm_target")},
+		{TEXT("right_hand.palm_facing"), TEXT("left_hand.palm_facing")},
 		{TEXT("right_fingers.open"), TEXT("left_fingers.open")},
 		{TEXT("right_fingers.point"), TEXT("left_fingers.point")},
+		{TEXT("right_fingers.contact"), TEXT("left_fingers.contact")},
 		{TEXT("right_fingers.relaxed"), TEXT("left_fingers.relaxed")},
 		{TEXT("right_fingers.curl"), TEXT("left_fingers.curl")}
 	};
@@ -80,7 +84,9 @@ bool IsNormalizedPoseControl(FName ControlId)
 		Control.StartsWith(TEXT("left_fingers.")) ||
 		Control == TEXT("gaze.target") ||
 		Control == TEXT("right_hand.palm_target") ||
-		Control == TEXT("left_hand.palm_target");
+		Control == TEXT("left_hand.palm_target") ||
+		Control == TEXT("right_hand.palm_facing") ||
+		Control == TEXT("left_hand.palm_facing");
 }
 
 FVector2D IntersectPolicyRange(const FVector2D& TemplateRange, const FVector2D& ContextRange)

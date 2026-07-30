@@ -150,6 +150,10 @@ TSharedRef<FJsonObject> BuildMotionRecipeAuthoringTrigger(
 		TEXT("source"),
 		Evidence.TriggerSource.ToString()
 	);
+	Trigger->SetStringField(
+		TEXT("authoring_contract_id"),
+		Evidence.AuthoringContractId.ToString()
+	);
 	if (
 		Evidence.TriggerSource ==
 			LLMNPCMotionRecipeAuthoring::
@@ -883,7 +887,13 @@ bool ValidateMotionRecipeEvidenceEnvelope(
 			TEXT("authoring_prompt_version"),
 			PromptVersion
 		) ||
-		PromptVersion != LLMNPCMotionRecipeAuthoring::PromptVersion ||
+		(
+			PromptVersion !=
+				LLMNPCMotionRecipeAuthoring::PromptVersion &&
+			PromptVersion !=
+				LLMNPCMotionRecipeAuthoring::
+					LegacyPromptVersionV3
+		) ||
 		!Provenance->TryGetStringField(
 			TEXT("authoring_prompt_hash"),
 			PromptHash
@@ -1534,6 +1544,7 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 		Evidence.ProviderId.IsNone() ||
 		Evidence.ProviderModelId.TrimStartAndEnd().IsEmpty() ||
 		Evidence.NonSecretConfigHash.TrimStartAndEnd().IsEmpty() ||
+		Evidence.AuthoringContractId.IsNone() ||
 		Evidence.PromptVersion !=
 			LLMNPCMotionRecipeAuthoring::PromptVersion ||
 		Evidence.PromptHash.TrimStartAndEnd().IsEmpty() ||
@@ -1587,6 +1598,8 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	TSharedPtr<FJsonObject> UserRequestObject;
 	FString RequestSchemaVersion;
 	FString RequestTriggerSource;
+	const TSharedPtr<FJsonObject>* AuthoringConstraints = nullptr;
+	FString RequestContractId;
 	if (
 		!ParseJsonObject(Evidence.UserJson, UserRequestObject) ||
 		!UserRequestObject->TryGetStringField(
@@ -1600,11 +1613,34 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 			RequestTriggerSource
 		) ||
 		RequestTriggerSource != Evidence.TriggerSource.ToString()
+		||
+		!UserRequestObject->TryGetObjectField(
+			TEXT("authoring_constraints"),
+			AuthoringConstraints
+		) ||
+		!AuthoringConstraints ||
+		!AuthoringConstraints->IsValid() ||
+		!(*AuthoringConstraints)->TryGetStringField(
+			TEXT("contract_id"),
+			RequestContractId
+		) ||
+		RequestContractId != Evidence.AuthoringContractId.ToString()
 	)
 	{
 		return ErrorResult(
-			TEXT("LLMNPC_RECIPE_DRAFT_TRIGGER_EVIDENCE_INVALID"),
-			TEXT("The Authoring trigger source is missing or does not match its request evidence.")
+			TEXT("LLMNPC_RECIPE_DRAFT_REQUEST_EVIDENCE_INVALID"),
+			TEXT("The Authoring trigger or contract is missing or does not match its request evidence.")
+		);
+	}
+	const FLLMNPCMotionRecipeAuthoringContract* AuthoringContract =
+		FLLMNPCMotionRecipeAuthoringPrompt::FindContract(
+			Evidence.AuthoringContractId
+		);
+	if (!AuthoringContract)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_CONTRACT_UNKNOWN"),
+			TEXT("The Authoring contract is not registered.")
 		);
 	}
 
@@ -1798,6 +1834,21 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 			Error.IsEmpty()
 				? TEXT("The Authoring Model did not return a Recipe.")
 				: Error
+		);
+	}
+	if (
+		!FLLMNPCMotionRecipeAuthoringPrompt::
+			ValidateRecipeForCapability(
+				OnlineResponse,
+				Capability,
+				*AuthoringContract,
+				Error
+			)
+	)
+	{
+		return ErrorResult(
+			TEXT("LLMNPC_RECIPE_DRAFT_CONTRACT_VALIDATION_FAILED"),
+			Error
 		);
 	}
 
@@ -2025,6 +2076,10 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	Job->SetStringField(
 		TEXT("prompt_version"),
 		Evidence.PromptVersion
+	);
+	Job->SetStringField(
+		TEXT("authoring_contract_id"),
+		Evidence.AuthoringContractId.ToString()
 	);
 	Job->SetStringField(TEXT("prompt_hash"), Evidence.PromptHash);
 	Job->SetStringField(
@@ -2313,7 +2368,11 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 	TemplateSeed->Metadata.SocialIntensity =
 		FMath::Clamp(CatalogSpec.SocialIntensity, 0.0f, 1.0f);
 	TemplateSeed->Metadata.VariantDifference =
-		TEXT("Online model-authored Motion Recipe compiled for the Manny capability profile.");
+		Evidence.AuthoringContractId ==
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralClapAuthoringContractId
+		? TEXT("Procedural hands.contact variant for comparison with the reviewed AnimationAsset baseline.")
+		: TEXT("Online model-authored Motion Recipe compiled for the Manny capability profile.");
 	TemplateSeed->Metadata.SourceRecipeHash =
 		CompiledMetadata.RecipeHash;
 	TemplateSeed->Metadata.KinematicReportHash =
@@ -2355,6 +2414,35 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 			FName(*TemplateValidationError),
 			TemplateValidationError
 		);
+	}
+	const ULLMNPCSettings* Settings =
+		GetDefault<ULLMNPCSettings>();
+	ULLMNPCActionVocabulary* Vocabulary =
+		Settings
+			? Settings->ActionVocabulary.LoadSynchronous()
+			: nullptr;
+	FString VocabularyError;
+	if (
+		!Vocabulary ||
+		!Vocabulary->ValidateVocabulary(VocabularyError)
+	)
+	{
+		return ErrorResult(
+			VocabularyError.IsEmpty()
+				? TEXT("LLMNPC_RECIPE_DRAFT_VOCABULARY_MISSING")
+				: FName(*VocabularyError),
+			VocabularyError.IsEmpty()
+				? TEXT("The Action Vocabulary is unavailable.")
+				: VocabularyError
+		);
+	}
+	if (!ValidateTemplateVocabularyTags(
+		*TemplateSeed,
+		*Vocabulary,
+		VocabularyError
+	))
+	{
+		return ErrorResult(FName(*VocabularyError), VocabularyError);
 	}
 
 	ULLMNPCPublicActionDefinition* Definition =
@@ -2428,15 +2516,8 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 			ULLMNPCPublicActionDefinition::BuildContentHash(
 				*DefinitionSeed
 			);
-		const ULLMNPCSettings* Settings =
-			GetDefault<ULLMNPCSettings>();
-		ULLMNPCActionVocabulary* Vocabulary =
-			Settings
-				? Settings->ActionVocabulary.LoadSynchronous()
-				: nullptr;
 		FString DefinitionError;
 		if (
-			!Vocabulary ||
 			!DefinitionSeed->ValidateDefinition(
 				Vocabulary,
 				DefinitionError
@@ -2528,6 +2609,47 @@ FLLMNPCAuthoringOperationResult ULLMNPCTemplateAuthoringSubsystem::GenerateQuali
 		TEXT("template_structure"),
 		bTemplateValid,
 		bTemplateValid ? TEXT("Template structure is valid.") : ValidationError
+	);
+
+	const ULLMNPCSettings* Settings =
+		GetDefault<ULLMNPCSettings>();
+	ULLMNPCActionVocabulary* Vocabulary =
+		Settings
+			? Settings->ActionVocabulary.LoadSynchronous()
+			: nullptr;
+	FString VocabularyError;
+	const bool bVocabularyValid =
+		Vocabulary &&
+		Vocabulary->ValidateVocabulary(VocabularyError);
+	AddCheck(
+		TEXT("action_vocabulary"),
+		bVocabularyValid,
+		bVocabularyValid
+			? TEXT("Action Vocabulary exists and validates.")
+			: (
+				VocabularyError.IsEmpty()
+					? TEXT("Action Vocabulary is unavailable.")
+					: VocabularyError
+			)
+	);
+	FString TemplateVocabularyError;
+	const bool bTemplateVocabularyValid =
+		bVocabularyValid &&
+		ValidateTemplateVocabularyTags(
+			*Template,
+			*Vocabulary,
+			TemplateVocabularyError
+		);
+	AddCheck(
+		TEXT("template_vocabulary_tags"),
+		bTemplateVocabularyValid,
+		bTemplateVocabularyValid
+			? TEXT("Template catalog tags use the controlled Action Vocabulary.")
+			: (
+				TemplateVocabularyError.IsEmpty()
+					? TEXT("Template tags could not be validated.")
+					: TemplateVocabularyError
+			)
 	);
 
 	const bool bAnimationTemplate =
@@ -4073,6 +4195,7 @@ FString ULLMNPCTemplateAuthoringSubsystem::BuildTemplateContentHash(
 	FString StableProvenanceJson = Template.SourceProvenanceJson;
 	FLLMNPCTemplateMetadata StableMetadata = Template.Metadata;
 	StableMetadata.ReviewState = ELLMNPCTemplateReviewState::Generated;
+	StableMetadata.CatalogContentHash.Reset();
 	FJsonObjectConverter::UStructToJsonObjectString(StableMetadata, MetadataJson);
 	FJsonObjectConverter::UStructToJsonObjectString(Template.ModifierPolicy, ModifierJson);
 	FJsonObjectConverter::UStructToJsonObjectString(Template.ProceduralClip, ClipJson);

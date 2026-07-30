@@ -460,6 +460,84 @@ FLLMNPCMotionPrimitiveRegistry::FLLMNPCMotionPrimitiveRegistry()
 		Definitions.Add(MoveTemp(Definition));
 	}
 
+	{
+		FLLMNPCMotionPrimitiveDefinition Definition = MakeDefinition(
+			TEXT("hands.contact"),
+			TEXT("hands"),
+			TEXT("solver.hands_contact.manny.v3"),
+			TEXT("Bring both open hands together for UE-authored rhythmic contact and release.")
+		);
+		Definition.Availability =
+			ELLMNPCMotionPrimitiveAvailability::AuthoringOnly;
+		Definition.AllowedSides = {TEXT("none")};
+		Definition.RequiredCapabilities.Add(TEXT("hand.pose.open"));
+		Definition.RequiredChannelPatterns = {
+			TEXT("{side}_arm_ik"),
+			TEXT("{side}_hand_pose")
+		};
+		Definition.MirroringPolicy = TEXT("bilateral_internal");
+		Definition.MinDurationSeconds = 0.8;
+		Definition.MaxDurationSeconds = 3.2;
+		Definition.MaxInstancesPerRecipe = 1;
+		Definition.BlockedStates.Append({
+			TEXT("left_hand_busy"),
+			TEXT("right_hand_busy"),
+			TEXT("two_hand_interaction")
+		});
+		Definition.ParameterSchemas = {
+			NumberParameter(
+				TEXT("amplitude"),
+				0.3,
+				1.0,
+				0.75,
+				TEXT("normalized"),
+				TEXT("Overall bounded clap expressiveness.")
+			),
+			NumberParameter(
+				TEXT("speed"),
+				0.7,
+				1.3,
+				1.0,
+				TEXT("multiplier"),
+				TEXT("Bounded hand-stroke speed and energy multiplier; duration and cycles own the contact cadence.")
+			),
+			NumberParameter(
+				TEXT("cycles"),
+				1.0,
+				3.0,
+				2.0,
+				TEXT("count"),
+				TEXT("Whole bounded hand-contact count."),
+				true
+			),
+			NumberParameter(
+				TEXT("contact_height"),
+				0.35,
+				0.75,
+				0.55,
+				TEXT("normalized"),
+				TEXT("Relative contact height in front of the upper chest.")
+			),
+			NumberParameter(
+				TEXT("separation"),
+				0.2,
+				1.0,
+				0.65,
+				TEXT("normalized"),
+				TEXT("Distance between contacts without changing the contact point.")
+			),
+			NumberParameter(
+				TEXT("palm_openness"),
+				0.5,
+				1.0,
+				0.9,
+				TEXT("normalized"),
+				TEXT("Calibrated open-palm and finger participation.")
+			)
+		};
+		Definitions.Add(MoveTemp(Definition));
+	}
+
 	for (
 		const TTuple<FName, FName, const TCHAR*> PoseDefinition :
 		{
@@ -749,6 +827,14 @@ bool FLLMNPCMotionPrimitiveRegistry::BuildModelSchemaJson(
 		PrimitiveSchema->SetStringField(
 			TEXT("description"),
 			Definition.Description
+		);
+		PrimitiveSchema->SetNumberField(
+			TEXT("x-min-duration-seconds"),
+			Definition.MinDurationSeconds
+		);
+		PrimitiveSchema->SetNumberField(
+			TEXT("x-max-duration-seconds"),
+			Definition.MaxDurationSeconds
 		);
 
 		TArray<FString> RequiredFields = {

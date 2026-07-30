@@ -111,6 +111,65 @@ FAutoConsoleCommand ExportMotionRecipeSchemaCommand(
 	FConsoleCommandDelegate::CreateStatic(&ExportMotionRecipeSchema)
 );
 
+void ExportMannyCapability()
+{
+	const TSharedPtr<IPlugin> Plugin =
+		IPluginManager::Get().FindPlugin(TEXT("LLMNPCActionLayer"));
+	ULLMNPCSkeletonProfile* Profile =
+		LoadObject<ULLMNPCSkeletonProfile>(
+			nullptr,
+			TEXT("/LLMNPCActionLayer/LLMNPC/SkeletonProfiles/SP_UE5_Manny_v1.SP_UE5_Manny_v1")
+		);
+	if (!Plugin.IsValid() || !Profile)
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("Manny Capability export could not resolve the plugin or Profile.")
+		);
+		return;
+	}
+
+	const FString OutputPath = FPaths::Combine(
+		Plugin->GetBaseDir(),
+		TEXT("Resources"),
+		TEXT("Capabilities"),
+		TEXT("Manny"),
+		TEXT("ue5_manny_v1.capability.json")
+	);
+	FLLMNPCSkeletonCapabilitySnapshot Snapshot;
+	FString Error;
+	if (!FLLMNPCSkeletonCapabilityExporter::ExportModelView(
+		*Profile,
+		nullptr,
+		OutputPath,
+		Snapshot,
+		Error
+	))
+	{
+		UE_LOG(
+			LogLLMNPCActionLayerEditor,
+			Error,
+			TEXT("Manny Capability export failed: %s"),
+			*Error
+		);
+		return;
+	}
+	UE_LOG(
+		LogLLMNPCActionLayerEditor,
+		Display,
+		TEXT("Manny Capability exported without modifying assets. Hash=%s Path=%s"),
+		*Snapshot.CapabilityHash,
+		*OutputPath
+	);
+}
+
+FAutoConsoleCommand ExportMannyCapabilityCommand(
+	TEXT("LLMNPC.ExportMannyCapability"),
+	TEXT("Export the current Manny model-safe Capability JSON without modifying assets."),
+	FConsoleCommandDelegate::CreateStatic(&ExportMannyCapability)
+);
+
 void RefreshMannyN1Profile()
 {
 	ULLMNPCSkeletonProfile* Profile = LoadObject<ULLMNPCSkeletonProfile>(

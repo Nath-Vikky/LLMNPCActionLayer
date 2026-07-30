@@ -220,10 +220,17 @@ bool FLLMNPCMotionRecipeValidator::ValidateAndNormalize(
 				PrimitiveArrayIndex
 			);
 		}
-		if (
-			Primitive.EndTimeSeconds - Primitive.StartTimeSeconds >
-			Definition->MaxDurationSeconds
-		)
+		const double PrimitiveDuration =
+			Primitive.EndTimeSeconds - Primitive.StartTimeSeconds;
+		if (PrimitiveDuration < Definition->MinDurationSeconds)
+		{
+			return Fail(
+				OutResult,
+				TEXT("LLMNPC_RECIPE_PRIMITIVE_DURATION_BELOW_MINIMUM"),
+				PrimitiveArrayIndex
+			);
+		}
+		if (PrimitiveDuration > Definition->MaxDurationSeconds)
 		{
 			return Fail(
 				OutResult,

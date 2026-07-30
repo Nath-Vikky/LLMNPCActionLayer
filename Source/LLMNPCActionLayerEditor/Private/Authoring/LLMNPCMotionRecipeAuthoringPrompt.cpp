@@ -178,6 +178,112 @@ TSharedRef<FJsonObject> BuildExampleObject(
 	);
 	return Example;
 }
+
+const TArray<FLLMNPCMotionRecipeAuthoringContract>& BuildContracts()
+{
+	static const TArray<FLLMNPCMotionRecipeAuthoringContract> Contracts = []
+	{
+		TArray<FLLMNPCMotionRecipeAuthoringContract> Result;
+
+		FLLMNPCMotionRecipeAuthoringContract Shrug;
+		Shrug.ContractId =
+			LLMNPCMotionRecipeAuthoring::DefaultAuthoringContractId;
+		Shrug.PublicActionId = TEXT("gesture.shrug");
+		Shrug.DisplayName = FText::FromString(TEXT("Bilateral Shrug"));
+		Shrug.DefaultDesiredAction =
+			TEXT("A readable bilateral shrug that expresses uncertainty. ")
+			TEXT("Raise both shoulders naturally, let the elbows open slightly, ")
+			TEXT("keep both hands relaxed, then return smoothly to neutral.");
+		Shrug.Phase = TEXT("forward_n5_shrug");
+		Shrug.RequiredIntent = TEXT("express_uncertainty");
+		Shrug.AllowedPrimitiveIds = {TEXT("shoulder.shrug")};
+		Shrug.PrimitiveCount = 1;
+		Shrug.MinDurationSeconds = 0.2;
+		Shrug.MaxDurationSeconds = 4.0;
+		Shrug.TimingContract =
+			TEXT("Use one shoulder.shrug primitive from start 0 through the recipe duration. ")
+			TEXT("Unreal supplies easing and the readable hold internally; do not create timing, hold, ")
+			TEXT("pause, ease, transition, or helper primitives.");
+		Shrug.RevisionPolicy =
+			TEXT("Create a new Draft. Preserve the shrug intent and address only the bounded visual feedback.");
+		Result.Add(MoveTemp(Shrug));
+
+		FLLMNPCMotionRecipeAuthoringContract Clap;
+		Clap.ContractId =
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralClapAuthoringContractId;
+		Clap.PublicActionId = TEXT("gesture.clap");
+		Clap.DisplayName = FText::FromString(TEXT("Procedural Clap"));
+		Clap.DefaultDesiredAction =
+			TEXT("Two clear celebratory claps in front of the chest. ")
+			TEXT("Approach with open relaxed palms, make readable contact, ")
+			TEXT("separate between claps, then recover smoothly to neutral.");
+		Clap.Phase = TEXT("forward_n7b_procedural_clap");
+		Clap.RequiredIntent = TEXT("applaud");
+		Clap.AllowedPrimitiveIds = {TEXT("hands.contact")};
+		Clap.PrimitiveCount = 1;
+		Clap.MinDurationSeconds = 0.8;
+		Clap.MaxDurationSeconds = 3.2;
+		Clap.TimingContract =
+			TEXT("Use one hands.contact primitive from start 0 through the recipe duration. ")
+			TEXT("Set cycles to the requested clap count. Unreal owns bilateral approach, ")
+			TEXT("contact, separation, palm targeting, continuous easing, and recovery; ")
+			TEXT("do not create hold, pause, timing, transition, or helper primitives.");
+		Clap.RevisionPolicy =
+			TEXT("Create a new Draft. Preserve the clap intent and address only the bounded visual feedback.");
+		Result.Add(MoveTemp(Clap));
+
+		return Result;
+	}();
+	return Contracts;
+}
+
+bool CapabilitySupportsPrimitive(
+	const FLLMNPCSkeletonCapabilitySnapshot& CapabilitySnapshot,
+	FName PrimitiveId
+)
+{
+	return CapabilitySnapshot.Capabilities.ContainsByPredicate(
+		[PrimitiveId](const FLLMNPCSemanticCapability& Capability)
+		{
+			return Capability.CapabilityId == PrimitiveId;
+		}
+	);
+}
+}
+
+const TArray<FLLMNPCMotionRecipeAuthoringContract>&
+FLLMNPCMotionRecipeAuthoringPrompt::GetContracts()
+{
+	return BuildContracts();
+}
+
+const FLLMNPCMotionRecipeAuthoringContract*
+FLLMNPCMotionRecipeAuthoringPrompt::FindContract(FName ContractId)
+{
+	return BuildContracts().FindByPredicate(
+		[ContractId](
+			const FLLMNPCMotionRecipeAuthoringContract& Contract
+		)
+		{
+			return Contract.ContractId == ContractId;
+		}
+	);
+}
+
+const FLLMNPCMotionRecipeAuthoringContract*
+FLLMNPCMotionRecipeAuthoringPrompt::FindContractForPublicAction(
+	FName PublicActionId
+)
+{
+	return BuildContracts().FindByPredicate(
+		[PublicActionId](
+			const FLLMNPCMotionRecipeAuthoringContract& Contract
+		)
+		{
+			return Contract.PublicActionId == PublicActionId;
+		}
+	);
 }
 
 bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
@@ -191,6 +297,46 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 {
 	OutPackage = FLLMNPCMotionRecipePromptPackage();
 	OutError.Reset();
+
+	const FLLMNPCMotionRecipeAuthoringContract* Contract =
+		FindContract(RequestContext.AuthoringContractId);
+	if (!Contract)
+	{
+		OutError = FString::Printf(
+			TEXT("LLMNPC_RECIPE_AUTHORING_CONTRACT_UNKNOWN:%s"),
+			*RequestContext.AuthoringContractId.ToString()
+		);
+		return false;
+	}
+	if (
+		Contract->AllowedPrimitiveIds.IsEmpty() ||
+		Contract->PrimitiveCount <= 0 ||
+		Contract->MinDurationSeconds < 0.05 ||
+		Contract->MaxDurationSeconds <
+			Contract->MinDurationSeconds
+	)
+	{
+		OutError =
+			TEXT("LLMNPC_RECIPE_AUTHORING_CONTRACT_INVALID");
+		return false;
+	}
+	for (const FName PrimitiveId : Contract->AllowedPrimitiveIds)
+	{
+		if (
+			!FLLMNPCMotionPrimitiveRegistry::Get().Find(PrimitiveId) ||
+			!CapabilitySupportsPrimitive(
+				CapabilitySnapshot,
+				PrimitiveId
+			)
+		)
+		{
+			OutError = FString::Printf(
+				TEXT("LLMNPC_RECIPE_AUTHORING_CONTRACT_UNSUPPORTED:%s"),
+				*PrimitiveId.ToString()
+			);
+			return false;
+		}
+	}
 
 	const FString CleanIntent = DesiredAction.TrimStartAndEnd();
 	if (CleanIntent.IsEmpty() || CleanIntent.Len() > 600)
@@ -302,7 +448,7 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 		);
 		RevisionContext->SetStringField(
 			TEXT("revision_policy"),
-			TEXT("Create a new Draft. Preserve the shrug intent and address only the bounded visual feedback.")
+			Contract->RevisionPolicy
 		);
 		Request->SetObjectField(
 			TEXT("revision_context"),
@@ -324,26 +470,53 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 	TSharedRef<FJsonObject> AuthoringConstraints =
 		MakeShared<FJsonObject>();
 	AuthoringConstraints->SetStringField(
+		TEXT("contract_id"),
+		Contract->ContractId.ToString()
+	);
+	AuthoringConstraints->SetStringField(
+		TEXT("public_action_id"),
+		Contract->PublicActionId.ToString()
+	);
+	AuthoringConstraints->SetStringField(
 		TEXT("phase"),
-		TEXT("forward_n5_shrug")
+		Contract->Phase.ToString()
 	);
 	AuthoringConstraints->SetStringField(
 		TEXT("required_intent"),
-		TEXT("express_uncertainty")
+		Contract->RequiredIntent.ToString()
 	);
 	AuthoringConstraints->SetNumberField(
 		TEXT("primitive_count"),
-		1
+		Contract->PrimitiveCount
 	);
+	TSharedRef<FJsonObject> DurationRange =
+		MakeShared<FJsonObject>();
+	DurationRange->SetNumberField(
+		TEXT("min"),
+		Contract->MinDurationSeconds
+	);
+	DurationRange->SetNumberField(
+		TEXT("max"),
+		Contract->MaxDurationSeconds
+	);
+	AuthoringConstraints->SetObjectField(
+		TEXT("duration_range_seconds"),
+		DurationRange
+	);
+	AuthoringConstraints->SetBoolField(
+		TEXT("primitive_must_cover_recipe"),
+		Contract->bPrimitiveCoversRecipe
+	);
+	TArray<FName> AllowedPrimitiveIds =
+		Contract->AllowedPrimitiveIds.Array();
+	AllowedPrimitiveIds.Sort(FNameLexicalLess());
 	AuthoringConstraints->SetArrayField(
 		TEXT("allowed_primitive_ids"),
-		StringValues({TEXT("shoulder.shrug")})
+		NameValues(AllowedPrimitiveIds)
 	);
 	AuthoringConstraints->SetStringField(
 		TEXT("timing_contract"),
-		TEXT("Use one shoulder.shrug primitive from start 0 through the recipe duration. ")
-		TEXT("Unreal supplies easing and the readable hold internally; do not create timing, hold, ")
-		TEXT("pause, ease, transition, or helper primitives.")
+		Contract->TimingContract
 	);
 	Request->SetObjectField(
 		TEXT("authoring_constraints"),
@@ -363,8 +536,19 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 		}
 	}
 	SortedExamples.Sort(
-		[](const ULLMNPCMotionTemplate& A, const ULLMNPCMotionTemplate& B)
+		[Contract](
+			const ULLMNPCMotionTemplate& A,
+			const ULLMNPCMotionTemplate& B
+		)
 		{
+			const bool bAMatches =
+				A.Metadata.PublicActionId == Contract->PublicActionId;
+			const bool bBMatches =
+				B.Metadata.PublicActionId == Contract->PublicActionId;
+			if (bAMatches != bBMatches)
+			{
+				return bAMatches;
+			}
 			return A.Metadata.TemplateId.LexicalLess(B.Metadata.TemplateId);
 		}
 	);
@@ -433,6 +617,7 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 	OutPackage.CapabilityHash = CapabilitySnapshot.CapabilityHash;
 	OutPackage.RegistryVersion = Registry.GetRegistryVersion();
 	OutPackage.SimilarTemplateCount = SortedExamples.Num();
+	OutPackage.AuthoringContract = *Contract;
 	OutPackage.RequestContext = RequestContext;
 	const FString StablePrompt = FString::Printf(
 		TEXT("%s\n%s\n%s"),
@@ -444,6 +629,77 @@ bool FLLMNPCMotionRecipeAuthoringPrompt::Build(
 		TEXT("md5:%s"),
 		*FMD5::HashAnsiString(*StablePrompt)
 	);
+	return true;
+}
+
+bool FLLMNPCMotionRecipeAuthoringPrompt::ValidateRecipeForCapability(
+	const FLLMNPCMotionRecipeAuthoringResponse& Response,
+	const FLLMNPCSkeletonCapabilitySnapshot& CapabilitySnapshot,
+	const FLLMNPCMotionRecipeAuthoringContract& Contract,
+	FString& OutError
+)
+{
+	if (!ValidateRecipeForCapability(
+		Response,
+		CapabilitySnapshot,
+		Contract.AllowedPrimitiveIds,
+		Contract.RequiredIntent,
+		Contract.PrimitiveCount,
+		OutError
+	))
+	{
+		return false;
+	}
+
+	FLLMNPCMotionRecipe Recipe;
+	if (!FLLMNPCMotionRecipeParser::Parse(
+		Response.RecipeJson,
+		Recipe,
+		OutError
+	))
+	{
+		return false;
+	}
+	if (Recipe.Primitives.Num() != Contract.PrimitiveCount)
+	{
+		OutError =
+			TEXT("LLMNPC_RECIPE_AUTHORING_PRIMITIVE_COUNT_MISMATCH");
+		return false;
+	}
+	if (
+		Recipe.DurationSeconds < Contract.MinDurationSeconds ||
+		Recipe.DurationSeconds > Contract.MaxDurationSeconds
+	)
+	{
+		OutError =
+			TEXT("LLMNPC_RECIPE_AUTHORING_DURATION_OUT_OF_CONTRACT");
+		return false;
+	}
+	if (Contract.bPrimitiveCoversRecipe)
+	{
+		for (
+			const FLLMNPCMotionRecipePrimitive& Primitive :
+			Recipe.Primitives
+		)
+		{
+			if (
+				!FMath::IsNearlyZero(
+					Primitive.StartTimeSeconds,
+					0.0001
+				) ||
+				!FMath::IsNearlyEqual(
+					Primitive.EndTimeSeconds,
+					Recipe.DurationSeconds,
+					0.0001
+				)
+			)
+			{
+				OutError =
+					TEXT("LLMNPC_RECIPE_AUTHORING_TIMING_COVERAGE_MISMATCH");
+				return false;
+			}
+		}
+	}
 	return true;
 }
 

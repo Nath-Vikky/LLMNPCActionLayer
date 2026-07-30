@@ -232,6 +232,10 @@ void FLLMNPCMotionSampler::SampleClip(
 		{
 			OutSnapshot.RightFingersPoint = FMath::Max(OutSnapshot.RightFingersPoint, FMath::Clamp(FloatValue, 0.0f, 1.0f));
 		}
+		else if (Control == TEXT("right_fingers.contact"))
+		{
+			OutSnapshot.RightFingersContact = FMath::Max(OutSnapshot.RightFingersContact, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
 		else if (Control == TEXT("right_fingers.relaxed"))
 		{
 			OutSnapshot.RightFingersRelaxed = FMath::Max(OutSnapshot.RightFingersRelaxed, FMath::Clamp(FloatValue, 0.0f, 1.0f));
@@ -247,6 +251,10 @@ void FLLMNPCMotionSampler::SampleClip(
 		else if (Control == TEXT("left_fingers.point"))
 		{
 			OutSnapshot.LeftFingersPoint = FMath::Max(OutSnapshot.LeftFingersPoint, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
+		else if (Control == TEXT("left_fingers.contact"))
+		{
+			OutSnapshot.LeftFingersContact = FMath::Max(OutSnapshot.LeftFingersContact, FMath::Clamp(FloatValue, 0.0f, 1.0f));
 		}
 		else if (Control == TEXT("left_fingers.relaxed"))
 		{
@@ -339,52 +347,152 @@ void FLLMNPCMotionSampler::SampleClip(
 		}
 		else if (Control == TEXT("right_hand.palm_target"))
 		{
-			FVector TargetLocationWS;
-			float TargetAlpha = 0.0f;
-			if (
-				Mesh &&
-				ResolveTargetLocationWS(
-					Track.TargetRef,
-					TargetMap,
-					RuntimeTargetSamples,
-					TargetLocationWS,
-					TargetAlpha
-				)
-			)
+			if (Track.TrackType == ELLMMotionTrackType::Anchor)
 			{
 				OutSnapshot.RightHandPalmTargetCS =
-					Mesh->GetComponentTransform().InverseTransformPosition(
-						TargetLocationWS + FVector(0.0f, 0.0f, 70.0f)
-					);
+					BuildAnchorTargetCS(Track, Manifest, Mesh);
 				OutSnapshot.RightHandPalmAlpha = FMath::Max(
 					OutSnapshot.RightHandPalmAlpha,
-					TrackAlpha * TargetAlpha
+					TrackAlpha
 				);
+			}
+			else
+			{
+				FVector TargetLocationWS;
+				float TargetAlpha = 0.0f;
+				if (
+					Mesh &&
+					ResolveTargetLocationWS(
+						Track.TargetRef,
+						TargetMap,
+						RuntimeTargetSamples,
+						TargetLocationWS,
+						TargetAlpha
+					)
+				)
+				{
+					OutSnapshot.RightHandPalmTargetCS =
+						Mesh->GetComponentTransform().InverseTransformPosition(
+							TargetLocationWS + FVector(0.0f, 0.0f, 70.0f)
+						);
+					OutSnapshot.RightHandPalmAlpha = FMath::Max(
+						OutSnapshot.RightHandPalmAlpha,
+						TrackAlpha * TargetAlpha
+					);
+				}
 			}
 		}
 		else if (Control == TEXT("left_hand.palm_target"))
 		{
-			FVector TargetLocationWS;
-			float TargetAlpha = 0.0f;
-			if (
-				Mesh &&
-				ResolveTargetLocationWS(
-					Track.TargetRef,
-					TargetMap,
-					RuntimeTargetSamples,
-					TargetLocationWS,
-					TargetAlpha
-				)
-			)
+			if (Track.TrackType == ELLMMotionTrackType::Anchor)
 			{
 				OutSnapshot.LeftHandPalmTargetCS =
-					Mesh->GetComponentTransform().InverseTransformPosition(
-						TargetLocationWS + FVector(0.0f, 0.0f, 70.0f)
-					);
+					BuildAnchorTargetCS(Track, Manifest, Mesh);
 				OutSnapshot.LeftHandPalmAlpha = FMath::Max(
 					OutSnapshot.LeftHandPalmAlpha,
-					TrackAlpha * TargetAlpha
+					TrackAlpha
 				);
+			}
+			else
+			{
+				FVector TargetLocationWS;
+				float TargetAlpha = 0.0f;
+				if (
+					Mesh &&
+					ResolveTargetLocationWS(
+						Track.TargetRef,
+						TargetMap,
+						RuntimeTargetSamples,
+						TargetLocationWS,
+						TargetAlpha
+					)
+				)
+				{
+					OutSnapshot.LeftHandPalmTargetCS =
+						Mesh->GetComponentTransform().InverseTransformPosition(
+							TargetLocationWS + FVector(0.0f, 0.0f, 70.0f)
+						);
+					OutSnapshot.LeftHandPalmAlpha = FMath::Max(
+						OutSnapshot.LeftHandPalmAlpha,
+						TrackAlpha * TargetAlpha
+					);
+				}
+			}
+		}
+		else if (Control == TEXT("right_hand.palm_facing"))
+		{
+			if (Track.TrackType == ELLMMotionTrackType::Anchor)
+			{
+				OutSnapshot.RightHandPalmFacingTargetCS =
+					BuildAnchorTargetCS(Track, Manifest, Mesh);
+				OutSnapshot.RightHandPalmFacingAlpha = FMath::Max(
+					OutSnapshot.RightHandPalmFacingAlpha,
+					TrackAlpha
+				);
+			}
+			else
+			{
+				FVector TargetLocationWS;
+				float TargetAlpha = 0.0f;
+				if (
+					Mesh &&
+					ResolveTargetLocationWS(
+						Track.TargetRef,
+						TargetMap,
+						RuntimeTargetSamples,
+						TargetLocationWS,
+						TargetAlpha
+					)
+				)
+				{
+					OutSnapshot.RightHandPalmFacingTargetCS =
+						Mesh->GetComponentTransform().InverseTransformPosition(
+							TargetLocationWS + FVector(0.0f, 0.0f, 70.0f)
+						);
+					OutSnapshot.RightHandPalmFacingAlpha =
+						FMath::Max(
+							OutSnapshot.RightHandPalmFacingAlpha,
+							TrackAlpha * TargetAlpha
+						);
+				}
+			}
+		}
+		else if (Control == TEXT("left_hand.palm_facing"))
+		{
+			if (Track.TrackType == ELLMMotionTrackType::Anchor)
+			{
+				OutSnapshot.LeftHandPalmFacingTargetCS =
+					BuildAnchorTargetCS(Track, Manifest, Mesh);
+				OutSnapshot.LeftHandPalmFacingAlpha = FMath::Max(
+					OutSnapshot.LeftHandPalmFacingAlpha,
+					TrackAlpha
+				);
+			}
+			else
+			{
+				FVector TargetLocationWS;
+				float TargetAlpha = 0.0f;
+				if (
+					Mesh &&
+					ResolveTargetLocationWS(
+						Track.TargetRef,
+						TargetMap,
+						RuntimeTargetSamples,
+						TargetLocationWS,
+						TargetAlpha
+					)
+				)
+				{
+					OutSnapshot.LeftHandPalmFacingTargetCS =
+						Mesh->GetComponentTransform().InverseTransformPosition(
+							TargetLocationWS + FVector(0.0f, 0.0f, 70.0f)
+						);
+					OutSnapshot.LeftHandPalmFacingAlpha =
+						FMath::Max(
+							OutSnapshot.LeftHandPalmFacingAlpha,
+							TrackAlpha * TargetAlpha
+						);
+				}
 			}
 		}
 	}
@@ -440,6 +548,17 @@ float FLLMNPCMotionSampler::EvaluateEnvelope(const FLLMMotionTrack& Track, float
 		return Smooth01(Normalized);
 	case ELLMMotionEnvelope::EaseOut:
 		return 1.0f - Smooth01(1.0f - Normalized);
+	case ELLMMotionEnvelope::Sustain:
+		{
+			constexpr float EdgeFraction = 0.2f;
+			const float InAlpha = Smooth01(
+				Normalized / EdgeFraction
+			);
+			const float OutAlpha = Smooth01(
+				(1.0f - Normalized) / EdgeFraction
+			);
+			return FMath::Min(InAlpha, OutAlpha);
+		}
 	default:
 		return 1.0f;
 	}

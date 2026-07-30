@@ -95,6 +95,7 @@ right_hand.pitch
 right_hand.yaw
 right_hand.roll
 right_fingers.open
+right_fingers.contact
 right_fingers.relaxed
 right_fingers.point
 left_hand.ik
@@ -103,6 +104,7 @@ left_hand.local_offset.y
 left_hand.local_offset.z
 left_hand.palm_target
 left_fingers.open
+left_fingers.contact
 left_fingers.relaxed
 left_fingers.point
 gaze.target
@@ -339,10 +341,14 @@ Baseline-management state do not.
 Editor commands:
 
 ```text
+LLMNPC.ExportMannyCapability
 LLMNPC.RefreshMannyN1Profile
 LLMNPC.ApproveMannyN1ValidationBaseline
 LLMNPC.RunMannyN1CapabilitySmoke
 ```
+
+`ExportMannyCapability` regenerates only the model-safe JSON artifact and does
+not modify the Manny Profile or its approved validation baseline.
 
 `ApproveMannyN1ValidationBaseline` is an explicit human-gated operation. It
 derives per-control thresholds from all Published Manny procedural templates,
@@ -441,7 +447,9 @@ names, transforms, axes, IK anchors, control IDs, and solver IDs remain private
 to Unreal.
 
 The first Recipe compiler target is a Manny bilateral Shrug with coordinated
-shoulders, upper chest, arm IK, wrists, and calibrated relaxed fingers.
+shoulders, upper chest, arm IK, wrists, and calibrated relaxed fingers. N7-B
+adds the second Authoring Contract, a bilateral Procedural Clap driven by the
+semantic `hands.contact` primitive.
 Generated Recipes are deterministically compiled into quarantined Motion
 Template Drafts. They must pass evidence-bound quality checks, human PIE
 preview, review, and explicit publication before runtime selection can see
@@ -455,7 +463,8 @@ Source/LLMNPCActionLayer/Public/MotionRecipe
 Source/LLMNPCActionLayer/Private/MotionRecipe
 ```
 
-Open `Generate` in the Template Workbench for the online authoring flow. The
+Open `Generate` in the Template Workbench and select a `Recipe Contract` for
+the online authoring flow. The
 checked-in Schema can be refreshed with
 `LLMNPC.ExportMotionRecipeSchema`. See
 `Docs/Phases/forward-n5-motion-recipe-shrug.md` for trust boundaries,
@@ -472,12 +481,29 @@ the revision if the parent is missing, changed, not Rejected, uses another
 Manny profile, or belongs to another Public Action.
 
 The revision receives a new Template ID and must repeat Sandbox visual review,
-Quality, Previewed, HumanApproved, and Publish. Existing prompt-v2 Drafts are
-intentionally stale under the prompt-v3 evidence gate and should be revised
-instead of published.
+Quality, Previewed, HumanApproved, and Publish. Existing prompt-v2 Drafts
+remain intentionally stale. Historical prompt-v3 provenance remains readable;
+new generation and revision requests use prompt v4 with an immutable Authoring
+Contract ID.
 
 See `Docs/Phases/forward-n7a-rejected-draft-revision.md` for the exact gate and
 manual online acceptance sequence.
+
+## Forward N7-B Procedural Clap
+
+N7-B adds Authoring-only `hands.contact` for Manny. The online model chooses
+clap count, amplitude, speed, height, separation, and palm openness; Unreal
+generates mirrored arm IK, contact/release keyframes, shared palm facing, open
+fingers, and recovery. Either occupied hand or an active two-hand interaction
+blocks the action.
+
+The existing Published Mixamo `Clapping` template remains the AnimationAsset
+baseline under `gesture.clap`. A generated procedural Clap becomes another
+variant of that Public Action only after Sandbox visual review, Quality,
+HumanApproved, and Publish.
+
+See `Docs/Phases/forward-n7b-procedural-clap.md` for protocol versions,
+calibration evidence, automated coverage, and the PIE comparison gate.
 
 ## Product Runtime
 

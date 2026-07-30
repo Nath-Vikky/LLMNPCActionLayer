@@ -68,6 +68,12 @@ struct FLLMNPCTemplateWorkbenchSkeletonOption
 	FText Label;
 };
 
+struct FLLMNPCTemplateWorkbenchContractOption
+{
+	FName ContractId = NAME_None;
+	FText Label;
+};
+
 struct FLLMNPCTemplateWorkbenchActorOption
 {
 	TWeakObjectPtr<ULLMNPCMotionComponent> MotionComponent;
@@ -132,6 +138,14 @@ private:
 	TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption> SelectedSkeleton;
 	TSharedPtr<SComboBox<TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption>>> SkeletonCombo;
 	TSharedPtr<SComboBox<TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption>>> GenerateSkeletonCombo;
+
+	TArray<TSharedPtr<FLLMNPCTemplateWorkbenchContractOption>>
+		AuthoringContractOptions;
+	TSharedPtr<FLLMNPCTemplateWorkbenchContractOption>
+		SelectedAuthoringContract;
+	TSharedPtr<
+		SComboBox<TSharedPtr<FLLMNPCTemplateWorkbenchContractOption>>>
+		AuthoringContractCombo;
 
 	TArray<TSharedPtr<FLLMNPCTemplateWorkbenchActorOption>> ActorOptions;
 	TSharedPtr<FLLMNPCTemplateWorkbenchActorOption> SelectedActor;
@@ -221,6 +235,9 @@ private:
 	TSharedRef<SWidget> GenerateSkeletonOption(
 		TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption> Option
 	) const;
+	TSharedRef<SWidget> GenerateAuthoringContractOption(
+		TSharedPtr<FLLMNPCTemplateWorkbenchContractOption> Option
+	) const;
 	TSharedRef<SWidget> GenerateActorOption(
 		TSharedPtr<FLLMNPCTemplateWorkbenchActorOption> Option
 	) const;
@@ -235,6 +252,10 @@ private:
 	void HandleSandboxEnabledChanged(ECheckBoxState State);
 	void HandleSkeletonChanged(
 		TSharedPtr<FLLMNPCTemplateWorkbenchSkeletonOption> Option,
+		ESelectInfo::Type SelectInfo
+	);
+	void HandleAuthoringContractChanged(
+		TSharedPtr<FLLMNPCTemplateWorkbenchContractOption> Option,
 		ESelectInfo::Type SelectInfo
 	);
 	void HandleActorChanged(
