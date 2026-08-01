@@ -24,7 +24,7 @@ FLLMMotionTrack& AddBaseTrack(
 	return Track;
 }
 
-void AddShapedFloatTrack(
+FLLMMotionTrack& AddShapedFloatTrack(
 	FLLMMotionClip& Clip,
 	FName ControlId,
 	float Value,
@@ -46,6 +46,7 @@ void AddShapedFloatTrack(
 		{Track.EndTime - RiseTime, Value},
 		{Track.EndTime, 0.0f}
 	};
+	return Track;
 }
 
 FLLMMotionTrack& AddKeyframedFloatTrack(
@@ -599,24 +600,36 @@ bool CompileArmPrimitive(
 		const float Amplitude = static_cast<float>(
 			Primitive.GetNumberParameter(TEXT("amplitude"), 0.65)
 		);
+		const float OutwardOffset = bRight ? 6.0f : -6.0f;
 		AddReachTrack(
 			Clip,
 			IKControl,
 			TargetRef,
-			FMath::Lerp(0.45f, 0.82f, Amplitude),
-			Offset,
-			0.75f + 0.2f * Amplitude,
+			FMath::Lerp(0.36f, 0.68f, Amplitude),
+			Offset + FVector(0.0f, OutwardOffset, 0.0f),
+			0.76f + 0.18f * Amplitude,
 			Primitive
 		);
-		AddShapedFloatTrack(
+		FLLMMotionTrack& OpenTrack = AddShapedFloatTrack(
 			Clip,
 			FName(*FString::Printf(
 				TEXT("%s_fingers.open"),
 				*SidePrefix
 			)),
-			0.9f,
+			0.92f,
 			Primitive
 		);
+		OpenTrack.TargetRef = TargetRef;
+		FLLMMotionTrack& PalmUpTrack = AddShapedFloatTrack(
+			Clip,
+			FName(*FString::Printf(
+				TEXT("%s_hand.palm_up"),
+				*SidePrefix
+			)),
+			0.88f,
+			Primitive
+		);
+		PalmUpTrack.TargetRef = TargetRef;
 		AddLookAtTrack(
 			Clip,
 			FName(*FString::Printf(
@@ -624,7 +637,7 @@ bool CompileArmPrimitive(
 				*SidePrefix
 			)),
 			TargetRef,
-			0.75f,
+			0.78f,
 			Primitive
 		);
 		return true;

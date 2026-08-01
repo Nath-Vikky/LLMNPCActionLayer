@@ -183,6 +183,14 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			FingersOpen.MaxValue = 1.0f;
 			Result.Add(FingersOpen);
 
+			FLLMControlDefinition RightHandPalmUp = FingersOpen;
+			RightHandPalmUp.ControlId = TEXT("right_hand.palm_up");
+			Result.Add(RightHandPalmUp);
+
+			FLLMControlDefinition LeftHandPalmUp = RightHandPalmUp;
+			LeftHandPalmUp.ControlId = TEXT("left_hand.palm_up");
+			Result.Add(LeftHandPalmUp);
+
 			FLLMControlDefinition FingersPoint = FingersOpen;
 			FingersPoint.ControlId = TEXT("right_fingers.point");
 			Result.Add(FingersPoint);
@@ -354,6 +362,6 @@ const TArray<FLLMAnchorDefinition>& ULLMNPCControlManifest::GetBuiltInAnchors()
 
 const FString& ULLMNPCControlManifest::GetBuiltInManifestVersion()
 {
-	static const FString Version(TEXT("llmnpc.control_manifest.v2"));
+	static const FString Version(TEXT("llmnpc.control_manifest.v3"));
 	return Version;
 }

@@ -1095,7 +1095,10 @@ void FLLMNPCContextModifierResolver::ApplyToCompiledPlan(
 		{
 			Track.Strength *= Modifiers.GazeEngagement;
 		}
-		if (Control.Contains(TEXT("palm_target")))
+		if (
+			Control.Contains(TEXT("palm_target")) ||
+			Control.Contains(TEXT("palm_up"))
+		)
 		{
 			Track.Strength *= Modifiers.PalmOrientationWeight;
 		}

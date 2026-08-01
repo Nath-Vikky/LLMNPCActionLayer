@@ -43,6 +43,7 @@ bool MirrorTrack(FLLMMotionTrack& Track)
 		{TEXT("right_hand.local_offset.z"), TEXT("left_hand.local_offset.z")},
 		{TEXT("right_hand.palm_target"), TEXT("left_hand.palm_target")},
 		{TEXT("right_hand.palm_facing"), TEXT("left_hand.palm_facing")},
+		{TEXT("right_hand.palm_up"), TEXT("left_hand.palm_up")},
 		{TEXT("right_fingers.open"), TEXT("left_fingers.open")},
 		{TEXT("right_fingers.point"), TEXT("left_fingers.point")},
 		{TEXT("right_fingers.contact"), TEXT("left_fingers.contact")},
@@ -87,7 +88,9 @@ bool IsNormalizedPoseControl(FName ControlId)
 		Control == TEXT("right_hand.palm_target") ||
 		Control == TEXT("left_hand.palm_target") ||
 		Control == TEXT("right_hand.palm_facing") ||
-		Control == TEXT("left_hand.palm_facing");
+		Control == TEXT("left_hand.palm_facing") ||
+		Control == TEXT("right_hand.palm_up") ||
+		Control == TEXT("left_hand.palm_up");
 }
 
 FVector2D IntersectPolicyRange(const FVector2D& TemplateRange, const FVector2D& ContextRange)

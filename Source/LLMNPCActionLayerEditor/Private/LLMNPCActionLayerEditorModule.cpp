@@ -5,9 +5,11 @@
 #include "Authoring/LLMNPCMannyValidationBaselineExporter.h"
 #include "Authoring/LLMNPCMannyN2CatalogMigration.h"
 #include "Authoring/LLMNPCMannyN3ContextMigration.h"
+#include "Containers/Ticker.h"
 #include "Editor.h"
 #include "Framework/Docking/TabManager.h"
 #include "HAL/IConsoleManager.h"
+#include "HAL/PlatformMisc.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -105,10 +107,23 @@ void ExportMotionRecipeSchema()
 	);
 }
 
+void QueueExportMotionRecipeSchema()
+{
+	FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda(
+			[](float)
+			{
+				ExportMotionRecipeSchema();
+				return false;
+			}
+		)
+	);
+}
+
 FAutoConsoleCommand ExportMotionRecipeSchemaCommand(
 	TEXT("LLMNPC.ExportMotionRecipeSchema"),
 	TEXT("Export the built-in model-safe Motion Recipe JSON Schema."),
-	FConsoleCommandDelegate::CreateStatic(&ExportMotionRecipeSchema)
+	FConsoleCommandDelegate::CreateStatic(&QueueExportMotionRecipeSchema)
 );
 
 void ExportMannyCapability()
@@ -164,10 +179,44 @@ void ExportMannyCapability()
 	);
 }
 
+void QueueExportMannyCapability()
+{
+	FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda(
+			[](float)
+			{
+				ExportMannyCapability();
+				return false;
+			}
+		)
+	);
+}
+
 FAutoConsoleCommand ExportMannyCapabilityCommand(
 	TEXT("LLMNPC.ExportMannyCapability"),
 	TEXT("Export the current Manny model-safe Capability JSON without modifying assets."),
-	FConsoleCommandDelegate::CreateStatic(&ExportMannyCapability)
+	FConsoleCommandDelegate::CreateStatic(&QueueExportMannyCapability)
+);
+
+void QueueExportResourcesAndQuit()
+{
+	FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateLambda(
+			[](float)
+			{
+				ExportMotionRecipeSchema();
+				ExportMannyCapability();
+				FPlatformMisc::RequestExit(false);
+				return false;
+			}
+		)
+	);
+}
+
+FAutoConsoleCommand ExportResourcesAndQuitCommand(
+	TEXT("LLMNPC.ExportResourcesAndQuit"),
+	TEXT("Export Motion Recipe and Manny Capability resources, then exit the Editor."),
+	FConsoleCommandDelegate::CreateStatic(&QueueExportResourcesAndQuit)
 );
 
 void RefreshMannyN1Profile()

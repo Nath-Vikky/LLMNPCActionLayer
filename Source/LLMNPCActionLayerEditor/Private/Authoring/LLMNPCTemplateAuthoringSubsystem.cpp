@@ -2437,6 +2437,15 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 		TemplateSeed->Metadata.VariantDifference =
 			TEXT("Target-following Manny beckon with constrained palm-up orientation, bounded finger curl cycles, and occupied-hand mirroring.");
 	}
+	else if (
+		Evidence.AuthoringContractId ==
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralPresentAuthoringContractId
+	)
+	{
+		TemplateSeed->Metadata.VariantDifference =
+			TEXT("Target-following Manny open-palm presentation with bounded reach, explicit palm-up orientation, calibrated open fingers, and occupied-hand mirroring.");
+	}
 	else
 	{
 		TemplateSeed->Metadata.VariantDifference =

@@ -39,11 +39,15 @@ FVector GetBoneLocationCS(USkeletalMeshComponent* Mesh, FName BoneName, const FV
 	return Fallback;
 }
 
-bool IsTargetGatedFingerControl(FName ControlId)
+bool IsTargetGatedPoseControl(FName ControlId)
 {
 	return
+		ControlId == TEXT("right_hand.palm_up") ||
+		ControlId == TEXT("left_hand.palm_up") ||
+		ControlId == TEXT("right_fingers.open") ||
 		ControlId == TEXT("right_fingers.relaxed") ||
 		ControlId == TEXT("right_fingers.curl") ||
+		ControlId == TEXT("left_fingers.open") ||
 		ControlId == TEXT("left_fingers.relaxed") ||
 		ControlId == TEXT("left_fingers.curl");
 }
@@ -90,7 +94,7 @@ void FLLMNPCMotionSampler::SampleClip(
 		float FloatValue = EvaluateFloatTrack(Track, Time) * TrackAlpha;
 		if (
 			!Track.TargetRef.IsEmpty() &&
-			IsTargetGatedFingerControl(Control)
+			IsTargetGatedPoseControl(Control)
 		)
 		{
 			FVector IgnoredTargetLocationWS;
@@ -254,6 +258,20 @@ void FLLMNPCMotionSampler::SampleClip(
 		else if (Control == TEXT("left_hand.roll") || Control == TEXT("mirror_left_hand.roll"))
 		{
 			OutSnapshot.LeftHandAdditiveRotation.Roll += FloatValue;
+		}
+		else if (Control == TEXT("right_hand.palm_up"))
+		{
+			OutSnapshot.RightHandPalmUp = FMath::Max(
+				OutSnapshot.RightHandPalmUp,
+				FMath::Clamp(FloatValue, 0.0f, 1.0f)
+			);
+		}
+		else if (Control == TEXT("left_hand.palm_up"))
+		{
+			OutSnapshot.LeftHandPalmUp = FMath::Max(
+				OutSnapshot.LeftHandPalmUp,
+				FMath::Clamp(FloatValue, 0.0f, 1.0f)
+			);
 		}
 		else if (Control == TEXT("right_fingers.open"))
 		{

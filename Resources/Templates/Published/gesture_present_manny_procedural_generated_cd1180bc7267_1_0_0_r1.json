@@ -1,0 +1,458 @@
+{
+	"schema_version": "llmnpc.published_template_source.v1",
+	"asset_path": "/Game/LLMNPCActionLayer/MotionTemplates/Published/MT_Present_Manny_Procedural_Generated_cd1180bc7267.MT_Present_Manny_Procedural_Generated_cd1180bc7267",
+	"catalog_content_hash": "md5:7f12ca89cf970dc50746bc8dddc0fa41",
+	"template_kind": 0,
+	"metadata":
+	{
+		"templateId": "gesture.present.manny.procedural.generated.cd1180bc7267",
+		"publicActionId": "gesture.present",
+		"semanticVersion": "1.0.0",
+		"catalogSchemaVersion": "llmnpc.template_catalog.v1",
+		"catalogRevision": 1,
+		"variantId": "procedural_generated_recipe",
+		"variantWeight": 1,
+		"variantStyleTags": [
+			"neutral",
+			"friendly",
+			"subtle"
+		],
+		"displayName": "Present Primary Target",
+		"description": "Extend the right arm toward the primary target with an open palm, then recover smoothly.",
+		"visualDescription": "The character extends the right arm toward the primary target with a comfortably bent elbow, turns the palm upward, and keeps all fingers naturally extended, then smoothly recovers to neutral.",
+		"intentTags": [
+			"indicate"
+		],
+		"emotionTags": [
+			"helpful"
+		],
+		"personalityTags": [],
+		"bodyRegionTags": [
+			"one_arm",
+			"hand",
+			"fingers"
+		],
+		"spatialRequirementTags": [
+			"target_required"
+		],
+		"semanticEffectTags": [
+			"indicate",
+			"direct_attention"
+		],
+		"targetCategoryTags": [
+			"scene_target"
+		],
+		"requiredCapabilities": [
+			"arm.present",
+			"hand.pose.open"
+		],
+		"requiredChannels": [
+			"right_arm_ik",
+			"right_hand_pose"
+		],
+		"blockedStates": [
+			"dead",
+			"ragdoll",
+			"stunned"
+		],
+		"skeletonProfileId": "ue5_manny.v1",
+		"compatibleSkeletonProfileIds": [],
+		"bRequiresTarget": true,
+		"bCanRunWhileMoving": true,
+		"bAllowRuntimeModelSelection": true,
+		"cooldownSeconds": 1,
+		"expressiveness": 0.62000000476837158,
+		"energy": 0.46000000834465027,
+		"socialIntensity": 0.64999997615814209,
+		"variantDifference": "Target-following Manny open-palm presentation with bounded reach, explicit palm-up orientation, calibrated open fingers, and occupied-hand mirroring.",
+		"sourceRecipeHash": "md5:93ef798201868a8f9e0dd4e1822a0bd0",
+		"kinematicReportHash": "md5:2cfee770b618d56c9ffc46f472931521",
+		"catalogContentHash": "md5:7f12ca89cf970dc50746bc8dddc0fa41",
+		"reviewState": "Published"
+	},
+	"modifier_policy":
+	{
+		"policyVersion": 2,
+		"amplitudeRange":
+		{
+			"x": 0.85000002384185791,
+			"y": 1.1499999761581421
+		},
+		"speedRange":
+		{
+			"x": 0.89999997615814209,
+			"y": 1.1000000238418579
+		},
+		"durationRange":
+		{
+			"x": 0.94999998807907104,
+			"y": 1.0499999523162842
+		},
+		"bAllowMirror": true,
+		"allowedStyleTags": [
+			"neutral",
+			"friendly",
+			"subtle"
+		],
+		"reachScaleRange":
+		{
+			"x": 0.80000001192092896,
+			"y": 1.1499999761581421
+		},
+		"heightScaleRange":
+		{
+			"x": 0.80000001192092896,
+			"y": 1.1200000047683716
+		},
+		"lateralScaleRange":
+		{
+			"x": 0.85000002384185791,
+			"y": 1
+		},
+		"cycleCountRange":
+		{
+			"x": 0,
+			"y": 0
+		},
+		"gazeEngagementRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"palmOrientationWeightRange":
+		{
+			"x": 0.85000002384185791,
+			"y": 1
+		},
+		"fingerPoseWeightRange":
+		{
+			"x": 0.85000002384185791,
+			"y": 1
+		},
+		"torsoParticipationRange":
+		{
+			"x": 0.80000001192092896,
+			"y": 1
+		},
+		"blendInScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"blendOutScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"bEnableDynamicTargetTracking": true,
+		"maxTargetFollowSpeedCmPerSecond": 240,
+		"maxTargetAngularSpeedDegreesPerSecond": 180,
+		"targetInterpolationSpeed": 8,
+		"targetTeleportThresholdCm": 250,
+		"targetLostFadeSeconds": 0.18000000715255737,
+		"targetLossPolicy": "FadeOut",
+		"bEnableObstacleAdaptation": true,
+		"minObstacleAmplitudeScale": 0.60000002384185791,
+		"minObstacleReachScale": 0.64999997615814209,
+		"obstacleCancelClearance": 0.20000000298023224,
+		"randomAmplitudeJitter": 0.014999999664723873,
+		"randomSpeedJitter": 0.014999999664723873,
+		"randomFrequencyJitter": 0,
+		"randomPhaseJitterRadians": 0
+	},
+	"procedural_clip":
+	{
+		"clipId": "recipe_a76f183e37f7f0ae",
+		"duration": 2,
+		"blendIn": 0,
+		"blendOut": 0,
+		"priority": 0.75,
+		"bInterruptible": true,
+		"tracks": [
+			{
+				"controlId": "right_hand.ik",
+				"trackType": "IKReach",
+				"valueType": "Vector",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 0.88599997758865356,
+				"reach": 0.58399999141693115,
+				"targetRef": "primary",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 6,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "right_fingers.open",
+				"trackType": "Keyframes",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "None",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "primary",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": [
+					{
+						"t": 0,
+						"v": 0
+					},
+					{
+						"t": 0.47999998927116394,
+						"v": 0.92000001668930054
+					},
+					{
+						"t": 1.5199999809265137,
+						"v": 0.92000001668930054
+					},
+					{
+						"t": 2,
+						"v": 0
+					}
+				]
+			},
+			{
+				"controlId": "right_hand.palm_up",
+				"trackType": "Keyframes",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "None",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "primary",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": [
+					{
+						"t": 0,
+						"v": 0
+					},
+					{
+						"t": 0.47999998927116394,
+						"v": 0.87999999523162842
+					},
+					{
+						"t": 1.5199999809265137,
+						"v": 0.87999999523162842
+					},
+					{
+						"t": 2,
+						"v": 0
+					}
+				]
+			},
+			{
+				"controlId": "right_hand.palm_target",
+				"trackType": "LookAt",
+				"valueType": "Vector",
+				"startTime": 0,
+				"endTime": 2,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "EaseInOut",
+				"strength": 0.77999997138977051,
+				"reach": 0.80000001192092896,
+				"targetRef": "primary",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			}
+		]
+	},
+	"animation_asset": "",
+	"animation_playback":
+	{
+		"slotName": "DefaultSlot",
+		"blendInSeconds": 0.15000000596046448,
+		"blendOutSeconds": 0.15000000596046448,
+		"startPositionSeconds": 0,
+		"maxDurationSeconds": 10,
+		"bLoop": false,
+		"bInterruptible": true,
+		"bStopOtherMontages": false,
+		"bAllowRootMotion": false
+	},
+	"source_provenance":
+	{
+		"source_type": "motion_recipe",
+		"schema_version": "llmnpc.motion_recipe_provenance.v1",
+		"motion_recipe":
+		{
+			"schema_version": "llmnpc.motion_recipe.v1",
+			"recipe_id": "gesture.present.primary",
+			"intent": "indicate",
+			"duration": 2,
+			"interruptible": true,
+			"primitives": [
+				{
+					"primitive_id": "arm.present",
+					"side": "right",
+					"start": 0,
+					"end": 2,
+					"target_slot": "primary",
+					"parameters":
+					{
+						"amplitude": 0.70000000000000007,
+						"height": 0.5
+					}
+				}
+			]
+		},
+		"recipe_hash": "md5:93ef798201868a8f9e0dd4e1822a0bd0",
+		"online_recipe_hash": "md5:93ef798201868a8f9e0dd4e1822a0bd0",
+		"human_parameter_edit": false,
+		"compiled_recipe_hash": "md5:a76f183e37f7f0ae411c7fd7f5f7f0ca",
+		"kinematic_report_hash": "md5:2cfee770b618d56c9ffc46f472931521",
+		"kinematic_baseline_hash": "md5:2e346854d3be9b09e8a666484b5821da",
+		"capability_hash": "md5:04c0f35b8de7cb5976434fd76cb2f9ba",
+		"primitive_registry_version": "llmnpc.motion_primitives.v4",
+		"compiler_version": "llmnpc.motion_recipe_compiler.v6",
+		"authoring_prompt_version": "llmnpc.motion_recipe_authoring_prompt.v6",
+		"authoring_prompt_hash": "md5:24ee3363d84bde862a57771aa64ab583",
+		"authoring_job_hash": "sha1:4ff52a5ee61d2df71b09bd5e15b72a5916bcafdc",
+		"authoring_trigger":
+		{
+			"schema_version": "llmnpc.motion_recipe_authoring_trigger.v1",
+			"source": "ManualWorkbench",
+			"authoring_contract_id": "gesture.present.procedural"
+		},
+		"source_license":
+		{
+			"identifier": "project_owned_generated_motion_recipe",
+			"holder": "project_owner",
+			"redistribution_allowed": true
+		},
+		"authoring_agent":
+		{
+			"provider_id": "deepseek_direct_editor_authoring",
+			"model_id": "deepseek-v4-flash",
+			"non_secret_config_hash": "bf57dcb49304343a0bd9a95ddea18f88",
+			"generated_at_utc": "2026-08-01T05:41:21.283Z"
+		},
+		"import_record":
+		{
+			"schema_version": "llmnpc.motion_recipe_draft_import.v1",
+			"draft_content_hash": "sha1:4ff52a5ee61d2df71b09bd5e15b72a5916bcafdc",
+			"imported_at_utc": "2026-08-01T05:45:52.971Z"
+		},
+		"review_history": [
+			{
+				"event": "previewed",
+				"reviewer": "preview_operator",
+				"notes": "Manny PIE passed: target reach, bent elbow, palm-up orientation, natural open fingers, wrist stability, and smooth recovery verified.",
+				"timestamp_utc": "2026-08-01T05:51:56.008Z",
+				"approved": false
+			},
+			{
+				"event": "human_approved",
+				"reviewer": "Vikky",
+				"notes": "Manny PIE passed: target reach, bent elbow, palm-up orientation, natural open fingers, wrist stability, and smooth recovery verified.",
+				"timestamp_utc": "2026-08-01T05:52:09.482Z",
+				"approved": true
+			}
+		],
+		"human_review":
+		{
+			"event": "human_approved",
+			"reviewer": "Vikky",
+			"notes": "Manny PIE passed: target reach, bent elbow, palm-up orientation, natural open fingers, wrist stability, and smooth recovery verified.",
+			"timestamp_utc": "2026-08-01T05:52:09.482Z",
+			"approved": true
+		}
+	},
+	"quality_report":
+	{
+		"schema_version": "llmnpc.template_quality_report.v1",
+		"status": "pass",
+		"template_id": "gesture.present.manny.procedural.generated.cd1180bc7267",
+		"template_content_hash": "sha1:8a31935e1a30995935671f9e1cf9492b388e3903",
+		"template_kind": "procedural_motion",
+		"source_type": "motion_recipe",
+		"generated_at_utc": "2026-08-01T05:48:14.214Z",
+		"source_reconstruction_hash": "",
+		"full_pose_validation": "not_requested",
+		"source_recipe_hash": "md5:93ef798201868a8f9e0dd4e1822a0bd0",
+		"compiled_recipe_hash": "md5:a76f183e37f7f0ae411c7fd7f5f7f0ca",
+		"capability_hash": "md5:04c0f35b8de7cb5976434fd76cb2f9ba",
+		"primitive_registry_version": "llmnpc.motion_primitives.v4",
+		"compiler_version": "llmnpc.motion_recipe_compiler.v6",
+		"checks": [
+			{
+				"id": "template_structure",
+				"passed": true,
+				"message": "Template structure is valid."
+			},
+			{
+				"id": "action_vocabulary",
+				"passed": true,
+				"message": "Action Vocabulary exists and validates."
+			},
+			{
+				"id": "template_vocabulary_tags",
+				"passed": true,
+				"message": "Template catalog tags use the controlled Action Vocabulary."
+			},
+			{
+				"id": "motion_validator",
+				"passed": true,
+				"message": "Motion tracks pass the Published Template trust boundary."
+			},
+			{
+				"id": "skeleton_profile",
+				"passed": true,
+				"message": "Skeleton Profile exists and validates."
+			},
+			{
+				"id": "provenance_json",
+				"passed": true,
+				"message": "Provenance JSON parses."
+			},
+			{
+				"id": "motion_recipe_provenance",
+				"passed": true,
+				"message": "Online Motion Recipe Job, provider identity, prompt, license, and sanitized source evidence validate."
+			},
+			{
+				"id": "motion_recipe_recompile",
+				"passed": true,
+				"message": "Recipe recompiles deterministically to the stored Motion Clip under the current Manny Capability."
+			}
+		],
+		"warnings": [],
+		"manual_review_required": true
+	}
+}

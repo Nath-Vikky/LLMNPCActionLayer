@@ -4005,6 +4005,60 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		CatalogSpec.Energy = 0.58f;
 		CatalogSpec.SocialIntensity = 0.72f;
 	}
+	else if (
+		Contract->ContractId ==
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralPresentAuthoringContractId
+	)
+	{
+		CatalogSpec.AssetName = FString::Printf(
+			TEXT("MT_Present_Manny_Procedural_Generated_%s"),
+			*Suffix
+		);
+		CatalogSpec.TemplateId = FName(*FString::Printf(
+			TEXT("gesture.present.manny.procedural.generated.%s"),
+			*Suffix
+		));
+		CatalogSpec.PublicActionAssetName =
+			TEXT("PA_Gesture_Present_Draft");
+		CatalogSpec.VariantId =
+			TEXT("procedural_generated_recipe");
+		CatalogSpec.IntentTags = {TEXT("indicate")};
+		CatalogSpec.EmotionTags = {TEXT("helpful")};
+		CatalogSpec.VariantStyleTags = {
+			TEXT("neutral"),
+			TEXT("friendly"),
+			TEXT("subtle")
+		};
+		CatalogSpec.BodyRegionTags = {
+			TEXT("one_arm"),
+			TEXT("hand"),
+			TEXT("fingers")
+		};
+		CatalogSpec.SpatialRequirementTags = {
+			TEXT("target_required")
+		};
+		CatalogSpec.TargetCategoryTags = {
+			TEXT("scene_target")
+		};
+		CatalogSpec.SemanticEffectTags = {
+			TEXT("indicate"),
+			TEXT("direct_attention")
+		};
+		CatalogSpec.GestureFamily = TEXT("point");
+		CatalogSpec.DefaultStyle = TEXT("friendly");
+		CatalogSpec.SearchKeywords = {
+			TEXT("present"),
+			TEXT("open palm"),
+			TEXT("introduce"),
+			TEXT("show"),
+			TEXT("this way")
+		};
+		CatalogSpec.bCanRunWhileMoving = true;
+		CatalogSpec.Expressiveness = 0.62f;
+		CatalogSpec.Energy = 0.46f;
+		CatalogSpec.SocialIntensity = 0.65f;
+	}
 	else
 	{
 		CatalogSpec.AssetName = FString::Printf(

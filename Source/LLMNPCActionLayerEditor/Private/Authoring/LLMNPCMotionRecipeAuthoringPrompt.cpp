@@ -267,6 +267,41 @@ const TArray<FLLMNPCMotionRecipeAuthoringContract>& BuildContracts()
 			TEXT("Create a new Draft. Preserve the beckon intent and primary target contract, and address only the bounded visual feedback.");
 		Result.Add(MoveTemp(Beckon));
 
+		FLLMNPCMotionRecipeAuthoringContract Present;
+		Present.ContractId =
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralPresentAuthoringContractId;
+		Present.PublicActionId = TEXT("gesture.present");
+		Present.DisplayName =
+			FText::FromString(TEXT("Targeted Open-Palm Present"));
+		Present.DefaultDesiredAction =
+			TEXT("Present the primary scene target with one helpful open palm. ")
+			TEXT("Extend one arm toward the target with a comfortably bent elbow, ")
+			TEXT("turn the open palm upward, keep every finger naturally extended, ")
+			TEXT("then recover smoothly to neutral.");
+		Present.Phase =
+			TEXT("forward_n7d_procedural_present");
+		Present.RequiredIntent = TEXT("indicate");
+		Present.AllowedPrimitiveIds = {TEXT("arm.present")};
+		Present.PrimitiveCount = 1;
+		Present.MinDurationSeconds = 0.8;
+		Present.MaxDurationSeconds = 3.0;
+		Present.AllowedTargetSlots = {TEXT("primary")};
+		Present.bTargetRequired = true;
+		Present.bAllowMirror = true;
+		Present.TargetContract =
+			TEXT("Exactly one semantic scene target is available as target_slot 'primary'. ")
+			TEXT("Use that exact slot on arm.present. Unreal binds it to the live Actor, ")
+			TEXT("limits reach, keeps the palm upward, and fades the gesture if the target is lost.");
+		Present.TimingContract =
+			TEXT("Use one arm.present primitive from start 0 through the recipe duration. ")
+			TEXT("Unreal owns arm IK, the palm-up wrist constraint, open-finger calibration, ")
+			TEXT("continuous easing, target tracking, and recovery; do not create hold, pause, ")
+			TEXT("timing, transition, or helper primitives.");
+		Present.RevisionPolicy =
+			TEXT("Create a new Draft. Preserve the open-palm presentation intent and primary target contract, and address only the bounded visual feedback.");
+		Result.Add(MoveTemp(Present));
+
 		return Result;
 	}();
 	return Contracts;

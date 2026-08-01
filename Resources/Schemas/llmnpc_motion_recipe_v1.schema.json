@@ -4,7 +4,7 @@
 	"title": "LLM NPC Motion Recipe v1",
 	"type": "object",
 	"additionalProperties": false,
-	"x-llmnpc-registry-version": "llmnpc.motion_primitives.v3",
+	"x-llmnpc-registry-version": "llmnpc.motion_primitives.v4",
 	"required": [
 		"schema_version",
 		"recipe_id",
@@ -56,7 +56,7 @@
 					{
 						"type": "object",
 						"additionalProperties": false,
-						"description": "Present a validated person, object, or direction with one open hand.",
+						"description": "Present a validated person, object, or direction with one open palm facing upward.",
 						"x-min-duration-seconds": 0.050000000000000003,
 						"x-max-duration-seconds": 4,
 						"required": [
@@ -112,7 +112,7 @@
 										"type": "number",
 										"minimum": 0.20000000000000001,
 										"maximum": 1,
-										"description": "Normalized expressive amplitude.",
+										"description": "How far and clearly the presenting arm opens toward the target.",
 										"x-unit": "normalized",
 										"default": 0.65000000000000002
 									},
@@ -124,15 +124,6 @@
 										"description": "Relative presentation height.",
 										"x-unit": "normalized",
 										"default": 0.5
-									},
-									"speed":
-									{
-										"type": "number",
-										"minimum": 0.59999999999999998,
-										"maximum": 1.3999999999999999,
-										"description": "Bounded timing multiplier.",
-										"x-unit": "multiplier",
-										"default": 1
 									}
 								}
 							}

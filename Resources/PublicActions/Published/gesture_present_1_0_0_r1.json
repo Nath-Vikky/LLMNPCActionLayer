@@ -1,0 +1,47 @@
+{
+	"schema_version": "llmnpc.published_public_action_source.v1",
+	"asset_path": "/Game/LLMNPCActionLayer/PublicActions/Published/PA_Gesture_Present_Draft.PA_Gesture_Present_Draft",
+	"content_hash": "md5:e4ae9ae35e212561eacb01cd47a4b327",
+	"definition":
+	{
+		"publicActionId": "gesture.present",
+		"semanticVersion": "1.0.0",
+		"definitionRevision": 1,
+		"displayName": "Present Primary Target",
+		"selectionSummary": "Extend the right arm toward the primary target with an open palm, then recover smoothly.",
+		"suitableWhen": [
+			"introducing a person or object",
+			"directing attention to a target",
+			"offering an item"
+		],
+		"avoidWhen": [
+			"target is out of reach",
+			"both hands are busy",
+			"a pointing gesture is more appropriate"
+		],
+		"semanticEffectTags": [
+			"indicate",
+			"direct_attention"
+		],
+		"targetCategoryTags": [
+			"scene_target"
+		],
+		"gestureFamily": "point",
+		"defaultStyle": "friendly",
+		"incompatibleActionFamilies": [],
+		"searchKeywords": [
+			"present",
+			"open palm",
+			"introduce",
+			"show",
+			"this way"
+		],
+		"bRequiresTarget": true,
+		"catalogSchemaVersion": "llmnpc.public_action_definition.v1",
+		"reviewState": "Published",
+		"contentHash": "md5:e4ae9ae35e212561eacb01cd47a4b327",
+		"reviewRecordJson": "{\r\n\t\"schema_version\": \"llmnpc.public_action_review.v1\",\r\n\t\"authoring_bundle_id\": \"md5:a76f183e37f7f0ae411c7fd7f5f7f0ca\",\r\n\t\"source_recipe_hash\": \"md5:93ef798201868a8f9e0dd4e1822a0bd0\",\r\n\t\"history\": [\r\n\t\t{\r\n\t\t\t\"event\": \"previewed\",\r\n\t\t\t\"reviewer\": \"preview_operator\",\r\n\t\t\t\"notes\": \"gesture.present semantics, target requirement, descriptions, tags, and approved Manny Present variant were reviewed.\",\r\n\t\t\t\"timestamp_utc\": \"2026-08-01T05:57:31.764Z\",\r\n\t\t\t\"approved\": false\r\n\t\t},\r\n\t\t{\r\n\t\t\t\"event\": \"human_approved\",\r\n\t\t\t\"reviewer\": \"Vikky\",\r\n\t\t\t\"notes\": \"gesture.present semantics, target requirement, descriptions, tags, and approved Manny Present variant were reviewed.\",\r\n\t\t\t\"timestamp_utc\": \"2026-08-01T05:57:32.214Z\",\r\n\t\t\t\"approved\": true\r\n\t\t}\r\n\t],\r\n\t\"human_review\":\r\n\t{\r\n\t\t\"event\": \"human_approved\",\r\n\t\t\"reviewer\": \"Vikky\",\r\n\t\t\"notes\": \"gesture.present semantics, target requirement, descriptions, tags, and approved Manny Present variant were reviewed.\",\r\n\t\t\"timestamp_utc\": \"2026-08-01T05:57:32.214Z\",\r\n\t\t\"approved\": true\r\n\t}\r\n}",
+		"assetBundleData": "",
+		"nativeClass": "/Script/CoreUObject.Class'/Script/LLMNPCActionLayer.LLMNPCPublicActionDefinition'"
+	}
+}

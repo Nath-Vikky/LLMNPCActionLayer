@@ -343,10 +343,38 @@ void AddArmCapabilities(
 
 		Reach.SupportedSides.Add(Side);
 		Reach.InternalControlIds.Append({IKControl, OffsetX});
-		Present.SupportedSides.Add(Side);
-		Present.InternalControlIds.Append({IKControl, OffsetX});
 		Wave.SupportedSides.Add(Side);
 		Wave.InternalControlIds.Append({IKControl, OffsetX});
+
+		const FName PalmTarget(*FString::Printf(
+			TEXT("%s_hand.palm_target"),
+			*Suffix
+		));
+		const FName PalmUp(*FString::Printf(
+			TEXT("%s_hand.palm_up"),
+			*Suffix
+		));
+		const FName OpenPose(*FString::Printf(
+			TEXT("%s_fingers.open"),
+			*Suffix
+		));
+		if (
+			HasFingerPose(Profile, TEXT("open")) &&
+			HasControls(
+				Manifest,
+				{PalmTarget, PalmUp, OpenPose}
+			)
+		)
+		{
+			Present.SupportedSides.Add(Side);
+			Present.InternalControlIds.Append({
+				IKControl,
+				OffsetX,
+				PalmTarget,
+				PalmUp,
+				OpenPose
+			});
+		}
 	};
 
 	AddSide(TEXT("left"), TEXT("left"));
@@ -366,15 +394,6 @@ void AddArmCapabilities(
 		};
 		OutCapabilities.Add(MoveTemp(Reach));
 
-		Present.TargetModes = {TEXT("scene_target"), TEXT("direction")};
-		Present.Requires = {TEXT("hand.pose.open")};
-		Present.ParameterRanges = {
-			NormalizedRange(TEXT("amplitude"), 0.2, 1.0),
-			NormalizedRange(TEXT("height"), 0.0, 1.0),
-			MakeRange(TEXT("duration"), TEXT("seconds"), TEXT("seconds"), 0.2, 4.0)
-		};
-		OutCapabilities.Add(MoveTemp(Present));
-
 		Wave.TargetModes = {TEXT("none"), TEXT("scene_target")};
 		Wave.Requires = {TEXT("arm.reach"), TEXT("hand.pose.open")};
 		Wave.ConflictsWith = {
@@ -389,6 +408,24 @@ void AddArmCapabilities(
 			MakeRange(TEXT("cycles"), TEXT("integer"), TEXT("count"), 1.0, 4.0)
 		};
 		OutCapabilities.Add(MoveTemp(Wave));
+	}
+	if (!Present.SupportedSides.IsEmpty())
+	{
+		Present.TargetModes = {TEXT("scene_target"), TEXT("direction")};
+		Present.Requires = {TEXT("hand.pose.open")};
+		Present.ConflictsWith = {
+			TEXT("left_hand_busy"),
+			TEXT("right_hand_busy"),
+			TEXT("two_hand_interaction")
+		};
+		Present.ParameterRanges = {
+			NormalizedRange(TEXT("amplitude"), 0.2, 1.0),
+			NormalizedRange(TEXT("height"), 0.0, 1.0),
+			MakeRange(TEXT("duration"), TEXT("seconds"), TEXT("seconds"), 0.8, 3.0)
+		};
+		Present.bRuntimeRecipeAllowed = false;
+		Present.bAuthoringOnly = true;
+		OutCapabilities.Add(MoveTemp(Present));
 	}
 }
 

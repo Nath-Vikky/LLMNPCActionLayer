@@ -384,8 +384,8 @@ FLLMNPCMotionPrimitiveRegistry::FLLMNPCMotionPrimitiveRegistry()
 		FLLMNPCMotionPrimitiveDefinition Definition = MakeDefinition(
 			TEXT("arm.present"),
 			TEXT("arms"),
-			TEXT("solver.arm_present.v1"),
-			TEXT("Present a validated person, object, or direction with one open hand.")
+			TEXT("solver.arm_present.manny.v2"),
+			TEXT("Present a validated person, object, or direction with one open palm facing upward.")
 		);
 		Definition.Availability =
 			ELLMNPCMotionPrimitiveAvailability::AuthoringOnly;
@@ -398,7 +398,16 @@ FLLMNPCMotionPrimitiveRegistry::FLLMNPCMotionPrimitiveRegistry()
 			TEXT("{side}_hand_pose")
 		};
 		Definition.MirroringPolicy = TEXT("semantic_side");
-		AddCommonMotionParameters(Definition, 0.65);
+		Definition.ParameterSchemas.Add(
+			NumberParameter(
+				TEXT("amplitude"),
+				0.2,
+				1.0,
+				0.65,
+				TEXT("normalized"),
+				TEXT("How far and clearly the presenting arm opens toward the target.")
+			)
+		);
 		Definition.ParameterSchemas.Add(
 			NumberParameter(
 				TEXT("height"),

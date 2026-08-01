@@ -1014,6 +1014,7 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		const FVector& LocalOffsetCS,
 		const FVector& PalmTargetCS,
 		float PalmTargetWeight,
+		float PalmUpWeight,
 		const FVector& PalmFacingTargetCS,
 		float PalmFacingWeight,
 		const FBoneReference& LowerArmBone,
@@ -1050,6 +1051,11 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 			0.0f,
 			1.0f
 		);
+		const float PalmUpAlpha = FMath::Clamp(
+			FMath::Min(HandIKAlpha, PalmUpWeight) * ActualAlpha,
+			0.0f,
+			1.0f
+		);
 		const float PalmFacingAlpha = FMath::Clamp(
 			FMath::Min(HandIKAlpha, PalmFacingWeight) * ActualAlpha,
 			0.0f,
@@ -1057,8 +1063,11 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		);
 		const float OrientationAlpha = FMath::Max(
 			FMath::Max(
-				FMath::Max(OpenAlpha, RelaxedAlpha),
-				CurlAlpha
+				FMath::Max(
+					FMath::Max(OpenAlpha, RelaxedAlpha),
+					CurlAlpha
+				),
+				PalmUpAlpha
 			),
 			PalmFacingAlpha
 		);
@@ -1172,8 +1181,34 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		const FVector PalmTargetDirection = (
 			PalmTargetCS - HandTM.GetLocation()
 		);
+		const bool bHasPresentBasis =
+			!bHasContactBasis &&
+			PalmUpAlpha > KINDA_SMALL_NUMBER;
+		if (bHasPresentBasis)
+		{
+			const FVector ComponentRight = -ComponentLeft;
+			const FVector Outward =
+				bRightHand ? ComponentRight : ComponentLeft;
+			DesiredPalmNormal = (
+				ComponentUp +
+				Outward * 0.16f +
+				ComponentForward * 0.05f
+			).GetSafeNormal();
+			DesiredFingerDirection = FVector::VectorPlaneProject(
+				PalmTargetDirection.GetSafeNormal(),
+				DesiredPalmNormal
+			).GetSafeNormal();
+			if (DesiredFingerDirection.IsNearlyZero())
+			{
+				DesiredFingerDirection = FVector::VectorPlaneProject(
+					ComponentForward + Outward * 0.2f,
+					DesiredPalmNormal
+				).GetSafeNormal();
+			}
+		}
 		const bool bHasBeckonBasis =
 			!bHasContactBasis &&
+			!bHasPresentBasis &&
 			PalmTargetAlpha > KINDA_SMALL_NUMBER &&
 			BeckonPoseAlpha > OpenAlpha &&
 			!PalmTargetDirection.IsNearlyZero();
@@ -1198,7 +1233,11 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 				).GetSafeNormal();
 			}
 		}
-		else if (!bHasContactBasis && OpenAlpha >= BeckonPoseAlpha)
+		else if (
+			!bHasContactBasis &&
+			!bHasPresentBasis &&
+			OpenAlpha >= BeckonPoseAlpha
+		)
 		{
 			const float WaveSway = FMath::Clamp(
 				LocalOffsetCS.X / 17.0f,
@@ -1211,7 +1250,7 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 				ComponentLeft * (WaveSway * 1.15f)
 			).GetSafeNormal();
 		}
-		else if (!bHasContactBasis)
+		else if (!bHasContactBasis && !bHasPresentBasis)
 		{
 			const FVector ComponentRight = -ComponentLeft;
 			const FVector Outward =
@@ -1262,6 +1301,7 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		Snapshot.RightHandLocalOffsetCS,
 		Snapshot.RightHandPalmTargetCS,
 		Snapshot.RightHandPalmAlpha,
+		Snapshot.RightHandPalmUp,
 		Snapshot.RightHandPalmFacingTargetCS,
 		Snapshot.RightHandPalmFacingAlpha,
 		RightLowerArmBone,
@@ -1287,6 +1327,7 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		Snapshot.LeftHandLocalOffsetCS,
 		Snapshot.LeftHandPalmTargetCS,
 		Snapshot.LeftHandPalmAlpha,
+		Snapshot.LeftHandPalmUp,
 		Snapshot.LeftHandPalmFacingTargetCS,
 		Snapshot.LeftHandPalmFacingAlpha,
 		LeftLowerArmBone,
