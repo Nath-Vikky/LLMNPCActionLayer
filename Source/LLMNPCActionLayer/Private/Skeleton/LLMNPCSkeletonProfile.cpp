@@ -52,7 +52,7 @@ const TCHAR* FingerSemanticStems[] = {
 	TEXT("pinky_01"), TEXT("pinky_02"), TEXT("pinky_03")
 };
 
-constexpr int32 MannyFingerPoseCalibrationRevision = 2;
+constexpr int32 MannyFingerPoseCalibrationRevision = 6;
 
 bool ResolveSemanticBone(
 	const TMap<FName, FName>& SemanticBoneMap,
@@ -263,6 +263,11 @@ FLLMNPCPoseBoneBindings ULLMNPCSkeletonProfile::BuildPoseBoneBindings() const
 		{
 			return Pose.PoseId == TEXT("curl") || Pose.PoseId == TEXT("fingers_curl");
 		});
+	const FLLMNPCFingerPoseProfile* ThumbsUpPose = FingerPoses.FindByPredicate(
+		[](const FLLMNPCFingerPoseProfile& Pose)
+		{
+			return Pose.PoseId == TEXT("thumbs_up") || Pose.PoseId == TEXT("fingers_thumbs_up");
+		});
 
 	static const TCHAR* FingerNames[] = {
 		TEXT("thumb_01"), TEXT("thumb_02"), TEXT("thumb_03"),
@@ -337,6 +342,17 @@ FLLMNPCPoseBoneBindings ULLMNPCSkeletonProfile::BuildPoseBoneBindings() const
 			if (const FRotator* Rotation = CurlPose->SemanticBoneRotations.Find(LeftSemantic))
 			{
 				Bindings.LeftFingerCurlRotations[Index] = *Rotation;
+			}
+		}
+		if (ThumbsUpPose)
+		{
+			if (const FRotator* Rotation = ThumbsUpPose->SemanticBoneRotations.Find(RightSemantic))
+			{
+				Bindings.RightFingerThumbsUpRotations[Index] = *Rotation;
+			}
+			if (const FRotator* Rotation = ThumbsUpPose->SemanticBoneRotations.Find(LeftSemantic))
+			{
+				Bindings.LeftFingerThumbsUpRotations[Index] = *Rotation;
 			}
 		}
 	}
@@ -680,6 +696,11 @@ FLLMNPCSkeletonProfileQualityReport ULLMNPCSkeletonProfile::BuildQualityReport()
 		{
 			return Pose.PoseId == TEXT("curl") || Pose.PoseId == TEXT("fingers_curl");
 		});
+	const FLLMNPCFingerPoseProfile* ThumbsUpPose = FingerPoses.FindByPredicate(
+		[](const FLLMNPCFingerPoseProfile& Pose)
+		{
+			return Pose.PoseId == TEXT("thumbs_up") || Pose.PoseId == TEXT("fingers_thumbs_up");
+		});
 	for (const TCHAR* Stem : FingerSemanticStems)
 	{
 		for (const TCHAR* Side : {TEXT("right"), TEXT("left")})
@@ -696,12 +717,14 @@ FLLMNPCSkeletonProfileQualityReport ULLMNPCSkeletonProfile::BuildQualityReport()
 				RelaxedPose && RelaxedPose->SemanticBoneRotations.Contains(SemanticBone) ? 1 : 0;
 			ExtendedFingerPoseRotationsFound +=
 				CurlPose && CurlPose->SemanticBoneRotations.Contains(SemanticBone) ? 1 : 0;
+			ExtendedFingerPoseRotationsFound +=
+				ThumbsUpPose && ThumbsUpPose->SemanticBoneRotations.Contains(SemanticBone) ? 1 : 0;
 		}
 	}
 	Report.FingerBoneCoverage = static_cast<float>(FingerBonesFound) / 30.0f;
 	Report.FingerPoseCoverage = static_cast<float>(FingerPoseRotationsFound) / 60.0f;
 	Report.ExtendedFingerPoseCoverage =
-		static_cast<float>(ExtendedFingerPoseRotationsFound) / 60.0f;
+		static_cast<float>(ExtendedFingerPoseRotationsFound) / 90.0f;
 
 	int32 KinematicConstraintsFound = 0;
 	for (const FName ControlId : RequiredKinematicControlIds)

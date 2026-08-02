@@ -602,6 +602,72 @@ void AddHandBeckonCapability(
 	OutCapabilities.Add(MoveTemp(Beckon));
 }
 
+void AddHandThumbsUpCapability(
+	const ULLMNPCSkeletonProfile& Profile,
+	const ULLMNPCControlManifest* Manifest,
+	TArray<FLLMNPCSemanticCapability>& OutCapabilities
+)
+{
+	if (!HasFingerPose(Profile, TEXT("thumbs_up")))
+	{
+		return;
+	}
+
+	FLLMNPCSemanticCapability ThumbsUp = MakeCapability(
+		TEXT("hand.thumbs_up"),
+		TEXT("hands"),
+		TEXT("Raise one hand near the upper chest with the thumb extended upward and the other fingers safely curled to signal approval or agreement.")
+	);
+	for (const FName Side : {FName(TEXT("left")), FName(TEXT("right"))})
+	{
+		const FString SideString = Side.ToString();
+		const FName IKControl(*FString::Printf(
+			TEXT("%s_hand.ik"),
+			*SideString
+		));
+		const FName PoseControl(*FString::Printf(
+			TEXT("%s_fingers.thumbs_up"),
+			*SideString
+		));
+		const bool bHasArm =
+			HasSemantic(Profile, FName(*FString::Printf(TEXT("upperarm_%s"), *SideString))) &&
+			HasSemantic(Profile, FName(*FString::Printf(TEXT("lowerarm_%s"), *SideString))) &&
+			HasSemantic(Profile, FName(*FString::Printf(TEXT("hand_%s"), *SideString)));
+		if (
+			!bHasArm ||
+			!HasControls(Manifest, {IKControl, PoseControl}) ||
+			!ControlAllowsTrack(Manifest, IKControl, ELLMMotionTrackType::Anchor) ||
+			!ControlAllowsTrack(Manifest, PoseControl, ELLMMotionTrackType::Keyframes)
+		)
+		{
+			continue;
+		}
+
+		ThumbsUp.SupportedSides.Add(Side);
+		ThumbsUp.InternalControlIds.Append({IKControl, PoseControl});
+	}
+	if (ThumbsUp.SupportedSides.IsEmpty())
+	{
+		return;
+	}
+
+	ThumbsUp.TargetModes = {TEXT("none")};
+	ThumbsUp.Requires = {TEXT("hand.pose.thumbs_up")};
+	ThumbsUp.ConflictsWith = {
+		TEXT("left_hand_busy"),
+		TEXT("right_hand_busy"),
+		TEXT("two_hand_interaction")
+	};
+	ThumbsUp.ParameterRanges = {
+		NormalizedRange(TEXT("amplitude"), 0.3, 1.0),
+		NormalizedRange(TEXT("height"), 0.3, 0.8),
+		MakeRange(TEXT("duration"), TEXT("seconds"), TEXT("seconds"), 0.8, 2.6)
+	};
+	ThumbsUp.bRuntimeRecipeAllowed = false;
+	ThumbsUp.bAuthoringOnly = true;
+	OutCapabilities.Add(MoveTemp(ThumbsUp));
+}
+
 void AddHandsContactCapability(
 	const ULLMNPCSkeletonProfile& Profile,
 	const ULLMNPCControlManifest* Manifest,
@@ -738,8 +804,17 @@ void BuildSemanticCapabilities(
 		TEXT("Curl the selected fingers within the calibrated safe pose."),
 		OutCapabilities
 	);
+	AddFingerCapability(
+		Profile,
+		Manifest,
+		TEXT("thumbs_up"),
+		TEXT("hand.pose.thumbs_up"),
+		TEXT("Blend the selected hand toward a calibrated thumbs-up pose with one extended thumb and four safely curled fingers."),
+		OutCapabilities
+	);
 	AddArmCapabilities(Profile, Manifest, OutCapabilities);
 	AddHandBeckonCapability(Profile, Manifest, OutCapabilities);
+	AddHandThumbsUpCapability(Profile, Manifest, OutCapabilities);
 	AddHandsContactCapability(Profile, Manifest, OutCapabilities);
 
 	FLLMNPCSemanticCapability Hold = MakeCapability(

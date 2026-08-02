@@ -258,7 +258,7 @@ bool FLLMNPCForwardN2CandidateAdapterTest::RunTest(const FString& Parameters)
 
 	TArray<FLLMNPCTemplateCandidate> Candidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), Candidates);
-	TestEqual(TEXT("Manny exposes six Public Action candidates"), Candidates.Num(), 6);
+	TestEqual(TEXT("Manny exposes eight Public Action candidates"), Candidates.Num(), 8);
 	const FLLMNPCTemplateCandidate* Wave =
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.wave.right"));
 	const FLLMNPCTemplateCandidate* Point =
@@ -269,12 +269,18 @@ bool FLLMNPCForwardN2CandidateAdapterTest::RunTest(const FString& Parameters)
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.shrug"));
 	const FLLMNPCTemplateCandidate* Beckon =
 		ForwardN2FindCandidate(Candidates, TEXT("gesture.beckon"));
+	const FLLMNPCTemplateCandidate* Present =
+		ForwardN2FindCandidate(Candidates, TEXT("gesture.present"));
+	const FLLMNPCTemplateCandidate* ThumbsUp =
+		ForwardN2FindCandidate(Candidates, TEXT("gesture.thumbs_up"));
 	TestNotNull(TEXT("The aggregated Wave Candidate exists"), Wave);
 	TestNotNull(TEXT("The aggregated Point Candidate exists"), Point);
 	TestNotNull(TEXT("The Published Clap Candidate exists"), Clap);
 	TestNotNull(TEXT("The Published Shrug Candidate exists"), Shrug);
 	TestNotNull(TEXT("The Published Beckon Candidate exists"), Beckon);
-	if (!Wave || !Point || !Clap || !Shrug || !Beckon)
+	TestNotNull(TEXT("The Published Present Candidate exists"), Present);
+	TestNotNull(TEXT("The Published Thumbs-Up Candidate exists"), ThumbsUp);
+	if (!Wave || !Point || !Clap || !Shrug || !Beckon || !Present || !ThumbsUp)
 	{
 		return false;
 	}
@@ -288,6 +294,11 @@ bool FLLMNPCForwardN2CandidateAdapterTest::RunTest(const FString& Parameters)
 	TestTrue(
 		TEXT("Beckon exposes only the model-safe scene_target category"),
 		Beckon->TargetCategoryTags.Contains(TEXT("scene_target"))
+	);
+	TestFalse(TEXT("Thumbs-Up does not require a scene target"), ThumbsUp->bRequiresTarget);
+	TestTrue(
+		TEXT("Thumbs-Up preserves its agreement semantic effect"),
+		ThumbsUp->SemanticEffectTags.Contains(TEXT("agree"))
 	);
 
 	FLLMNPCTemplateCandidate V2Wave;
@@ -450,9 +461,11 @@ bool FLLMNPCForwardN2TurnRequestV3PrivacyTest::RunTest(
 	);
 	if (CandidateValues)
 	{
-		TestEqual(TEXT("All six Public Actions are offered"), CandidateValues->Num(), 6);
+		TestEqual(TEXT("All eight Public Actions are offered"), CandidateValues->Num(), 8);
 		bool bHasPublishedShrug = false;
 		bool bHasPublishedBeckon = false;
+		bool bHasPublishedPresent = false;
+		bool bHasPublishedThumbsUp = false;
 		for (const TSharedPtr<FJsonValue>& Value : *CandidateValues)
 		{
 			const TSharedPtr<FJsonObject> CandidateObject = Value->AsObject();
@@ -462,6 +475,8 @@ bool FLLMNPCForwardN2TurnRequestV3PrivacyTest::RunTest(
 				CandidateObject->TryGetStringField(TEXT("selection_id"), SelectionId);
 			bHasPublishedShrug |= bHasSelectionId && SelectionId == TEXT("gesture.shrug");
 			bHasPublishedBeckon |= bHasSelectionId && SelectionId == TEXT("gesture.beckon");
+			bHasPublishedPresent |= bHasSelectionId && SelectionId == TEXT("gesture.present");
+			bHasPublishedThumbsUp |= bHasSelectionId && SelectionId == TEXT("gesture.thumbs_up");
 			TestTrue(
 				TEXT("v3 Candidate Cards use selection_id"),
 				CandidateObject.IsValid() &&
@@ -480,6 +495,8 @@ bool FLLMNPCForwardN2TurnRequestV3PrivacyTest::RunTest(
 		}
 		TestTrue(TEXT("The request offers the Published Shrug"), bHasPublishedShrug);
 		TestTrue(TEXT("The request offers the Published Beckon"), bHasPublishedBeckon);
+		TestTrue(TEXT("The request offers the Published Present"), bHasPublishedPresent);
+		TestTrue(TEXT("The request offers the Published Thumbs-Up"), bHasPublishedThumbsUp);
 	}
 	for (const TCHAR* Forbidden : {
 		TEXT("clavicle_"),

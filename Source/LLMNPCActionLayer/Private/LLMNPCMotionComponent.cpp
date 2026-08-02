@@ -2508,11 +2508,15 @@ void ULLMNPCMotionComponent::MergeSnapshot(
 	InOutSnapshot.RightFingersContact = FMath::Max(InOutSnapshot.RightFingersContact, Snapshot.RightFingersContact);
 	InOutSnapshot.RightFingersRelaxed = FMath::Max(InOutSnapshot.RightFingersRelaxed, Snapshot.RightFingersRelaxed);
 	InOutSnapshot.RightFingersCurl = FMath::Max(InOutSnapshot.RightFingersCurl, Snapshot.RightFingersCurl);
+	InOutSnapshot.RightFingersThumbsUp = FMath::Max(InOutSnapshot.RightFingersThumbsUp, Snapshot.RightFingersThumbsUp);
+	InOutSnapshot.RightHandPalmUp = FMath::Max(InOutSnapshot.RightHandPalmUp, Snapshot.RightHandPalmUp);
 	InOutSnapshot.LeftFingersOpen = FMath::Max(InOutSnapshot.LeftFingersOpen, Snapshot.LeftFingersOpen);
 	InOutSnapshot.LeftFingersPoint = FMath::Max(InOutSnapshot.LeftFingersPoint, Snapshot.LeftFingersPoint);
 	InOutSnapshot.LeftFingersContact = FMath::Max(InOutSnapshot.LeftFingersContact, Snapshot.LeftFingersContact);
 	InOutSnapshot.LeftFingersRelaxed = FMath::Max(InOutSnapshot.LeftFingersRelaxed, Snapshot.LeftFingersRelaxed);
 	InOutSnapshot.LeftFingersCurl = FMath::Max(InOutSnapshot.LeftFingersCurl, Snapshot.LeftFingersCurl);
+	InOutSnapshot.LeftFingersThumbsUp = FMath::Max(InOutSnapshot.LeftFingersThumbsUp, Snapshot.LeftFingersThumbsUp);
+	InOutSnapshot.LeftHandPalmUp = FMath::Max(InOutSnapshot.LeftHandPalmUp, Snapshot.LeftHandPalmUp);
 }
 
 bool ULLMNPCMotionComponent::InstallPostProcessAnimBP()

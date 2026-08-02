@@ -201,13 +201,31 @@ bool FLLMNPCCandidateBoundaryTest::RunTest(const FString& Parameters)
 
 	TArray<FLLMNPCTemplateCandidate> Candidates;
 	Library->QueryRuntimeCandidates(TEXT("ue5_manny.v1"), Candidates);
-	TestEqual(TEXT("Manny exposes six public actions"), Candidates.Num(), 6);
+	TestEqual(TEXT("Manny exposes eight public actions"), Candidates.Num(), 8);
 	TestTrue(
 		TEXT("The Published Beckon candidate is model-visible"),
 		Candidates.ContainsByPredicate(
 			[](const FLLMNPCTemplateCandidate& Candidate)
 			{
 				return Candidate.SelectionId == TEXT("gesture.beckon");
+			}
+		)
+	);
+	TestTrue(
+		TEXT("The Published Present candidate is model-visible"),
+		Candidates.ContainsByPredicate(
+			[](const FLLMNPCTemplateCandidate& Candidate)
+			{
+				return Candidate.SelectionId == TEXT("gesture.present");
+			}
+		)
+	);
+	TestTrue(
+		TEXT("The Published Thumbs-Up candidate is model-visible"),
+		Candidates.ContainsByPredicate(
+			[](const FLLMNPCTemplateCandidate& Candidate)
+			{
+				return Candidate.SelectionId == TEXT("gesture.thumbs_up");
 			}
 		)
 	);
@@ -228,10 +246,14 @@ bool FLLMNPCCandidateBoundaryTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Context includes the public Clap action"), ContextJson.Contains(TEXT("gesture.clap")));
 	TestTrue(TEXT("Context includes the public Shrug action"), ContextJson.Contains(TEXT("gesture.shrug")));
 	TestTrue(TEXT("Context includes the public Beckon action"), ContextJson.Contains(TEXT("gesture.beckon")));
+	TestTrue(TEXT("Context includes the public Present action"), ContextJson.Contains(TEXT("gesture.present")));
+	TestTrue(TEXT("Context includes the public Thumbs-Up action"), ContextJson.Contains(TEXT("gesture.thumbs_up")));
 	TestFalse(TEXT("Context does not expose the faithful internal variant"), ContextJson.Contains(TEXT(".fk.v1")));
 	TestFalse(TEXT("Context does not expose the Clap implementation ID"), ContextJson.Contains(TEXT("gesture.clap.manny.asset.v1")));
 	TestFalse(TEXT("Context does not expose the Shrug implementation ID"), ContextJson.Contains(TEXT("gesture.shrug.manny.generated")));
 	TestFalse(TEXT("Context does not expose the Beckon implementation ID"), ContextJson.Contains(TEXT("gesture.beckon.manny.procedural.generated")));
+	TestFalse(TEXT("Context does not expose the Present implementation ID"), ContextJson.Contains(TEXT("gesture.present.manny.procedural.generated")));
+	TestFalse(TEXT("Context does not expose the Thumbs-Up implementation ID"), ContextJson.Contains(TEXT("gesture.thumbs_up.manny.procedural.generated")));
 	TestFalse(TEXT("Context does not expose raw controls"), ContextJson.Contains(TEXT("right_upperarm")));
 
 	FLLMNPCModelTurnDecision UnknownDecision;

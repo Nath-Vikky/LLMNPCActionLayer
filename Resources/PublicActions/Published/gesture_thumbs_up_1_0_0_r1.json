@@ -1,0 +1,45 @@
+{
+	"schema_version": "llmnpc.published_public_action_source.v1",
+	"asset_path": "/Game/LLMNPCActionLayer/PublicActions/Published/PA_Gesture_ThumbsUp_Draft.PA_Gesture_ThumbsUp_Draft",
+	"content_hash": "md5:973a1f531ea9997f34664337613e5e90",
+	"definition":
+	{
+		"publicActionId": "gesture.thumbs_up",
+		"semanticVersion": "1.0.0",
+		"definitionRevision": 1,
+		"displayName": "Friendly Thumbs-Up",
+		"selectionSummary": "Raise one hand near the upper chest with a clear thumbs-up to signal approval or agreement, then recover smoothly.",
+		"suitableWhen": [
+			"When signaling approval or agreement",
+			"When giving positive feedback",
+			"When acknowledging someone without words"
+		],
+		"avoidWhen": [
+			"When the character's hands are busy",
+			"When a two-handed gesture is required",
+			"When a more subtle or neutral response is needed"
+		],
+		"semanticEffectTags": [
+			"agree",
+			"affirm"
+		],
+		"targetCategoryTags": [],
+		"gestureFamily": "thumbs_up",
+		"defaultStyle": "friendly",
+		"incompatibleActionFamilies": [],
+		"searchKeywords": [
+			"thumbs up",
+			"approve",
+			"agreement",
+			"good",
+			"well done"
+		],
+		"bRequiresTarget": false,
+		"catalogSchemaVersion": "llmnpc.public_action_definition.v1",
+		"reviewState": "Published",
+		"contentHash": "md5:973a1f531ea9997f34664337613e5e90",
+		"reviewRecordJson": "{\r\n\t\"schema_version\": \"llmnpc.public_action_review.v1\",\r\n\t\"authoring_bundle_id\": \"md5:cdf064ce178bf87c2cc35c18b4dd0ae6\",\r\n\t\"source_recipe_hash\": \"md5:fc2d2be15ca67a6822baaf3b6afe5d29\",\r\n\t\"history\": [\r\n\t\t{\r\n\t\t\t\"event\": \"previewed\",\r\n\t\t\t\"reviewer\": \"preview_operator\",\r\n\t\t\t\"notes\": \"Public action semantics and selection metadata reviewed for the approved Manny thumbs-up gesture. Suitable for agreement, approval, affirmation, and friendly acknowledgement; no target required.\",\r\n\t\t\t\"timestamp_utc\": \"2026-08-02T01:08:24.095Z\",\r\n\t\t\t\"approved\": false\r\n\t\t},\r\n\t\t{\r\n\t\t\t\"event\": \"human_approved\",\r\n\t\t\t\"reviewer\": \"Nath-Vikky\",\r\n\t\t\t\"notes\": \"Public action semantics and selection metadata reviewed for the approved Manny thumbs-up gesture. Suitable for agreement, approval, affirmation, and friendly acknowledgement; no target required.\",\r\n\t\t\t\"timestamp_utc\": \"2026-08-02T01:08:32.643Z\",\r\n\t\t\t\"approved\": true\r\n\t\t}\r\n\t],\r\n\t\"human_review\":\r\n\t{\r\n\t\t\"event\": \"human_approved\",\r\n\t\t\"reviewer\": \"Nath-Vikky\",\r\n\t\t\"notes\": \"Public action semantics and selection metadata reviewed for the approved Manny thumbs-up gesture. Suitable for agreement, approval, affirmation, and friendly acknowledgement; no target required.\",\r\n\t\t\"timestamp_utc\": \"2026-08-02T01:08:32.643Z\",\r\n\t\t\"approved\": true\r\n\t}\r\n}",
+		"assetBundleData": "",
+		"nativeClass": "/Script/CoreUObject.Class'/Script/LLMNPCActionLayer.LLMNPCPublicActionDefinition'"
+	}
+}

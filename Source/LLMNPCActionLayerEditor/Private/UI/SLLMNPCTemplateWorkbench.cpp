@@ -4059,6 +4059,54 @@ FReply SLLMNPCTemplateWorkbench::HandleCreateMotionRecipeDraft()
 		CatalogSpec.Energy = 0.46f;
 		CatalogSpec.SocialIntensity = 0.65f;
 	}
+	else if (
+		Contract->ContractId ==
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralThumbsUpAuthoringContractId
+	)
+	{
+		CatalogSpec.AssetName = FString::Printf(
+			TEXT("MT_ThumbsUp_Manny_Procedural_Generated_%s"),
+			*Suffix
+		);
+		CatalogSpec.TemplateId = FName(*FString::Printf(
+			TEXT("gesture.thumbs_up.manny.procedural.generated.%s"),
+			*Suffix
+		));
+		CatalogSpec.PublicActionAssetName =
+			TEXT("PA_Gesture_ThumbsUp_Draft");
+		CatalogSpec.VariantId =
+			TEXT("procedural_generated_recipe");
+		CatalogSpec.IntentTags = {TEXT("agree")};
+		CatalogSpec.EmotionTags = {TEXT("friendly")};
+		CatalogSpec.VariantStyleTags = {
+			TEXT("neutral"),
+			TEXT("friendly"),
+			TEXT("subtle")
+		};
+		CatalogSpec.BodyRegionTags = {
+			TEXT("one_arm"),
+			TEXT("hand"),
+			TEXT("fingers")
+		};
+		CatalogSpec.SemanticEffectTags = {
+			TEXT("agree"),
+			TEXT("affirm")
+		};
+		CatalogSpec.GestureFamily = TEXT("thumbs_up");
+		CatalogSpec.DefaultStyle = TEXT("friendly");
+		CatalogSpec.SearchKeywords = {
+			TEXT("thumbs up"),
+			TEXT("approve"),
+			TEXT("agreement"),
+			TEXT("good"),
+			TEXT("well done")
+		};
+		CatalogSpec.bCanRunWhileMoving = true;
+		CatalogSpec.Expressiveness = 0.62f;
+		CatalogSpec.Energy = 0.48f;
+		CatalogSpec.SocialIntensity = 0.68f;
+	}
 	else
 	{
 		CatalogSpec.AssetName = FString::Printf(

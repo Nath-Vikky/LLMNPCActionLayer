@@ -50,7 +50,8 @@ const TCHAR* FingerNames[] = {
 	TEXT("pinky_01"), TEXT("pinky_02"), TEXT("pinky_03")
 };
 
-constexpr int32 MannyFingerPoseCalibrationRevision = 2;
+constexpr int32 MannyLegacyExtendedFingerPoseCalibrationRevision = 2;
+constexpr int32 MannyFingerPoseCalibrationRevision = 6;
 
 FName FindFirstBone(const FReferenceSkeleton& ReferenceSkeleton, const TArray<FName>& Candidates)
 {
@@ -544,6 +545,8 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 	RelaxedPose.PoseId = TEXT("relaxed");
 	FLLMNPCFingerPoseProfile CurlPose;
 	CurlPose.PoseId = TEXT("curl");
+	FLLMNPCFingerPoseProfile ThumbsUpPose;
+	ThumbsUpPose.PoseId = TEXT("thumbs_up");
 	const FLLMNPCFingerPoseProfile* ExistingOpen =
 		FindFingerPose(ExistingFingerPoses, TEXT("open"));
 	const FLLMNPCFingerPoseProfile* ExistingPoint =
@@ -554,7 +557,15 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 		FindFingerPose(ExistingFingerPoses, TEXT("relaxed"));
 	const FLLMNPCFingerPoseProfile* ExistingCurl =
 		FindFingerPose(ExistingFingerPoses, TEXT("curl"));
+	const FLLMNPCFingerPoseProfile* ExistingThumbsUp =
+		FindFingerPose(ExistingFingerPoses, TEXT("thumbs_up"));
 	const bool bPreserveExtendedFingerPoses =
+		bPreserveExistingCalibration &&
+		(
+			Profile.ProfileId != TEXT("ue5_manny.v1") ||
+			Profile.FingerPoseCalibrationRevision >= MannyLegacyExtendedFingerPoseCalibrationRevision
+		);
+	const bool bPreserveThumbsUpPose =
 		bPreserveExistingCalibration &&
 		(
 			Profile.ProfileId != TEXT("ue5_manny.v1") ||
@@ -609,6 +620,14 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 					DefaultBindings.RightFingerCurlRotations[Index]
 				)
 			);
+			ThumbsUpPose.SemanticBoneRotations.Add(
+				RightSemantic,
+				ResolveFingerCalibration(
+					bPreserveThumbsUpPose ? ExistingThumbsUp : nullptr,
+					RightSemantic,
+					DefaultBindings.RightFingerThumbsUpRotations[Index]
+				)
+			);
 		}
 		if (!LeftBone.IsNone())
 		{
@@ -653,6 +672,14 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 					DefaultBindings.LeftFingerCurlRotations[Index]
 				)
 			);
+			ThumbsUpPose.SemanticBoneRotations.Add(
+				LeftSemantic,
+				ResolveFingerCalibration(
+					bPreserveThumbsUpPose ? ExistingThumbsUp : nullptr,
+					LeftSemantic,
+					DefaultBindings.LeftFingerThumbsUpRotations[Index]
+				)
+			);
 		}
 	}
 	Profile.FingerPoses = {
@@ -660,7 +687,8 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 		PointPose,
 		ContactPose,
 		RelaxedPose,
-		CurlPose
+		CurlPose,
+		ThumbsUpPose
 	};
 
 	Profile.IKChains.Reset();
@@ -713,7 +741,7 @@ bool ULLMNPCSkeletonProfileAuthoringSubsystem::PopulateGeneratedProfile(
 	}
 	if (Profile.ProfileId == TEXT("ue5_manny.v1"))
 	{
-		Profile.SemanticVersion = TEXT("1.1.1");
+		Profile.SemanticVersion = TEXT("1.1.4");
 		Profile.FingerPoseCalibrationRevision =
 			MannyFingerPoseCalibrationRevision;
 		Profile.UpperBodyConstraints.ValidationBaselineVersion =

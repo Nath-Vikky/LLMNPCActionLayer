@@ -156,8 +156,8 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 {
 	Vocabulary.VocabularyId = TEXT("llmnpc.manny_social_actions");
 	Vocabulary.SchemaVersion = LLMNPCCatalog::VocabularySchemaVersion;
-	Vocabulary.SemanticVersion = TEXT("1.1.0");
-	Vocabulary.Revision = 2;
+	Vocabulary.SemanticVersion = TEXT("1.2.0");
+	Vocabulary.Revision = 3;
 	Vocabulary.Entries.Reset();
 
 	AddVocabularyEntry(Vocabulary, TEXT("nod"), TEXT("Nod"), TEXT("\u70b9\u5934"),
@@ -169,6 +169,8 @@ void PopulateVocabulary(ULLMNPCActionVocabulary& Vocabulary)
 	AddVocabularyEntry(Vocabulary, TEXT("clap"), TEXT("Clap"), TEXT("\u9f13\u638c"),
 		{ ELLMNPCActionVocabularyField::GestureFamily });
 	AddVocabularyEntry(Vocabulary, TEXT("shrug"), TEXT("Shrug"), TEXT("\u8038\u80a9"),
+		{ ELLMNPCActionVocabularyField::GestureFamily });
+	AddVocabularyEntry(Vocabulary, TEXT("thumbs_up"), TEXT("Thumbs Up"), TEXT("\u7ad6\u8d77\u62c7\u6307"),
 		{ ELLMNPCActionVocabularyField::GestureFamily });
 
 	AddVocabularyEntry(Vocabulary, TEXT("confirm"), TEXT("Confirm"), TEXT("\u786e\u8ba4"),

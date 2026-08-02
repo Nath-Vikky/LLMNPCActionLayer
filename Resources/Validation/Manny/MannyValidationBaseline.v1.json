@@ -1,9 +1,9 @@
 {
 	"schema_version": "llmnpc.manny_validation_baseline.v1",
 	"profile_id": "ue5_manny.v1",
-	"profile_semantic_version": "1.1.1",
-	"skeleton_signature": "md5:6b1ff1901c28611b8c817ec9c968a58f",
-	"capability_hash": "md5:9a0b995dac43d28ce4a674fa79d6d532",
+	"profile_semantic_version": "1.1.2",
+	"skeleton_signature": "md5:fdc8b7d9e26a1f34b0034a36882a4802",
+	"capability_hash": "md5:976ff2f7ba4d5d443c3f3463f65e29b5",
 	"sample_rate_hz": 60,
 	"validation_pose_set": [
 		{
@@ -97,6 +97,18 @@
 			"max_normalized_jerk_per_second_cubed": 20000
 		},
 		{
+			"control_id": "left_fingers.contact",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
 			"control_id": "left_fingers.curl",
 			"max_angular_speed_degrees_per_second": 360,
 			"max_angular_acceleration_degrees_per_second_squared": 1440,
@@ -134,6 +146,18 @@
 		},
 		{
 			"control_id": "left_fingers.relaxed",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_fingers.thumbs_up",
 			"max_angular_speed_degrees_per_second": 360,
 			"max_angular_acceleration_degrees_per_second_squared": 1440,
 			"max_angular_jerk_degrees_per_second_cubed": 7200,
@@ -188,6 +212,18 @@
 			"max_position_speed_centimeters_per_second": 180,
 			"max_position_acceleration_centimeters_per_second_squared": 1000,
 			"max_position_jerk_centimeters_per_second_cubed": 7000,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "left_hand.palm_up",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
 			"max_normalized_speed_per_second": 12,
 			"max_normalized_acceleration_per_second_squared": 480,
 			"max_normalized_jerk_per_second_cubed": 20000
@@ -445,6 +481,18 @@
 			"max_normalized_jerk_per_second_cubed": 20000
 		},
 		{
+			"control_id": "right_fingers.contact",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
 			"control_id": "right_fingers.curl",
 			"max_angular_speed_degrees_per_second": 360,
 			"max_angular_acceleration_degrees_per_second_squared": 1440,
@@ -482,6 +530,18 @@
 		},
 		{
 			"control_id": "right_fingers.relaxed",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_fingers.thumbs_up",
 			"max_angular_speed_degrees_per_second": 360,
 			"max_angular_acceleration_degrees_per_second_squared": 1440,
 			"max_angular_jerk_degrees_per_second_cubed": 7200,
@@ -536,6 +596,18 @@
 			"max_position_speed_centimeters_per_second": 180,
 			"max_position_acceleration_centimeters_per_second_squared": 2200,
 			"max_position_jerk_centimeters_per_second_cubed": 84000,
+			"max_normalized_speed_per_second": 12,
+			"max_normalized_acceleration_per_second_squared": 480,
+			"max_normalized_jerk_per_second_cubed": 20000
+		},
+		{
+			"control_id": "right_hand.palm_up",
+			"max_angular_speed_degrees_per_second": 360,
+			"max_angular_acceleration_degrees_per_second_squared": 1440,
+			"max_angular_jerk_degrees_per_second_cubed": 7200,
+			"max_position_speed_centimeters_per_second": 180,
+			"max_position_acceleration_centimeters_per_second_squared": 720,
+			"max_position_jerk_centimeters_per_second_cubed": 3600,
 			"max_normalized_speed_per_second": 12,
 			"max_normalized_acceleration_per_second_squared": 480,
 			"max_normalized_jerk_per_second_cubed": 20000
@@ -691,9 +763,9 @@
 			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Nod_Manny_v1.MT_Nod_Manny_v1",
 			"validation_target_mode": "none",
 			"validation_style": "neutral",
-			"asset_hash": "md5:3f52932cddbf3cdd0001c121ad1883df",
+			"asset_hash": "md5:29d38f39ec9a7fdbe329d9ed402c896a",
 			"plan_hash": "md5:6a17c446ad051b70d9d0ad454a10e930",
-			"quality_report_hash": "md5:479cca3403af23eb5fc1418aacb00248",
+			"quality_report_hash": "md5:99e59028b2ca64c0af33beaeae22b1bc",
 			"diagnostic_pass": true,
 			"track_metrics": [
 				{
@@ -713,9 +785,9 @@
 			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Point_Target_Manny_v1.MT_Point_Target_Manny_v1",
 			"validation_target_mode": "synthetic_semantic_reference",
 			"validation_style": "neutral",
-			"asset_hash": "md5:d0c6df24b06f6013dbb3b737e4e3d010",
+			"asset_hash": "md5:783c85fffddf429c4bbe95474ca8cacf",
 			"plan_hash": "md5:ca7f7c0fec1b964e9011465287cdff9c",
-			"quality_report_hash": "md5:c2af34ee266d20f36e942fae0a621ddf",
+			"quality_report_hash": "md5:c998ba39072569eec68ae0bf63bf6a80",
 			"diagnostic_pass": true,
 			"track_metrics": [
 				{
@@ -735,9 +807,9 @@
 			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Wave_Right_Manny_FK_v1.MT_Wave_Right_Manny_FK_v1",
 			"validation_target_mode": "none",
 			"validation_style": "neutral",
-			"asset_hash": "md5:3bf4e3cb1fc5f0112ba48608a2fd744a",
+			"asset_hash": "md5:61ceca0b1e7221b3cb64b3eca4d20970",
 			"plan_hash": "md5:dff3174637f600fc6b3a9c4c642bc861",
-			"quality_report_hash": "md5:121064b042b4fe7505f3e209bac087fd",
+			"quality_report_hash": "md5:a0cee7bff3eaba79bc7be8f12947286f",
 			"diagnostic_pass": true,
 			"track_metrics": [
 				{
@@ -838,9 +910,9 @@
 			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Wave_Right_Manny_Procedural_v1.MT_Wave_Right_Manny_Procedural_v1",
 			"validation_target_mode": "none",
 			"validation_style": "neutral",
-			"asset_hash": "md5:5a792dd89a3903c85969003a94029191",
+			"asset_hash": "md5:2c7589a5828690949bbf3d9a7586f10e",
 			"plan_hash": "md5:e9285e290dd4207afc870eacad01cdcf",
-			"quality_report_hash": "md5:b0113aed8ba2b26f20e1b2b4d47916ad",
+			"quality_report_hash": "md5:417a325eb6d9c249fae2c5ed74b2a905",
 			"diagnostic_pass": true,
 			"track_metrics": [
 				{
@@ -905,9 +977,9 @@
 			"asset_path": "/LLMNPCActionLayer/LLMNPC/MotionTemplates/Manny/MT_Wave_Right_Manny_Subtle_v1.MT_Wave_Right_Manny_Subtle_v1",
 			"validation_target_mode": "none",
 			"validation_style": "subtle",
-			"asset_hash": "md5:8c06bb1cdb505e06c87780263e3ecd21",
+			"asset_hash": "md5:55966e7c2719aed5c062c454aff5ade9",
 			"plan_hash": "md5:87ae50e140f5dcd37cb3fdcdea06db03",
-			"quality_report_hash": "md5:346994464b6f22f744fd28cc1a89c4fa",
+			"quality_report_hash": "md5:e536511f54e990b548c19e2fa79915ad",
 			"diagnostic_pass": true,
 			"track_metrics": [
 				{
@@ -1005,12 +1077,12 @@
 		}
 	],
 	"status": "approved",
-	"generated_at": "2026-07-25T03:13:42.563Z",
+	"generated_at": "2026-08-01T12:15:27.764Z",
 	"human_approval":
 	{
 		"approved_by": "project_owner",
-		"approved_at": "2026-07-25T03:13:42.584Z",
+		"approved_at": "2026-08-01T12:15:27.799Z",
 		"note": "Manny N1 PIE visual review accepted shoulders, relaxed/curl hands, interruption/recovery, and the published gesture set."
 	},
-	"baseline_hash": "md5:2e346854d3be9b09e8a666484b5821da"
+	"baseline_hash": "md5:96e8c9873d1a91e2a114ae36c8a3c36d"
 }

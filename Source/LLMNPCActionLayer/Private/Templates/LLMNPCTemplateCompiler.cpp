@@ -48,7 +48,8 @@ bool MirrorTrack(FLLMMotionTrack& Track)
 		{TEXT("right_fingers.point"), TEXT("left_fingers.point")},
 		{TEXT("right_fingers.contact"), TEXT("left_fingers.contact")},
 		{TEXT("right_fingers.relaxed"), TEXT("left_fingers.relaxed")},
-		{TEXT("right_fingers.curl"), TEXT("left_fingers.curl")}
+		{TEXT("right_fingers.curl"), TEXT("left_fingers.curl")},
+		{TEXT("right_fingers.thumbs_up"), TEXT("left_fingers.thumbs_up")}
 	};
 	const FName* MirroredControl = ControlMap.Find(Track.ControlId);
 	if (!MirroredControl)
@@ -66,6 +67,10 @@ bool MirrorTrack(FLLMMotionTrack& Track)
 	else if (Track.Anchor == TEXT("right_wave"))
 	{
 		Track.Anchor = TEXT("left_wave");
+	}
+	else if (Track.Anchor == TEXT("right_thumbs_up"))
+	{
+		Track.Anchor = TEXT("left_thumbs_up");
 	}
 	if (bMirrorScalarValue)
 	{

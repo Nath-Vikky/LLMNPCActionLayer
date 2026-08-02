@@ -302,6 +302,35 @@ const TArray<FLLMNPCMotionRecipeAuthoringContract>& BuildContracts()
 			TEXT("Create a new Draft. Preserve the open-palm presentation intent and primary target contract, and address only the bounded visual feedback.");
 		Result.Add(MoveTemp(Present));
 
+		FLLMNPCMotionRecipeAuthoringContract ThumbsUp;
+		ThumbsUp.ContractId =
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralThumbsUpAuthoringContractId;
+		ThumbsUp.PublicActionId = TEXT("gesture.thumbs_up");
+		ThumbsUp.DisplayName =
+			FText::FromString(TEXT("Procedural Thumbs Up"));
+		ThumbsUp.DefaultDesiredAction =
+			TEXT("Give one clear, friendly thumbs-up to signal approval or agreement. ")
+			TEXT("Raise one hand near the upper chest with a comfortably bent elbow, ")
+			TEXT("face the hand outward, extend the thumb upward, curl the other four fingers naturally, ")
+			TEXT("hold the readable sign briefly, then recover smoothly to neutral.");
+		ThumbsUp.Phase =
+			TEXT("forward_n7e_procedural_thumbs_up");
+		ThumbsUp.RequiredIntent = TEXT("agree");
+		ThumbsUp.AllowedPrimitiveIds = {TEXT("hand.thumbs_up")};
+		ThumbsUp.PrimitiveCount = 1;
+		ThumbsUp.MinDurationSeconds = 0.8;
+		ThumbsUp.MaxDurationSeconds = 2.6;
+		ThumbsUp.bAllowMirror = true;
+		ThumbsUp.TimingContract =
+			TEXT("Use one hand.thumbs_up primitive from start 0 through the recipe duration. ")
+			TEXT("Unreal owns the upper-chest arm anchor, bent-elbow IK, outward wrist orientation, ")
+			TEXT("calibrated thumb extension, four-finger curl, continuous easing, readable hold, and recovery; ")
+			TEXT("do not create hold, pause, timing, transition, target, or helper primitives.");
+		ThumbsUp.RevisionPolicy =
+			TEXT("Create a new Draft. Preserve the approval or agreement intent and address only the bounded visual feedback.");
+		Result.Add(MoveTemp(ThumbsUp));
+
 		return Result;
 	}();
 	return Contracts;

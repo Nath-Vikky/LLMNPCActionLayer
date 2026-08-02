@@ -555,6 +555,52 @@ FLLMNPCMotionPrimitiveRegistry::FLLMNPCMotionPrimitiveRegistry()
 
 	{
 		FLLMNPCMotionPrimitiveDefinition Definition = MakeDefinition(
+			TEXT("hand.thumbs_up"),
+			TEXT("hands"),
+			TEXT("solver.hand_thumbs_up.manny.v1"),
+			TEXT("Raise one hand near the upper chest with the thumb up and the other four fingers safely curled to signal approval or agreement.")
+		);
+		Definition.Availability =
+			ELLMNPCMotionPrimitiveAvailability::AuthoringOnly;
+		Definition.AllowedSides = {TEXT("left"), TEXT("right")};
+		Definition.AllowedTargetModes = {TEXT("none")};
+		Definition.RequiredCapabilities.Add(TEXT("hand.pose.thumbs_up"));
+		Definition.RequiredChannelPatterns = {
+			TEXT("{side}_arm_ik"),
+			TEXT("{side}_hand_pose")
+		};
+		Definition.MirroringPolicy = TEXT("semantic_side");
+		Definition.MinDurationSeconds = 0.8;
+		Definition.MaxDurationSeconds = 2.6;
+		Definition.MaxInstancesPerRecipe = 1;
+		Definition.BlockedStates.Append({
+			TEXT("left_hand_busy"),
+			TEXT("right_hand_busy"),
+			TEXT("two_hand_interaction")
+		});
+		Definition.ParameterSchemas = {
+			NumberParameter(
+				TEXT("amplitude"),
+				0.3,
+				1.0,
+				0.65,
+				TEXT("normalized"),
+				TEXT("Overall bounded approval-gesture clarity and arm participation.")
+			),
+			NumberParameter(
+				TEXT("height"),
+				0.3,
+				0.8,
+				0.55,
+				TEXT("normalized"),
+				TEXT("Relative hand height between the upper chest and shoulder.")
+			)
+		};
+		Definitions.Add(MoveTemp(Definition));
+	}
+
+	{
+		FLLMNPCMotionPrimitiveDefinition Definition = MakeDefinition(
 			TEXT("hands.contact"),
 			TEXT("hands"),
 			TEXT("solver.hands_contact.manny.v3"),
@@ -653,6 +699,11 @@ FLLMNPCMotionPrimitiveRegistry::FLLMNPCMotionPrimitiveRegistry()
 				TEXT("hand.pose.curl"),
 				TEXT("solver.hand_pose_curl.v1"),
 				TEXT("Blend one hand toward its calibrated curl pose.")
+			),
+			TTuple<FName, FName, const TCHAR*>(
+				TEXT("hand.pose.thumbs_up"),
+				TEXT("solver.hand_pose_thumbs_up.manny.v1"),
+				TEXT("Blend one hand toward its calibrated thumbs-up pose.")
 			)
 		}
 	)

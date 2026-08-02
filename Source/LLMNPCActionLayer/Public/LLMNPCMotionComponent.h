@@ -357,6 +357,7 @@ private:
 #if WITH_DEV_AUTOMATION_TESTS
 	friend class FLLMNPCMotionSchedulerTest;
 	friend class FLLMNPCForwardN3DynamicTargetTest;
+	friend class FLLMNPCForwardN7EThumbsUpRuntimeMergeTest;
 #endif
 
 	void StartEligiblePlans();

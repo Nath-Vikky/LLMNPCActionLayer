@@ -4,7 +4,7 @@
 	"title": "LLM NPC Motion Recipe v1",
 	"type": "object",
 	"additionalProperties": false,
-	"x-llmnpc-registry-version": "llmnpc.motion_primitives.v4",
+	"x-llmnpc-registry-version": "llmnpc.motion_primitives.v5",
 	"required": [
 		"schema_version",
 		"recipe_id",
@@ -760,6 +760,133 @@
 										"description": "Calibrated pose blend weight.",
 										"x-unit": "normalized",
 										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Blend one hand toward its calibrated thumbs-up pose.",
+						"x-min-duration-seconds": 0.050000000000000003,
+						"x-max-duration-seconds": 4,
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "hand.pose.thumbs_up"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"weight":
+									{
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1,
+										"description": "Calibrated pose blend weight.",
+										"x-unit": "normalized",
+										"default": 1
+									}
+								}
+							}
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Raise one hand near the upper chest with the thumb up and the other four fingers safely curled to signal approval or agreement.",
+						"x-min-duration-seconds": 0.80000000000000004,
+						"x-max-duration-seconds": 2.6000000000000001,
+						"required": [
+							"primitive_id",
+							"start",
+							"end",
+							"parameters",
+							"side"
+						],
+						"properties":
+						{
+							"primitive_id":
+							{
+								"type": "string",
+								"const": "hand.thumbs_up"
+							},
+							"side":
+							{
+								"type": "string",
+								"enum": [
+									"left",
+									"right"
+								]
+							},
+							"start":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"end":
+							{
+								"type": "number",
+								"minimum": 0,
+								"maximum": 4
+							},
+							"parameters":
+							{
+								"type": "object",
+								"additionalProperties": false,
+								"properties":
+								{
+									"amplitude":
+									{
+										"type": "number",
+										"minimum": 0.29999999999999999,
+										"maximum": 1,
+										"description": "Overall bounded approval-gesture clarity and arm participation.",
+										"x-unit": "normalized",
+										"default": 0.65000000000000002
+									},
+									"height":
+									{
+										"type": "number",
+										"minimum": 0.29999999999999999,
+										"maximum": 0.80000000000000004,
+										"description": "Relative hand height between the upper chest and shoulder.",
+										"x-unit": "normalized",
+										"default": 0.55000000000000004
 									}
 								}
 							}

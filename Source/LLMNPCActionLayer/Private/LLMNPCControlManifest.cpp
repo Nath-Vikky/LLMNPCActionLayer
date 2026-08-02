@@ -207,6 +207,10 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			FingersCurl.ControlId = TEXT("right_fingers.curl");
 			Result.Add(FingersCurl);
 
+			FLLMControlDefinition FingersThumbsUp = FingersOpen;
+			FingersThumbsUp.ControlId = TEXT("right_fingers.thumbs_up");
+			Result.Add(FingersThumbsUp);
+
 			FLLMControlDefinition LeftFingersOpen = FingersOpen;
 			LeftFingersOpen.ControlId = TEXT("left_fingers.open");
 			Result.Add(LeftFingersOpen);
@@ -226,6 +230,10 @@ const TArray<FLLMControlDefinition>& BuiltInControls()
 			FLLMControlDefinition LeftFingersCurl = FingersOpen;
 			LeftFingersCurl.ControlId = TEXT("left_fingers.curl");
 			Result.Add(LeftFingersCurl);
+
+			FLLMControlDefinition LeftFingersThumbsUp = FingersOpen;
+			LeftFingersThumbsUp.ControlId = TEXT("left_fingers.thumbs_up");
+			Result.Add(LeftFingersThumbsUp);
 
 			return Result;
 		}();
@@ -288,6 +296,17 @@ const TArray<FLLMAnchorDefinition>& BuiltInAnchors()
 			ClapCenter.AnchorId = TEXT("clap_center");
 			ClapCenter.OffsetCS.X = 0.0f;
 			Result.Add(ClapCenter);
+
+			FLLMAnchorDefinition RightThumbsUp;
+			RightThumbsUp.AnchorId = TEXT("right_thumbs_up");
+			RightThumbsUp.BoneName = TEXT("spine_03");
+			RightThumbsUp.OffsetCS = FVector(-28.0f, 20.0f, 20.0f);
+			Result.Add(RightThumbsUp);
+
+			FLLMAnchorDefinition LeftThumbsUp = RightThumbsUp;
+			LeftThumbsUp.AnchorId = TEXT("left_thumbs_up");
+			LeftThumbsUp.OffsetCS.X *= -1.0f;
+			Result.Add(LeftThumbsUp);
 
 			FLLMAnchorDefinition ChestFront;
 			ChestFront.AnchorId = TEXT("chest_front");
@@ -362,6 +381,6 @@ const TArray<FLLMAnchorDefinition>& ULLMNPCControlManifest::GetBuiltInAnchors()
 
 const FString& ULLMNPCControlManifest::GetBuiltInManifestVersion()
 {
-	static const FString Version(TEXT("llmnpc.control_manifest.v3"));
+	static const FString Version(TEXT("llmnpc.control_manifest.v4"));
 	return Version;
 }

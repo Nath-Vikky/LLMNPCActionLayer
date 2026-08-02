@@ -116,7 +116,7 @@ bool FLLMNPCForwardN1MannyProfileContractTest::RunTest(const FString& Parameters
 	TestEqual(
 		TEXT("The shipped Manny finger calibration is current"),
 		Profile->FingerPoseCalibrationRevision,
-		2
+		6
 	);
 	TestTrue(
 		TEXT("Right Relaxed opens the index finger relative to the base pose"),

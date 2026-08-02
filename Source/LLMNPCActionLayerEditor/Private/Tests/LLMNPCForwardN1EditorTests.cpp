@@ -68,11 +68,17 @@ bool FLLMNPCForwardN1CapabilitySmokeContractTest::RunTest(
 	TestEqual(
 		TEXT("The challenge derives all matching hand capabilities"),
 		Challenge.ExpectedCapabilityIds.Num(),
-		4
+		5
 	);
 	TestTrue(
 		TEXT("The challenge includes the Relaxed hand pose"),
 		Challenge.ExpectedCapabilityIds.Contains(TEXT("hand.pose.relaxed"))
+	);
+	TestTrue(
+		TEXT("The challenge includes the calibrated Thumbs Up hand pose"),
+		Challenge.ExpectedCapabilityIds.Contains(
+			TEXT("hand.pose.thumbs_up")
+		)
 	);
 	TestFalse(
 		TEXT("The challenge excludes hand abilities without a Weight parameter"),

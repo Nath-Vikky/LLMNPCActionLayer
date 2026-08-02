@@ -293,6 +293,10 @@ void FLLMNPCMotionSampler::SampleClip(
 		{
 			OutSnapshot.RightFingersCurl = FMath::Max(OutSnapshot.RightFingersCurl, FMath::Clamp(FloatValue, 0.0f, 1.0f));
 		}
+		else if (Control == TEXT("right_fingers.thumbs_up"))
+		{
+			OutSnapshot.RightFingersThumbsUp = FMath::Max(OutSnapshot.RightFingersThumbsUp, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
 		else if (Control == TEXT("left_fingers.open"))
 		{
 			OutSnapshot.LeftFingersOpen = FMath::Max(OutSnapshot.LeftFingersOpen, FMath::Clamp(FloatValue, 0.0f, 1.0f));
@@ -312,6 +316,10 @@ void FLLMNPCMotionSampler::SampleClip(
 		else if (Control == TEXT("left_fingers.curl"))
 		{
 			OutSnapshot.LeftFingersCurl = FMath::Max(OutSnapshot.LeftFingersCurl, FMath::Clamp(FloatValue, 0.0f, 1.0f));
+		}
+		else if (Control == TEXT("left_fingers.thumbs_up"))
+		{
+			OutSnapshot.LeftFingersThumbsUp = FMath::Max(OutSnapshot.LeftFingersThumbsUp, FMath::Clamp(FloatValue, 0.0f, 1.0f));
 		}
 		else if (Control == TEXT("right_hand.ik"))
 		{

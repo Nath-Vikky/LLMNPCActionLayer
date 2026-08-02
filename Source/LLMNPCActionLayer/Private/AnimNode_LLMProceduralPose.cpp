@@ -1011,6 +1011,7 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		float OpenWeight,
 		float RelaxedWeight,
 		float CurlWeight,
+		float ThumbsUpWeight,
 		const FVector& LocalOffsetCS,
 		const FVector& PalmTargetCS,
 		float PalmTargetWeight,
@@ -1046,6 +1047,11 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 			0.0f,
 			1.0f
 		);
+		const float ThumbsUpAlpha = FMath::Clamp(
+			FMath::Min(HandIKAlpha, ThumbsUpWeight) * ActualAlpha,
+			0.0f,
+			1.0f
+		);
 		const float PalmTargetAlpha = FMath::Clamp(
 			FMath::Min(HandIKAlpha, PalmTargetWeight) * ActualAlpha,
 			0.0f,
@@ -1064,8 +1070,11 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		const float OrientationAlpha = FMath::Max(
 			FMath::Max(
 				FMath::Max(
-					FMath::Max(OpenAlpha, RelaxedAlpha),
-					CurlAlpha
+					FMath::Max(
+						FMath::Max(OpenAlpha, RelaxedAlpha),
+						CurlAlpha
+					),
+					ThumbsUpAlpha
 				),
 				PalmUpAlpha
 			),
@@ -1158,7 +1167,6 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		{
 			CurrentPalmNormal *= -1.0f;
 		}
-
 		FVector DesiredPalmNormal;
 		FVector DesiredFingerDirection;
 		const FVector ContactDirection = (
@@ -1206,9 +1214,29 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 				).GetSafeNormal();
 			}
 		}
+		const bool bHasThumbsUpBasis =
+			!bHasContactBasis &&
+			!bHasPresentBasis &&
+			ThumbsUpAlpha > KINDA_SMALL_NUMBER;
+		if (bHasThumbsUpBasis)
+		{
+			const FVector ComponentRight = -ComponentLeft;
+			const FVector Inward =
+				bRightHand ? ComponentLeft : ComponentRight;
+			DesiredPalmNormal = Inward.GetSafeNormal();
+			const float ForwardTiltRadians = FMath::DegreesToRadians(
+				FLLMNPCArmIKSolver::ThumbsUpForwardTiltDegrees
+			);
+			DesiredFingerDirection = FVector::VectorPlaneProject(
+				ComponentUp * FMath::Cos(ForwardTiltRadians) +
+					ComponentForward * FMath::Sin(ForwardTiltRadians),
+				DesiredPalmNormal
+			).GetSafeNormal();
+		}
 		const bool bHasBeckonBasis =
 			!bHasContactBasis &&
 			!bHasPresentBasis &&
+			!bHasThumbsUpBasis &&
 			PalmTargetAlpha > KINDA_SMALL_NUMBER &&
 			BeckonPoseAlpha > OpenAlpha &&
 			!PalmTargetDirection.IsNearlyZero();
@@ -1236,6 +1264,7 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		else if (
 			!bHasContactBasis &&
 			!bHasPresentBasis &&
+			!bHasThumbsUpBasis &&
 			OpenAlpha >= BeckonPoseAlpha
 		)
 		{
@@ -1250,7 +1279,11 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 				ComponentLeft * (WaveSway * 1.15f)
 			).GetSafeNormal();
 		}
-		else if (!bHasContactBasis && !bHasPresentBasis)
+		else if (
+			!bHasContactBasis &&
+			!bHasPresentBasis &&
+			!bHasThumbsUpBasis
+		)
 		{
 			const FVector ComponentRight = -ComponentLeft;
 			const FVector Outward =
@@ -1278,7 +1311,13 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 			LowerArmTM,
 			HandTM,
 			TargetRotation,
-			OrientationAlpha
+			OrientationAlpha,
+			bHasThumbsUpBasis
+				? FLLMNPCArmIKSolver::ThumbsUpMaxAxialTwistDegrees
+				: 87.0f,
+			bHasThumbsUpBasis
+				? FLLMNPCArmIKSolver::ThumbsUpMaxWristSwingDegrees
+				: 35.0f
 		);
 		AddOrReplaceBoneTransform(
 			OutBoneTransforms,
@@ -1298,6 +1337,7 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		Snapshot.RightFingersOpen,
 		Snapshot.RightFingersRelaxed,
 		Snapshot.RightFingersCurl,
+		Snapshot.RightFingersThumbsUp,
 		Snapshot.RightHandLocalOffsetCS,
 		Snapshot.RightHandPalmTargetCS,
 		Snapshot.RightHandPalmAlpha,
@@ -1324,6 +1364,7 @@ void FAnimNode_LLMProceduralPose::ApplyHandPoseIKOrientations(
 		Snapshot.LeftFingersOpen,
 		Snapshot.LeftFingersRelaxed,
 		Snapshot.LeftFingersCurl,
+		Snapshot.LeftFingersThumbsUp,
 		Snapshot.LeftHandLocalOffsetCS,
 		Snapshot.LeftHandPalmTargetCS,
 		Snapshot.LeftHandPalmAlpha,
@@ -1694,7 +1735,8 @@ void FAnimNode_LLMProceduralPose::ApplyRightFingerPoseLocal(
 	const float ContactAlpha = FMath::Clamp(Snapshot.RightFingersContact * InAlpha, 0.0f, 1.0f);
 	const float RelaxedAlpha = FMath::Clamp(Snapshot.RightFingersRelaxed * InAlpha, 0.0f, 1.0f);
 	const float CurlAlpha = FMath::Clamp(Snapshot.RightFingersCurl * InAlpha, 0.0f, 1.0f);
-	const float PoseAlphaSum = OpenAlpha + PointAlpha + ContactAlpha + RelaxedAlpha + CurlAlpha;
+	const float ThumbsUpAlpha = FMath::Clamp(Snapshot.RightFingersThumbsUp * InAlpha, 0.0f, 1.0f);
+	const float PoseAlphaSum = OpenAlpha + PointAlpha + ContactAlpha + RelaxedAlpha + CurlAlpha + ThumbsUpAlpha;
 	if (PoseAlphaSum <= KINDA_SMALL_NUMBER)
 	{
 		return;
@@ -1748,12 +1790,16 @@ void FAnimNode_LLMProceduralPose::ApplyRightFingerPoseLocal(
 		const FRotator CurlRotation = Bindings.RightFingerCurlRotations.IsValidIndex(Index)
 			? Bindings.RightFingerCurlRotations[Index]
 			: FRotator::ZeroRotator;
+		const FRotator ThumbsUpRotation = Bindings.RightFingerThumbsUpRotations.IsValidIndex(Index)
+			? Bindings.RightFingerThumbsUpRotations[Index]
+			: (Index < 3 ? OpenRotation : CurlRotation);
 		const FRotator BlendedRotation =
 			OpenRotation * (OpenAlpha * WeightScale) +
 			PointRotation * (PointAlpha * WeightScale) +
 			ContactRotation * (ContactAlpha * WeightScale) +
 			RelaxedRotation * (RelaxedAlpha * WeightScale) +
-			CurlRotation * (CurlAlpha * WeightScale);
+			CurlRotation * (CurlAlpha * WeightScale) +
+			ThumbsUpRotation * (ThumbsUpAlpha * WeightScale);
 		ApplyFingerRotationLocal(
 			Output,
 			OutBoneTransforms,
@@ -1777,7 +1823,8 @@ void FAnimNode_LLMProceduralPose::ApplyLeftFingerPoseLocal(
 	const float ContactAlpha = FMath::Clamp(Snapshot.LeftFingersContact * InAlpha, 0.0f, 1.0f);
 	const float RelaxedAlpha = FMath::Clamp(Snapshot.LeftFingersRelaxed * InAlpha, 0.0f, 1.0f);
 	const float CurlAlpha = FMath::Clamp(Snapshot.LeftFingersCurl * InAlpha, 0.0f, 1.0f);
-	const float PoseAlphaSum = OpenAlpha + PointAlpha + ContactAlpha + RelaxedAlpha + CurlAlpha;
+	const float ThumbsUpAlpha = FMath::Clamp(Snapshot.LeftFingersThumbsUp * InAlpha, 0.0f, 1.0f);
+	const float PoseAlphaSum = OpenAlpha + PointAlpha + ContactAlpha + RelaxedAlpha + CurlAlpha + ThumbsUpAlpha;
 	if (PoseAlphaSum <= KINDA_SMALL_NUMBER)
 	{
 		return;
@@ -1831,12 +1878,16 @@ void FAnimNode_LLMProceduralPose::ApplyLeftFingerPoseLocal(
 		const FRotator CurlRotation = Bindings.LeftFingerCurlRotations.IsValidIndex(Index)
 			? Bindings.LeftFingerCurlRotations[Index]
 			: FRotator::ZeroRotator;
+		const FRotator ThumbsUpRotation = Bindings.LeftFingerThumbsUpRotations.IsValidIndex(Index)
+			? Bindings.LeftFingerThumbsUpRotations[Index]
+			: (Index < 3 ? OpenRotation : CurlRotation);
 		const FRotator BlendedRotation =
 			OpenRotation * (OpenAlpha * WeightScale) +
 			PointRotation * (PointAlpha * WeightScale) +
 			ContactRotation * (ContactAlpha * WeightScale) +
 			RelaxedRotation * (RelaxedAlpha * WeightScale) +
-			CurlRotation * (CurlAlpha * WeightScale);
+			CurlRotation * (CurlAlpha * WeightScale) +
+			ThumbsUpRotation * (ThumbsUpAlpha * WeightScale);
 		ApplyFingerRotationLocal(
 			Output,
 			OutBoneTransforms,

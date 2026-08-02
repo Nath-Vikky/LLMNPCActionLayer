@@ -324,7 +324,7 @@ bool FLLMNPCForwardN7BArtifactContractTest::RunTest(
 			CheckedInCapabilityHash ==
 				Capability.CapabilityHash &&
 			CheckedInManifestVersion ==
-				TEXT("llmnpc.control_manifest.v3")
+				TEXT("llmnpc.control_manifest.v4")
 	);
 	TestTrue(
 		TEXT("The Capability artifact exposes hands.contact"),

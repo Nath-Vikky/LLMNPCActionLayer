@@ -863,6 +863,42 @@ void CompileBeckonPrimitive(
 	CurlTrack.TargetRef = TargetRef;
 }
 
+void CompileThumbsUpPrimitive(
+	const FLLMNPCMotionRecipePrimitive& Primitive,
+	FLLMMotionClip& Clip
+)
+{
+	const bool bRight = Primitive.Side == TEXT("right");
+	const FString SidePrefix = bRight ? TEXT("right") : TEXT("left");
+	const float Amplitude = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("amplitude"), 0.65)
+	);
+	const float Height = static_cast<float>(
+		Primitive.GetNumberParameter(TEXT("height"), 0.55)
+	);
+	const float Expressiveness = Amplitude - 0.65f;
+	const float OutwardSign = bRight ? -1.0f : 1.0f;
+	AddAnchorTrack(
+		Clip,
+		FName(*FString::Printf(TEXT("%s_hand.ik"), *SidePrefix)),
+		bRight ? FName(TEXT("right_thumbs_up")) : FName(TEXT("left_thumbs_up")),
+		FVector(
+			OutwardSign * Expressiveness * 6.0f,
+			Expressiveness * 8.0f,
+			(Height - 0.55f) * 24.0f
+		),
+		1.0f,
+		Primitive,
+		ELLMMotionEnvelope::Sustain
+	);
+	AddShapedFloatTrack(
+		Clip,
+		FName(*FString::Printf(TEXT("%s_fingers.thumbs_up"), *SidePrefix)),
+		1.0f,
+		Primitive
+	);
+}
+
 bool CompileHandPosePrimitive(
 	const FLLMNPCMotionRecipePrimitive& Primitive,
 	FLLMMotionClip& Clip
@@ -884,6 +920,10 @@ bool CompileHandPosePrimitive(
 	else if (Primitive.PrimitiveId == TEXT("hand.pose.curl"))
 	{
 		PoseName = TEXT("curl");
+	}
+	else if (Primitive.PrimitiveId == TEXT("hand.pose.thumbs_up"))
+	{
+		PoseName = TEXT("thumbs_up");
 	}
 	else
 	{
@@ -982,6 +1022,11 @@ bool CompilePrimitive(
 	else if (Primitive.PrimitiveId == TEXT("hand.beckon"))
 	{
 		CompileBeckonPrimitive(Primitive, TargetRef, Clip);
+		bCompiled = true;
+	}
+	else if (Primitive.PrimitiveId == TEXT("hand.thumbs_up"))
+	{
+		CompileThumbsUpPrimitive(Primitive, Clip);
 		bCompiled = true;
 	}
 	else

@@ -1,0 +1,396 @@
+{
+	"schema_version": "llmnpc.published_template_source.v1",
+	"asset_path": "/Game/LLMNPCActionLayer/MotionTemplates/Published/MT_ThumbsUp_Manny_Procedural_Generated_04d1689c0353.MT_ThumbsUp_Manny_Procedural_Generated_04d1689c0353",
+	"catalog_content_hash": "md5:55f13886ab76fb1f23976c182c27fc93",
+	"template_kind": 0,
+	"metadata":
+	{
+		"templateId": "gesture.thumbs_up.manny.procedural.generated.04d1689c0353",
+		"publicActionId": "gesture.thumbs_up",
+		"semanticVersion": "1.0.0",
+		"catalogSchemaVersion": "llmnpc.template_catalog.v1",
+		"catalogRevision": 1,
+		"variantId": "procedural_generated_recipe",
+		"variantWeight": 1,
+		"variantStyleTags": [
+			"neutral",
+			"friendly",
+			"subtle"
+		],
+		"displayName": "Friendly Thumbs-Up",
+		"description": "Raise one hand near the upper chest with a clear thumbs-up to signal approval or agreement, then recover smoothly.",
+		"visualDescription": "The character raises the right hand to upper-chest height with a comfortably bent elbow, faces the hand outward, extends the thumb upward, and curls the other four fingers naturally. The readable sign is held briefly, then the arm recovers smoothly to neutral.",
+		"intentTags": [
+			"agree"
+		],
+		"emotionTags": [
+			"friendly"
+		],
+		"personalityTags": [],
+		"bodyRegionTags": [
+			"one_arm",
+			"hand",
+			"fingers"
+		],
+		"spatialRequirementTags": [
+			"target_independent"
+		],
+		"semanticEffectTags": [
+			"agree",
+			"affirm"
+		],
+		"targetCategoryTags": [],
+		"requiredCapabilities": [
+			"hand.pose.thumbs_up",
+			"hand.thumbs_up"
+		],
+		"requiredChannels": [
+			"right_arm_ik",
+			"right_hand_pose"
+		],
+		"blockedStates": [
+			"dead",
+			"ragdoll",
+			"right_hand_busy",
+			"stunned",
+			"two_hand_interaction"
+		],
+		"skeletonProfileId": "ue5_manny.v1",
+		"compatibleSkeletonProfileIds": [],
+		"bRequiresTarget": false,
+		"bCanRunWhileMoving": true,
+		"bAllowRuntimeModelSelection": true,
+		"cooldownSeconds": 1,
+		"expressiveness": 0.62000000476837158,
+		"energy": 0.47999998927116394,
+		"socialIntensity": 0.68000000715255737,
+		"variantDifference": "Target-independent Manny thumbs-up with a bounded upper-chest arm anchor, constrained outward wrist, calibrated thumb extension, four-finger curl, and occupied-hand mirroring.",
+		"sourceRecipeHash": "md5:fc2d2be15ca67a6822baaf3b6afe5d29",
+		"kinematicReportHash": "md5:97bc0cf53cba2005c4356577d11f5c84",
+		"catalogContentHash": "md5:55f13886ab76fb1f23976c182c27fc93",
+		"reviewState": "Published"
+	},
+	"modifier_policy":
+	{
+		"policyVersion": 2,
+		"amplitudeRange":
+		{
+			"x": 0.85000002384185791,
+			"y": 1.1499999761581421
+		},
+		"speedRange":
+		{
+			"x": 0.89999997615814209,
+			"y": 1.1000000238418579
+		},
+		"durationRange":
+		{
+			"x": 0.94999998807907104,
+			"y": 1.0499999523162842
+		},
+		"bAllowMirror": true,
+		"allowedStyleTags": [
+			"neutral",
+			"friendly",
+			"subtle"
+		],
+		"reachScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"heightScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"lateralScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"cycleCountRange":
+		{
+			"x": 0,
+			"y": 0
+		},
+		"gazeEngagementRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"palmOrientationWeightRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"fingerPoseWeightRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"torsoParticipationRange":
+		{
+			"x": 0.80000001192092896,
+			"y": 1
+		},
+		"blendInScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"blendOutScaleRange":
+		{
+			"x": 1,
+			"y": 1
+		},
+		"bEnableDynamicTargetTracking": false,
+		"maxTargetFollowSpeedCmPerSecond": 240,
+		"maxTargetAngularSpeedDegreesPerSecond": 180,
+		"targetInterpolationSpeed": 8,
+		"targetTeleportThresholdCm": 250,
+		"targetLostFadeSeconds": 0.18000000715255737,
+		"targetLossPolicy": "FadeOut",
+		"bEnableObstacleAdaptation": false,
+		"minObstacleAmplitudeScale": 0.60000002384185791,
+		"minObstacleReachScale": 0.64999997615814209,
+		"obstacleCancelClearance": 0.20000000298023224,
+		"randomAmplitudeJitter": 0.014999999664723873,
+		"randomSpeedJitter": 0.014999999664723873,
+		"randomFrequencyJitter": 0,
+		"randomPhaseJitterRadians": 0
+	},
+	"procedural_clip":
+	{
+		"clipId": "recipe_cdf064ce178bf87c",
+		"duration": 1.7999999523162842,
+		"blendIn": 0,
+		"blendOut": 0,
+		"priority": 0.75,
+		"bInterruptible": true,
+		"tracks": [
+			{
+				"controlId": "right_hand.ik",
+				"trackType": "Anchor",
+				"valueType": "Vector",
+				"startTime": 0,
+				"endTime": 1.7999999523162842,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "Sustain",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "right_thumbs_up",
+				"offset":
+				{
+					"x": -0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": []
+			},
+			{
+				"controlId": "right_fingers.thumbs_up",
+				"trackType": "Keyframes",
+				"valueType": "Float",
+				"startTime": 0,
+				"endTime": 1.7999999523162842,
+				"amplitude": 0,
+				"frequency": 1,
+				"phase": 0,
+				"envelope": "None",
+				"strength": 1,
+				"reach": 0.80000001192092896,
+				"targetRef": "",
+				"anchor": "None",
+				"offset":
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0
+				},
+				"floatKeys": [
+					{
+						"t": 0,
+						"v": 0
+					},
+					{
+						"t": 0.43199998140335083,
+						"v": 1
+					},
+					{
+						"t": 1.3680000305175781,
+						"v": 1
+					},
+					{
+						"t": 1.7999999523162842,
+						"v": 0
+					}
+				]
+			}
+		]
+	},
+	"animation_asset": "",
+	"animation_playback":
+	{
+		"slotName": "DefaultSlot",
+		"blendInSeconds": 0.15000000596046448,
+		"blendOutSeconds": 0.15000000596046448,
+		"startPositionSeconds": 0,
+		"maxDurationSeconds": 10,
+		"bLoop": false,
+		"bInterruptible": true,
+		"bStopOtherMontages": false,
+		"bAllowRootMotion": false
+	},
+	"source_provenance":
+	{
+		"source_type": "motion_recipe",
+		"schema_version": "llmnpc.motion_recipe_provenance.v1",
+		"motion_recipe":
+		{
+			"schema_version": "llmnpc.motion_recipe.v1",
+			"recipe_id": "gesture.thumbs_up.procedural",
+			"intent": "agree",
+			"duration": 1.8,
+			"interruptible": true,
+			"primitives": [
+				{
+					"primitive_id": "hand.thumbs_up",
+					"side": "right",
+					"start": 0,
+					"end": 1.8,
+					"parameters":
+					{
+						"amplitude": 0.65000000000000002,
+						"height": 0.55000000000000004
+					}
+				}
+			]
+		},
+		"recipe_hash": "md5:fc2d2be15ca67a6822baaf3b6afe5d29",
+		"online_recipe_hash": "md5:fc2d2be15ca67a6822baaf3b6afe5d29",
+		"human_parameter_edit": false,
+		"compiled_recipe_hash": "md5:cdf064ce178bf87c2cc35c18b4dd0ae6",
+		"kinematic_report_hash": "md5:97bc0cf53cba2005c4356577d11f5c84",
+		"kinematic_baseline_hash": "md5:96e8c9873d1a91e2a114ae36c8a3c36d",
+		"capability_hash": "md5:b8db12edb32987bc87bc8e577731de5e",
+		"primitive_registry_version": "llmnpc.motion_primitives.v5",
+		"compiler_version": "llmnpc.motion_recipe_compiler.v7",
+		"authoring_prompt_version": "llmnpc.motion_recipe_authoring_prompt.v7",
+		"authoring_prompt_hash": "md5:a9e37f0c2dd32447fdf03a376cec0ff1",
+		"authoring_job_hash": "sha1:492d2246cc2c62cceb76591ee9a576dbc9863902",
+		"authoring_trigger":
+		{
+			"schema_version": "llmnpc.motion_recipe_authoring_trigger.v1",
+			"source": "ManualWorkbench",
+			"authoring_contract_id": "gesture.thumbs_up.procedural"
+		},
+		"source_license":
+		{
+			"identifier": "project_owned_generated_motion_recipe",
+			"holder": "project_owner",
+			"redistribution_allowed": true
+		},
+		"authoring_agent":
+		{
+			"provider_id": "deepseek_direct_editor_authoring",
+			"model_id": "deepseek-v4-flash",
+			"non_secret_config_hash": "bf57dcb49304343a0bd9a95ddea18f88",
+			"generated_at_utc": "2026-08-02T00:56:49.239Z"
+		},
+		"import_record":
+		{
+			"schema_version": "llmnpc.motion_recipe_draft_import.v1",
+			"draft_content_hash": "sha1:492d2246cc2c62cceb76591ee9a576dbc9863902",
+			"imported_at_utc": "2026-08-02T01:00:33.695Z"
+		},
+		"review_history": [
+			{
+				"event": "previewed",
+				"reviewer": "preview_operator",
+				"notes": "PIE visual pass confirmed by project owner. Palm faces inward; fist and wrist use a natural 45-degree forward tilt; thumb is clearly extended; four fingers are curled; motion and recovery are stable.",
+				"timestamp_utc": "2026-08-02T01:02:28.538Z",
+				"approved": false
+			},
+			{
+				"event": "human_approved",
+				"reviewer": "Nath-Vikky",
+				"notes": "PIE visual pass confirmed by project owner. Palm faces inward; fist and wrist use a natural 45-degree forward tilt; thumb is clearly extended; four fingers are curled; motion and recovery are stable.",
+				"timestamp_utc": "2026-08-02T01:02:39.912Z",
+				"approved": true
+			}
+		],
+		"human_review":
+		{
+			"event": "human_approved",
+			"reviewer": "Nath-Vikky",
+			"notes": "PIE visual pass confirmed by project owner. Palm faces inward; fist and wrist use a natural 45-degree forward tilt; thumb is clearly extended; four fingers are curled; motion and recovery are stable.",
+			"timestamp_utc": "2026-08-02T01:02:39.912Z",
+			"approved": true
+		}
+	},
+	"quality_report":
+	{
+		"schema_version": "llmnpc.template_quality_report.v1",
+		"status": "pass",
+		"template_id": "gesture.thumbs_up.manny.procedural.generated.04d1689c0353",
+		"template_content_hash": "sha1:2a21e0791958a96460f568004d56f5c2bb3fc36d",
+		"template_kind": "procedural_motion",
+		"source_type": "motion_recipe",
+		"generated_at_utc": "2026-08-02T01:00:45.847Z",
+		"source_reconstruction_hash": "",
+		"full_pose_validation": "not_requested",
+		"source_recipe_hash": "md5:fc2d2be15ca67a6822baaf3b6afe5d29",
+		"compiled_recipe_hash": "md5:cdf064ce178bf87c2cc35c18b4dd0ae6",
+		"capability_hash": "md5:b8db12edb32987bc87bc8e577731de5e",
+		"primitive_registry_version": "llmnpc.motion_primitives.v5",
+		"compiler_version": "llmnpc.motion_recipe_compiler.v7",
+		"checks": [
+			{
+				"id": "template_structure",
+				"passed": true,
+				"message": "Template structure is valid."
+			},
+			{
+				"id": "action_vocabulary",
+				"passed": true,
+				"message": "Action Vocabulary exists and validates."
+			},
+			{
+				"id": "template_vocabulary_tags",
+				"passed": true,
+				"message": "Template catalog tags use the controlled Action Vocabulary."
+			},
+			{
+				"id": "motion_validator",
+				"passed": true,
+				"message": "Motion tracks pass the Published Template trust boundary."
+			},
+			{
+				"id": "skeleton_profile",
+				"passed": true,
+				"message": "Skeleton Profile exists and validates."
+			},
+			{
+				"id": "provenance_json",
+				"passed": true,
+				"message": "Provenance JSON parses."
+			},
+			{
+				"id": "motion_recipe_provenance",
+				"passed": true,
+				"message": "Online Motion Recipe Job, provider identity, prompt, license, and sanitized source evidence validate."
+			},
+			{
+				"id": "motion_recipe_recompile",
+				"passed": true,
+				"message": "Recipe recompiles deterministically to the stored Motion Clip under the current Manny Capability."
+			}
+		],
+		"warnings": [],
+		"manual_review_required": true
+	}
+}

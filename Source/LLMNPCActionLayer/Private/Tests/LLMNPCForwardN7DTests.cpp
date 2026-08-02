@@ -191,7 +191,7 @@ bool FLLMNPCForwardN7DPresentCapabilityTest::RunTest(
 	TestEqual(
 		TEXT("The built-in control manifest is versioned for palm-up support"),
 		ULLMNPCControlManifest::GetBuiltInManifestVersion(),
-		FString(TEXT("llmnpc.control_manifest.v3"))
+		FString(TEXT("llmnpc.control_manifest.v4"))
 	);
 	const FLLMControlDefinition* PalmUp =
 		ULLMNPCControlManifest::FindBuiltInControl(

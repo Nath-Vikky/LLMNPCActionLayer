@@ -8,6 +8,8 @@ struct FLLMNPCSkeletonCapabilitySnapshot;
 namespace LLMNPCMotionRecipeAuthoring
 {
 inline constexpr const TCHAR* PromptVersion =
+	TEXT("llmnpc.motion_recipe_authoring_prompt.v7");
+inline constexpr const TCHAR* LegacyPromptVersionV6 =
 	TEXT("llmnpc.motion_recipe_authoring_prompt.v6");
 inline constexpr const TCHAR* LegacyPromptVersionV5 =
 	TEXT("llmnpc.motion_recipe_authoring_prompt.v5");
@@ -27,6 +29,8 @@ inline constexpr const TCHAR* ProceduralBeckonAuthoringContractId =
 	TEXT("gesture.beckon.procedural");
 inline constexpr const TCHAR* ProceduralPresentAuthoringContractId =
 	TEXT("gesture.present.procedural");
+inline constexpr const TCHAR* ProceduralThumbsUpAuthoringContractId =
+	TEXT("gesture.thumbs_up.procedural");
 inline constexpr const TCHAR* ManualTriggerSource =
 	TEXT("ManualWorkbench");
 inline constexpr const TCHAR* RegenerationTriggerSource =

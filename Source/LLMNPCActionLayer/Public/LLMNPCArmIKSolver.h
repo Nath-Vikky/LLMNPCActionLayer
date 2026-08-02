@@ -5,6 +5,10 @@
 class LLMNPCACTIONLAYER_API FLLMNPCArmIKSolver
 {
 public:
+	static constexpr float ThumbsUpMaxAxialTwistDegrees = 95.0f;
+	static constexpr float ThumbsUpMaxWristSwingDegrees = 90.0f;
+	static constexpr float ThumbsUpForwardTiltDegrees = 45.0f;
+
 	static FVector BuildStableJointTarget(
 		const FVector& RootPosition,
 		const FVector& CurrentJointPosition,

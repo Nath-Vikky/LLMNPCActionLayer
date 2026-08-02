@@ -387,6 +387,19 @@ void ApproveMannyN1ValidationBaseline()
 		);
 		return;
 	}
+	const bool bPreviousBaselineApproved =
+		Profile->UpperBodyConstraints.bKinematicBaselineApproved;
+	const FString PreviousBaselineHash =
+		Profile->UpperBodyConstraints.ValidationBaselineHash;
+	Profile->UpperBodyConstraints.bKinematicBaselineApproved = false;
+	Profile->UpperBodyConstraints.ValidationBaselineHash.Reset();
+	const auto RestorePreviousBaselineApproval = [&]()
+	{
+		Profile->UpperBodyConstraints.bKinematicBaselineApproved =
+			bPreviousBaselineApproved;
+		Profile->UpperBodyConstraints.ValidationBaselineHash =
+			PreviousBaselineHash;
+	};
 
 	const FString CapabilityPath = FPaths::Combine(
 		Plugin->GetBaseDir(),
@@ -411,6 +424,7 @@ void ApproveMannyN1ValidationBaseline()
 		Error
 	))
 	{
+		RestorePreviousBaselineApproval();
 		UE_LOG(
 			LogLLMNPCActionLayerEditor,
 			Error,
@@ -428,6 +442,7 @@ void ApproveMannyN1ValidationBaseline()
 		&BaselineHash
 	))
 	{
+		RestorePreviousBaselineApproval();
 		UE_LOG(
 			LogLLMNPCActionLayerEditor,
 			Error,

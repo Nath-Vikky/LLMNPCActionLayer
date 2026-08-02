@@ -2446,6 +2446,15 @@ ULLMNPCTemplateAuthoringSubsystem::CreateMotionRecipeDraft(
 		TemplateSeed->Metadata.VariantDifference =
 			TEXT("Target-following Manny open-palm presentation with bounded reach, explicit palm-up orientation, calibrated open fingers, and occupied-hand mirroring.");
 	}
+	else if (
+		Evidence.AuthoringContractId ==
+			LLMNPCMotionRecipeAuthoring::
+				ProceduralThumbsUpAuthoringContractId
+	)
+	{
+		TemplateSeed->Metadata.VariantDifference =
+			TEXT("Target-independent Manny thumbs-up with a bounded upper-chest arm anchor, constrained outward wrist, calibrated thumb extension, four-finger curl, and occupied-hand mirroring.");
+	}
 	else
 	{
 		TemplateSeed->Metadata.VariantDifference =
