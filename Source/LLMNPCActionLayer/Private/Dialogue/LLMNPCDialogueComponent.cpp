@@ -70,6 +70,7 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	LastSourceCandidateCount = 0;
 	LastOfferedCandidateCount = 0;
 	LastExcludedCandidateCount = 0;
+	LastCandidateExclusions.Reset();
 	LastRequestSchemaVersion.Reset();
 
 	EnsureRuntimeObjects();
@@ -127,7 +128,7 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	RetrievalRequest.ActionHistory = ConversationSession->GetActionHistory();
 	RetrievalRequest.NowSeconds = FPlatformTime::Seconds();
 	RetrievalRequest.MaxCandidates = Settings ? Settings->MaxContextCandidates : 8;
-	RetrievalRequest.RepeatSuppressionSeconds = Settings ? Settings->RepeatSuppressionSeconds : 2.0f;
+	RetrievalRequest.RepeatSuppressionSeconds = Settings ? Settings->RepeatSuppressionSeconds : 6.0f;
 	FLLMNPCCandidateRetrievalResult Retrieval = ULLMNPCCandidateRetriever::Retrieve(RetrievalRequest);
 	LastOfferedCandidateCount = Retrieval.Candidates.Num();
 	LastExcludedCandidateCount = Retrieval.Exclusions.Num();
@@ -171,6 +172,7 @@ bool ULLMNPCDialogueComponent::SendPlayerMessage(const FString& Message)
 	LastOfferedCandidateCount = ActiveOfferedCandidates.Num();
 	LastExcludedCandidateCount = ActiveCandidateExclusions.Num();
 	LastOfferedCandidates = ActiveOfferedCandidates;
+	LastCandidateExclusions = ActiveCandidateExclusions;
 
 	ActiveRequest = FLLMNPCModelTurnRequest();
 	ActiveRequest.RequestId = FGuid::NewGuid();
@@ -292,6 +294,8 @@ void ULLMNPCDialogueComponent::ResetConversation()
 	LastSourceCandidateCount = 0;
 	LastOfferedCandidateCount = 0;
 	LastExcludedCandidateCount = 0;
+	LastOfferedCandidates.Reset();
+	LastCandidateExclusions.Reset();
 	SetState(ELLMNPCDialogueState::Idle);
 }
 
@@ -780,6 +784,7 @@ void ULLMNPCDialogueComponent::CompleteFromDecision(
 	LastTurnResult.PromptTokens = LastProviderResult.PromptTokens;
 	LastTurnResult.CompletionTokens = LastProviderResult.CompletionTokens;
 	LastTurnResult.TotalTokens = LastProviderResult.TotalTokens;
+	LastTurnResult.bResponseSchemaValid = bParseSucceeded;
 	if (!Decision.AssistantText.IsEmpty())
 	{
 		const FLLMNPCConversationMessage AssistantMessage = ConversationSession->AddMessage(

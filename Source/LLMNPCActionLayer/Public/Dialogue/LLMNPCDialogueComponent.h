@@ -120,6 +120,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="LLM NPC|Dialogue|Context")
 	const TArray<FLLMNPCTemplateCandidate>& GetLastOfferedCandidates() const { return LastOfferedCandidates; }
 
+	UFUNCTION(BlueprintPure, Category="LLM NPC|Dialogue|Context")
+	const TArray<FLLMNPCCandidateExclusion>& GetLastCandidateExclusions() const
+	{
+		return LastCandidateExclusions;
+	}
+
 	UPROPERTY(BlueprintAssignable, Category="LLM NPC|Dialogue")
 	FLLMNPCDialogueMessageEvent OnMessageAdded;
 
@@ -193,6 +199,9 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<FLLMNPCTemplateCandidate> LastOfferedCandidates;
+
+	UPROPERTY(Transient)
+	TArray<FLLMNPCCandidateExclusion> LastCandidateExclusions;
 
 	TSharedPtr<ILLMNPCModelProvider> ModelProvider;
 	TSharedPtr<ILLMNPCModelProvider> FallbackModelProvider;

@@ -522,6 +522,19 @@ Public Action `gesture.beckon` and resolves it to the Manny template
 See `Docs/Phases/forward-n7c-procedural-beckon.md` for the target contract,
 dynamic-target policy, automated coverage, and manual acceptance matrix.
 
+## Forward N7-F Online Selection Matrix
+
+N7-F closes the Manny action-library expansion phase with a locked 17-case
+real-provider PIE matrix. It covers all eight Published Public Actions plus
+`None`, targets, hand occupation, mirroring, style variants, walking, and
+repeat suppression. Selection must pass without local fallback, and action
+cases are not advanced until runtime playback and recovery have completed.
+
+The accepted run passed 17 of 17 machine cases, observed and completed all 14
+required playbacks with no timeout, and received explicit human visual approval
+for all 17 cases. See `Docs/Phases/forward-n7f-online-selection-matrix.md` for
+the locked contract, report location, and acceptance evidence.
+
 ## Product Runtime
 
 When the owning Actor replicates, `ULLMNPCMotionComponent` replicates only a

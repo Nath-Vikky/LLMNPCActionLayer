@@ -78,7 +78,7 @@ public:
 	int32 MaxContextCandidates = 8;
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection", meta=(ClampMin="0.0", ClampMax="30.0"))
-	float RepeatSuppressionSeconds = 2.0f;
+	float RepeatSuppressionSeconds = 6.0f;
 
 	UPROPERTY(Config, EditAnywhere, Category="Dialogue|Selection", meta=(ClampMin="8", ClampMax="2048"))
 	int32 MaxSelectionAnalyticsEvents = 128;

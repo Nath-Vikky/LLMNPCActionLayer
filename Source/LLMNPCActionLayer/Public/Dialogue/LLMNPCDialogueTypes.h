@@ -151,6 +151,9 @@ struct FLLMNPCDialogueTurnResult
 	bool bUsedLocalFallback = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
+	bool bResponseSchemaValid = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")
 	FName ProviderId = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category="LLM NPC|Dialogue")

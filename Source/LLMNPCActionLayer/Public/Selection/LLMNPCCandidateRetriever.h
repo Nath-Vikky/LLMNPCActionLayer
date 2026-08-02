@@ -43,7 +43,7 @@ struct FLLMNPCCandidateRetrievalRequest
 	int32 MaxCandidates = 8;
 
 	UPROPERTY(BlueprintReadWrite, Category="LLM NPC|Selection", meta=(ClampMin="0.0"))
-	float RepeatSuppressionSeconds = 2.0f;
+	float RepeatSuppressionSeconds = 6.0f;
 };
 
 USTRUCT(BlueprintType)

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Dialogue/LLMNPCDialogueTypes.h"
+#include "Evaluation/LLMNPCForwardN7Evaluation.h"
 #include "Templates/LLMNPCTemplateCompiler.h"
 #include "Widgets/SCompoundWidget.h"
 
@@ -92,10 +93,16 @@ struct FLLMNPCOnlineEvaluationRecord
 	FString ConfigHash;
 	bool bStrictProviderIdentity = false;
 	bool bUsedLocalFallback = false;
+	bool bResponseSchemaValid = false;
+	FString RequestSchemaVersion;
 	int32 SourceCandidateCount = 0;
 	int32 OfferedCandidateCount = 0;
 	int32 ExcludedCandidateCount = 0;
 	TArray<FName> OfferedCandidateIds;
+	TArray<FLLMNPCCandidateExclusion> CandidateExclusions;
+	TArray<FName> ActiveStates;
+	FName ContextEmotion = NAME_None;
+	TArray<FString> AvailableTargetRefs;
 	FName SelectedActionId = NAME_None;
 	FName ResolvedTemplateId = NAME_None;
 	bool bActionExecuted = false;
@@ -120,7 +127,33 @@ struct FLLMNPCOnlineEvaluationRecord
 	bool bModifiersClamped = false;
 	FString ModifierResolutionTrace;
 	FString ValidatorResult;
+	bool bMatrixCase = false;
+	FName MatrixCaseId = NAME_None;
+	ELLMNPCForwardN7ExpectedSelection ExpectedSelection =
+		ELLMNPCForwardN7ExpectedSelection::ExactAction;
+	FName ExpectedActionId = NAME_None;
+	FString ExpectedTargetRef;
+	bool bCheckExpectedMirror = false;
+	bool bExpectedMirror = false;
+	bool bCheckExpectedStyle = false;
+	FName ExpectedStyle = NAME_None;
+	TArray<FName> ExpectedExclusionReasons;
+	TArray<FName> CoverageTags;
+	bool bProviderPassed = false;
+	bool bSchemaPassed = false;
+	bool bSelectionPassed = false;
+	bool bExecutionPassed = false;
+	bool bContextPassed = false;
+	bool bStylePassed = false;
+	bool bValidatorPassed = false;
+	FString FailureReason;
 	bool bPassed = false;
+	bool bPlaybackRequired = false;
+	bool bPlaybackObserved = false;
+	bool bPlaybackCompleted = false;
+	float PlaybackWaitSeconds = 0.0f;
+	FString PlaybackWaitResult = TEXT("not_started");
+	FString VisualReview = TEXT("pending");
 };
 
 class SLLMNPCMotionTestConsole final : public SCompoundWidget
@@ -148,6 +181,7 @@ private:
 
 	TArray<FLLMNPCTestExecutionRecord> ExecutionRecords;
 	TArray<FLLMNPCOnlineEvaluationRecord> OnlineEvaluationRecords;
+	TArray<FLLMNPCForwardN7MatrixCase> OnlineMatrixCases;
 	FString TargetRef = TEXT("player");
 	FString OnlineInput = TEXT("Greet the player with a friendly body gesture.");
 	FString ActiveOnlineInputHash;
@@ -163,10 +197,20 @@ private:
 	bool bMirror = false;
 	bool bSweepRunning = false;
 	bool bOnlineRunInFlight = false;
+	bool bOnlineMatrixRunning = false;
+	bool bOnlineMatrixCompleted = false;
+	bool bOnlineMatrixCancelled = false;
+	bool bOnlineMatrixWaitingForPlayback = false;
 	bool bRestoreOnlineDialogueSettings = false;
 	int32 SweepStepIndex = INDEX_NONE;
+	int32 OnlineMatrixCaseIndex = INDEX_NONE;
+	int32 OnlineMatrixPassedCount = 0;
+	int32 OnlineMatrixFailedCount = 0;
 	double SweepNextActionTime = 0.0;
 	double OnlineRequestStartedAt = 0.0;
+	double OnlineMatrixNextCaseTime = 0.0;
+	double OnlineMatrixPlaybackWaitStartedAt = 0.0;
+	double OnlineMatrixPlaybackIdleSince = 0.0;
 	float RuntimeRefreshAccumulator = 0.0f;
 	FGuid ActiveOnlineRequestId;
 	TWeakObjectPtr<AActor> N3TestTargetActor;
@@ -175,6 +219,9 @@ private:
 		ELLMNPCModelProviderKind::UseProjectSettings;
 	FName PreviousProviderIdOverride = NAME_None;
 	bool bPreviousLocalFallback = true;
+	FString OnlineMatrixHumanReview = TEXT("pending");
+	FDateTime OnlineMatrixHumanReviewedAtUtc;
+	FString LastSavedReportPath;
 	FText StatusText;
 	bool bStatusError = false;
 
@@ -208,6 +255,16 @@ private:
 	void StartSweepStep();
 	void PollOnlineEvaluation();
 	void CompleteOnlineEvaluation(ULLMNPCDialogueComponent& Dialogue);
+	void PollOnlineMatrixPlayback(double CurrentTime);
+	void CompleteOnlineMatrixCasePlayback(
+		bool bPlaybackGatePassed,
+		const FString& Result
+	);
+	const FLLMNPCForwardN7MatrixCase* GetActiveOnlineMatrixCase() const;
+	bool PrepareOnlineMatrixCase(const FLLMNPCForwardN7MatrixCase& TestCase);
+	void StartOnlineMatrixCase();
+	void FinishOnlineMatrix();
+	void ResetOnlineMatrixContext();
 	void RestoreOnlineDialogueSettings();
 	void SetStatus(const FText& Text, bool bError);
 
@@ -237,6 +294,10 @@ private:
 	FReply HandleForwardN1RelaxedReview();
 	FReply HandleForwardN1CurlReview();
 	FReply HandleRunOnlineEvaluation();
+	FReply HandleRunOnlineMatrix();
+	FReply HandleOnlineMatrixVisualPass();
+	FReply HandleOnlineMatrixVisualFail();
+	FReply ApplyOnlineMatrixHumanReview(const FString& Review);
 	FReply HandleCancelOnlineEvaluation();
 	FReply HandleSaveReport();
 };

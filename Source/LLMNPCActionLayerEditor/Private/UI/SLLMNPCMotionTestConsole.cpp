@@ -41,6 +41,22 @@
 
 namespace
 {
+constexpr double OnlineMatrixPlaybackTimeoutSeconds = 20.0;
+constexpr double OnlineMatrixPlaybackIdleDwellSeconds = 0.9;
+constexpr double OnlineMatrixNoActionObservationSeconds = 1.25;
+constexpr double OnlineMatrixInterCaseDelaySeconds = 0.15;
+constexpr float OnlineMatrixMinimumRepeatSuppressionSeconds = 5.5f;
+
+bool IsOnlinePlaybackBusy(const FLLMNPCMotionDebugState& Debug)
+{
+	return
+		Debug.bHasActivePlan ||
+		Debug.ActivePlanCount > 0 ||
+		Debug.QueueCount > 0 ||
+		Debug.bMotionRequestInFlight ||
+		Debug.bAnimationAssetPlaying;
+}
+
 FString PresetName(ELLMNPCTestParameterPreset Preset)
 {
 	switch (Preset)
@@ -77,6 +93,28 @@ FString HashUtf8Text(const FString& Value)
 	uint8 Digest[16];
 	Hash.Final(Digest);
 	return FString::Printf(TEXT("md5:%s"), *BytesToHex(Digest, UE_ARRAY_COUNT(Digest)));
+}
+
+TArray<TSharedPtr<FJsonValue>> NamesToJsonValues(const TArray<FName>& Names)
+{
+	TArray<TSharedPtr<FJsonValue>> Values;
+	Values.Reserve(Names.Num());
+	for (const FName Name : Names)
+	{
+		Values.Add(MakeShared<FJsonValueString>(Name.ToString()));
+	}
+	return Values;
+}
+
+TArray<TSharedPtr<FJsonValue>> StringsToJsonValues(const TArray<FString>& Strings)
+{
+	TArray<TSharedPtr<FJsonValue>> Values;
+	Values.Reserve(Strings.Num());
+	for (const FString& String : Strings)
+	{
+		Values.Add(MakeShared<FJsonValueString>(String));
+	}
+	return Values;
 }
 }
 
@@ -472,9 +510,49 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 					+ SUniformGridPanel::Slot(1, 0)
 					[
 						SNew(SButton)
+						.ToolTipText(LOCTEXT("RunOnlineMatrixTooltip", "Run the locked N7-F strict online selection matrix sequentially."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleRunOnlineMatrix)
+						[
+							SNew(STextBlock).Text(LOCTEXT("RunOnlineMatrix", "Run N7-F Matrix"))
+						]
+					]
+					+ SUniformGridPanel::Slot(2, 0)
+					[
+						SNew(SButton)
 						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleCancelOnlineEvaluation)
 						[
 							SNew(STextBlock).Text(LOCTEXT("CancelOnlineEvaluation", "Cancel Online"))
+						]
+					]
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(188.0f, 2.0f, 0.0f, 4.0f)
+				[
+					SNew(SUniformGridPanel)
+					.SlotPadding(FMargin(4.0f, 0.0f))
+					+ SUniformGridPanel::Slot(0, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return bOnlineMatrixCompleted && !bOnlineMatrixRunning;
+						})
+						.ToolTipText(LOCTEXT("OnlineMatrixVisualPassTooltip", "Human confirmation that every case in the completed matrix looked acceptable in PIE."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleOnlineMatrixVisualPass)
+						[
+							SNew(STextBlock).Text(LOCTEXT("OnlineMatrixVisualPass", "Human Visual Pass"))
+						]
+					]
+					+ SUniformGridPanel::Slot(1, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return bOnlineMatrixCompleted && !bOnlineMatrixRunning;
+						})
+						.ToolTipText(LOCTEXT("OnlineMatrixVisualFailTooltip", "Human confirmation that at least one case in the completed matrix had a visual problem."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleOnlineMatrixVisualFail)
+						[
+							SNew(STextBlock).Text(LOCTEXT("OnlineMatrixVisualFail", "Human Visual Fail"))
 						]
 					]
 				]
@@ -579,6 +657,17 @@ void SLLMNPCMotionTestConsole::Tick(
 	}
 
 	PollOnlineEvaluation();
+	if (bOnlineMatrixRunning && !bOnlineRunInFlight)
+	{
+		if (bOnlineMatrixWaitingForPlayback)
+		{
+			PollOnlineMatrixPlayback(InCurrentTime);
+		}
+		else if (InCurrentTime >= OnlineMatrixNextCaseTime)
+		{
+			StartOnlineMatrixCase();
+		}
+	}
 	if (!bSweepRunning || InCurrentTime < SweepNextActionTime)
 	{
 		return;
@@ -764,10 +853,31 @@ FText SLLMNPCMotionTestConsole::GetOnlineTraceText() const
 	const FLLMNPCOnlineTestConfigState OnlineConfig =
 		FLLMNPCOnlineTestConfigLoader::GetState();
 	const ULLMNPCDialogueComponent* Dialogue = GetSelectedDialogueComponent();
+	const FLLMNPCForwardN7MatrixCase* MatrixCase = GetActiveOnlineMatrixCase();
+	const FString MatrixTrace = FString::Printf(
+		TEXT("Matrix: %s  Stage: %s  Progress: %d/%d  Passed: %d  Failed: %d  Human: %s  Case: %s\n"),
+		bOnlineMatrixRunning
+			? TEXT("running")
+			: (bOnlineMatrixCompleted
+				? TEXT("complete")
+				: (bOnlineMatrixCancelled ? TEXT("cancelled") : TEXT("idle"))),
+		bOnlineRunInFlight
+			? TEXT("model request")
+			: (bOnlineMatrixWaitingForPlayback
+				? TEXT("full playback")
+				: TEXT("idle")),
+		FMath::Max(OnlineMatrixCaseIndex, 0),
+		OnlineMatrixCases.Num(),
+		OnlineMatrixPassedCount,
+		OnlineMatrixFailedCount,
+		*OnlineMatrixHumanReview,
+		MatrixCase ? *MatrixCase->CaseId.ToString() : TEXT("none")
+	);
 	if (!Dialogue)
 	{
 		return FText::FromString(FString::Printf(
-			TEXT("Config: %s  Connection: %s\nDialogue component unavailable on selected PIE NPC"),
+			TEXT("%sConfig: %s  Connection: %s\nDialogue component unavailable on selected PIE NPC"),
+			*MatrixTrace,
 			OnlineConfig.IsLoaded() ? TEXT("loaded") : TEXT("not loaded"),
 			OnlineConfig.HasPassingConnectionForCurrentConfig()
 				? TEXT("verified")
@@ -780,10 +890,11 @@ FText SLLMNPCMotionTestConsole::GetOnlineTraceText() const
 		? Debug.ActiveRequestId
 		: Debug.LastRequestId;
 	return FText::FromString(FString::Printf(
-		TEXT("Config: %s  Connection: %s  Run: %s\n")
+		TEXT("%sConfig: %s  Connection: %s  Run: %s\n")
 		TEXT("Provider: %s  Model: %s  Request: %s\n")
 		TEXT("Context: %s\nCandidates: %d -> %d (%d excluded)\n")
 		TEXT("Selected: %s  Resolved: %s  Fallback: %s  Error: %s"),
+		*MatrixTrace,
 		OnlineConfig.IsLoaded() ? TEXT("loaded") : TEXT("not loaded"),
 		OnlineConfig.HasPassingConnectionForCurrentConfig()
 			? TEXT("verified")
@@ -1312,6 +1423,8 @@ void SLLMNPCMotionTestConsole::PollOnlineEvaluation()
 	if (!Dialogue)
 	{
 		bOnlineRunInFlight = false;
+		bOnlineMatrixRunning = false;
+		bOnlineMatrixCompleted = false;
 		bRestoreOnlineDialogueSettings = false;
 		ActiveOnlineRequestId.Invalidate();
 		SetStatus(
@@ -1340,8 +1453,12 @@ void SLLMNPCMotionTestConsole::CompleteOnlineEvaluation(
 	ULLMNPCDialogueComponent& Dialogue
 )
 {
+	const FLLMNPCForwardN7MatrixCase* MatrixCase =
+		GetActiveOnlineMatrixCase();
 	const FLLMNPCDialogueTurnResult& Turn = Dialogue.LastTurnResult;
 	const FLLMNPCDialogueDebugState DialogueDebug = Dialogue.GetDebugState();
+	const FLLMNPCSelectionContextSnapshot SelectionContext =
+		Dialogue.GetSelectionContextSnapshot();
 	const FLLMNPCMotionDebugState MotionDebug = GetSelectedMotionComponent()
 		? GetSelectedMotionComponent()->GetDebugState()
 		: FLLMNPCMotionDebugState();
@@ -1358,12 +1475,21 @@ void SLLMNPCMotionTestConsole::CompleteOnlineEvaluation(
 	Record.ProviderModelId = Turn.ProviderModelId;
 	Record.ConfigHash = ActiveOnlineConfigHash;
 	Record.bUsedLocalFallback = Turn.bUsedLocalFallback;
+	Record.bResponseSchemaValid = Turn.bResponseSchemaValid;
+	Record.RequestSchemaVersion = DialogueDebug.RequestSchemaVersion;
 	Record.SourceCandidateCount = DialogueDebug.SourceCandidateCount;
 	Record.OfferedCandidateCount = DialogueDebug.OfferedCandidateCount;
 	Record.ExcludedCandidateCount = DialogueDebug.ExcludedCandidateCount;
 	for (const FLLMNPCTemplateCandidate& Candidate : Dialogue.GetLastOfferedCandidates())
 	{
 		Record.OfferedCandidateIds.Add(Candidate.SelectionId);
+	}
+	Record.CandidateExclusions = Dialogue.GetLastCandidateExclusions();
+	Record.ActiveStates = SelectionContext.ActiveStates;
+	Record.ContextEmotion = SelectionContext.Emotion.PrimaryEmotion;
+	for (const FLLMNPCSceneTargetContext& Target : SelectionContext.AvailableTargets)
+	{
+		Record.AvailableTargetRefs.Add(Target.TargetRef);
 	}
 	Record.SelectedActionId = Turn.SelectedActionId;
 	Record.ResolvedTemplateId = Turn.ResolvedTemplateId;
@@ -1402,15 +1528,94 @@ void SLLMNPCMotionTestConsole::CompleteOnlineEvaluation(
 		FLLMNPCOnlineTestConfigLoader::GetState().HasPassingConnectionForCurrentConfig() &&
 		FLLMNPCOnlineTestConfigLoader::GetState().NonSecretConfigHash ==
 			ActiveOnlineConfigHash;
-	Record.bPassed =
-		Record.bStrictProviderIdentity &&
-		Record.ErrorCode.IsNone() &&
-		!Record.SelectedActionId.IsNone() &&
-		!Record.ResolvedTemplateId.IsNone() &&
-		(Record.bActionExecuted || Record.bBehaviorStarted);
+	if (MatrixCase)
+	{
+		Record.bMatrixCase = true;
+		Record.MatrixCaseId = MatrixCase->CaseId;
+		Record.ExpectedSelection = MatrixCase->ExpectedSelection;
+		Record.ExpectedActionId = MatrixCase->ExpectedActionId;
+		Record.ExpectedTargetRef = MatrixCase->ExpectedTargetRef;
+		Record.bCheckExpectedMirror = MatrixCase->bCheckMirror;
+		Record.bExpectedMirror = MatrixCase->bExpectedMirror;
+		Record.bCheckExpectedStyle = MatrixCase->bCheckStyle;
+		Record.ExpectedStyle = MatrixCase->ExpectedStyle;
+		Record.ExpectedExclusionReasons = MatrixCase->AllowedExclusionReasons;
+		Record.CoverageTags = MatrixCase->CoverageTags;
+
+		FLLMNPCForwardN7ObservedSelection Observed;
+		Observed.bStrictProviderIdentity = Record.bStrictProviderIdentity;
+		Observed.bUsedLocalFallback = Record.bUsedLocalFallback;
+		Observed.bResponseSchemaValid = Record.bResponseSchemaValid;
+		Observed.OfferedCandidateIds = Record.OfferedCandidateIds;
+		Observed.CandidateExclusions = Record.CandidateExclusions;
+		Observed.SelectedActionId = Record.SelectedActionId;
+		Observed.ResolvedTemplateId = Record.ResolvedTemplateId;
+		Observed.bActionExecuted = Record.bActionExecuted;
+		Observed.bBehaviorStarted = Record.bBehaviorStarted;
+		Observed.ErrorCode = Record.ErrorCode;
+		Observed.TargetRef = Record.TargetRef;
+		Observed.ResolvedStyle = Record.ResolvedStyle;
+		Observed.bResolvedMirror = Record.bResolvedMirror;
+		Observed.ValidatorResult = Record.ValidatorResult;
+		const FLLMNPCForwardN7CaseVerdict Verdict =
+			LLMNPCForwardN7Evaluation::EvaluateCase(*MatrixCase, Observed);
+		Record.bProviderPassed = Verdict.bProviderPassed;
+		Record.bSchemaPassed = Verdict.bSchemaPassed;
+		Record.bSelectionPassed = Verdict.bSelectionPassed;
+		Record.bExecutionPassed = Verdict.bExecutionPassed;
+		Record.bContextPassed = Verdict.bContextPassed;
+		Record.bStylePassed = Verdict.bStylePassed;
+		Record.bValidatorPassed = Verdict.bValidatorPassed;
+		Record.FailureReason = Verdict.FailureReason;
+		Record.bPassed = Verdict.bPassed;
+	}
+	else
+	{
+		Record.bPassed =
+			Record.bStrictProviderIdentity &&
+			Record.ErrorCode.IsNone() &&
+			!Record.SelectedActionId.IsNone() &&
+			!Record.ResolvedTemplateId.IsNone() &&
+			(Record.bActionExecuted || Record.bBehaviorStarted);
+	}
 
 	bOnlineRunInFlight = false;
 	ActiveOnlineRequestId.Invalidate();
+	RestoreOnlineDialogueSettings();
+
+	if (MatrixCase && bOnlineMatrixRunning)
+	{
+		Record.bPlaybackRequired =
+			Record.bActionExecuted || Record.bBehaviorStarted;
+		Record.PlaybackWaitResult = Record.bPlaybackRequired
+			? TEXT("waiting_for_playback")
+			: TEXT("observing_no_action");
+		bOnlineMatrixWaitingForPlayback = true;
+		OnlineMatrixPlaybackWaitStartedAt = FPlatformTime::Seconds();
+		OnlineMatrixPlaybackIdleSince = 0.0;
+		if (const ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent())
+		{
+			Record.bPlaybackObserved =
+				IsOnlinePlaybackBusy(Motion->GetDebugState());
+		}
+		SetStatus(
+			FText::Format(
+				Record.bPlaybackRequired
+					? LOCTEXT(
+						"OnlineMatrixPlaybackWaiting",
+						"N7-F selection complete for {0}; waiting for full playback and return to neutral"
+					)
+					: LOCTEXT(
+						"OnlineMatrixNoActionWaiting",
+						"N7-F selection complete for {0}; observing the required no-action interval"
+					),
+				FText::FromName(Record.MatrixCaseId)
+			),
+			!Record.bPassed
+		);
+		return;
+	}
+
 	SetStatus(
 		Record.bPassed
 			? FText::Format(
@@ -1436,7 +1641,355 @@ void SLLMNPCMotionTestConsole::CompleteOnlineEvaluation(
 			),
 		!Record.bPassed
 	);
-	RestoreOnlineDialogueSettings();
+}
+
+void SLLMNPCMotionTestConsole::PollOnlineMatrixPlayback(double CurrentTime)
+{
+	if (
+		!bOnlineMatrixRunning ||
+		!bOnlineMatrixWaitingForPlayback ||
+		OnlineEvaluationRecords.IsEmpty()
+	)
+	{
+		return;
+	}
+
+	FLLMNPCOnlineEvaluationRecord& Record = OnlineEvaluationRecords.Last();
+	const FLLMNPCForwardN7MatrixCase* MatrixCase = GetActiveOnlineMatrixCase();
+	if (!MatrixCase || Record.MatrixCaseId != MatrixCase->CaseId)
+	{
+		bOnlineMatrixWaitingForPlayback = false;
+		bOnlineMatrixRunning = false;
+		bOnlineMatrixCompleted = false;
+		SetStatus(
+			LOCTEXT("OnlineMatrixPlaybackStateMismatch", "N7-F playback state no longer matches the active case"),
+			true
+		);
+		return;
+	}
+
+	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
+	if (!Motion)
+	{
+		CompleteOnlineMatrixCasePlayback(false, TEXT("motion_component_lost"));
+		return;
+	}
+
+	const double Elapsed = FMath::Max(
+		CurrentTime - OnlineMatrixPlaybackWaitStartedAt,
+		0.0
+	);
+	const bool bPlaybackBusy = IsOnlinePlaybackBusy(Motion->GetDebugState());
+	if (bPlaybackBusy)
+	{
+		Record.bPlaybackObserved = true;
+		OnlineMatrixPlaybackIdleSince = 0.0;
+	}
+	else if (!Record.bPlaybackRequired || Record.bPlaybackObserved)
+	{
+		if (OnlineMatrixPlaybackIdleSince <= 0.0)
+		{
+			OnlineMatrixPlaybackIdleSince = CurrentTime;
+		}
+		const double RequiredIdleSeconds = Record.bPlaybackRequired
+			? OnlineMatrixPlaybackIdleDwellSeconds
+			: OnlineMatrixNoActionObservationSeconds;
+		if (CurrentTime - OnlineMatrixPlaybackIdleSince >= RequiredIdleSeconds)
+		{
+			CompleteOnlineMatrixCasePlayback(
+				true,
+				Record.bPlaybackRequired ? TEXT("completed") : TEXT("not_required")
+			);
+			return;
+		}
+	}
+
+	if (Elapsed >= OnlineMatrixPlaybackTimeoutSeconds)
+	{
+		Motion->StopAllMotions();
+		CompleteOnlineMatrixCasePlayback(false, TEXT("timeout"));
+	}
+}
+
+void SLLMNPCMotionTestConsole::CompleteOnlineMatrixCasePlayback(
+	bool bPlaybackGatePassed,
+	const FString& Result
+)
+{
+	if (!bOnlineMatrixWaitingForPlayback || OnlineEvaluationRecords.IsEmpty())
+	{
+		return;
+	}
+
+	FLLMNPCOnlineEvaluationRecord& Record = OnlineEvaluationRecords.Last();
+	Record.PlaybackWaitSeconds = static_cast<float>(FMath::Max(
+		FPlatformTime::Seconds() - OnlineMatrixPlaybackWaitStartedAt,
+		0.0
+	));
+	Record.PlaybackWaitResult = Result;
+	Record.bPlaybackCompleted =
+		Record.bPlaybackRequired && bPlaybackGatePassed;
+	if (!bPlaybackGatePassed)
+	{
+		Record.bPassed = false;
+		const FString PlaybackFailure = FString::Printf(
+			TEXT("playback gate failed: %s"),
+			*Result
+		);
+		Record.FailureReason = Record.FailureReason.IsEmpty()
+			? PlaybackFailure
+			: Record.FailureReason + TEXT("; ") + PlaybackFailure;
+	}
+
+	bOnlineMatrixWaitingForPlayback = false;
+	OnlineMatrixPlaybackWaitStartedAt = 0.0;
+	OnlineMatrixPlaybackIdleSince = 0.0;
+	if (Record.bPassed)
+	{
+		++OnlineMatrixPassedCount;
+	}
+	else
+	{
+		++OnlineMatrixFailedCount;
+	}
+
+	++OnlineMatrixCaseIndex;
+	if (OnlineMatrixCaseIndex >= OnlineMatrixCases.Num())
+	{
+		FinishOnlineMatrix();
+		return;
+	}
+
+	OnlineMatrixNextCaseTime =
+		FPlatformTime::Seconds() + OnlineMatrixInterCaseDelaySeconds;
+	SetStatus(
+		FText::Format(
+			LOCTEXT(
+				"OnlineMatrixProgress",
+				"N7-F matrix: {0}/{1} fully observed, {2} passed, {3} failed"
+			),
+			FText::AsNumber(OnlineMatrixCaseIndex),
+			FText::AsNumber(OnlineMatrixCases.Num()),
+			FText::AsNumber(OnlineMatrixPassedCount),
+			FText::AsNumber(OnlineMatrixFailedCount)
+		),
+		OnlineMatrixFailedCount > 0
+	);
+}
+
+const FLLMNPCForwardN7MatrixCase*
+SLLMNPCMotionTestConsole::GetActiveOnlineMatrixCase() const
+{
+	return bOnlineMatrixRunning &&
+		OnlineMatrixCases.IsValidIndex(OnlineMatrixCaseIndex)
+		? &OnlineMatrixCases[OnlineMatrixCaseIndex]
+		: nullptr;
+}
+
+bool SLLMNPCMotionTestConsole::PrepareOnlineMatrixCase(
+	const FLLMNPCForwardN7MatrixCase& TestCase
+)
+{
+	ULLMNPCDialogueComponent* Dialogue = GetSelectedDialogueComponent();
+	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
+	if (!Dialogue || !Motion)
+	{
+		SetStatus(
+			LOCTEXT("OnlineMatrixTargetUnavailable", "The N7-F matrix lost its PIE NPC"),
+			true
+		);
+		return false;
+	}
+
+	for (const FName State : {
+		FName(TEXT("right_hand_busy")),
+		FName(TEXT("right_hand_occupied")),
+		FName(TEXT("left_hand_busy")),
+		FName(TEXT("left_hand_occupied")),
+		FName(TEXT("upper_body_busy")),
+		FName(TEXT("upper_body_occupied")),
+		FName(TEXT("walking")),
+		FName(TEXT("running")),
+		FName(TEXT("sprinting")),
+		FName(TEXT("turning")),
+		FName(TEXT("falling"))
+	})
+	{
+		Dialogue->SetSceneStateActive(State, false);
+	}
+	for (const FName State : TestCase.ActiveStates)
+	{
+		Dialogue->SetSceneStateActive(State, true);
+	}
+	Dialogue->ResetEmotionContext();
+	if (!TestCase.Emotion.IsNone())
+	{
+		Dialogue->SetEmotionContext(
+			TestCase.Emotion,
+			TestCase.EmotionIntensity,
+			TestCase.EmotionValence,
+			TestCase.EmotionArousal
+		);
+	}
+
+	TestTargetDistanceCm = TestCase.TargetDistanceCm;
+	TestTargetHeightCm = TestCase.TargetHeightCm;
+	if (TestCase.bProvideTarget)
+	{
+		if (!PlaceN3TestTarget())
+		{
+			return false;
+		}
+	}
+	else
+	{
+		for (const FString& TargetToRemove : {
+			FString(TEXT("n3_test_target")),
+			FString(TEXT("player")),
+			FString(TEXT("player.main"))
+		})
+		{
+			if (
+				TargetToRemove == TEXT("n3_test_target") ||
+				TestCase.bRequireNoAvailableTargets
+			)
+			{
+				Dialogue->RegisterSceneTarget(
+					TargetToRemove,
+					nullptr,
+					TEXT("scene_target"),
+					{},
+					0.0f
+				);
+			}
+		}
+		if (AActor* TestTarget = N3TestTargetActor.Get())
+		{
+			TestTarget->Destroy();
+		}
+		N3TestTargetActor.Reset();
+		TargetRef = TestCase.bRequireNoAvailableTargets
+			? FString()
+			: FString(TEXT("player"));
+	}
+
+	OnlineInput = TestCase.NaturalLanguage;
+	Motion->ResetMotionTestState();
+	return true;
+}
+
+void SLLMNPCMotionTestConsole::StartOnlineMatrixCase()
+{
+	const FLLMNPCForwardN7MatrixCase* TestCase = GetActiveOnlineMatrixCase();
+	if (!TestCase)
+	{
+		FinishOnlineMatrix();
+		return;
+	}
+	if (!PrepareOnlineMatrixCase(*TestCase))
+	{
+		bOnlineMatrixRunning = false;
+		bOnlineMatrixCompleted = false;
+		return;
+	}
+
+	HandleRunOnlineEvaluation();
+	if (!bOnlineRunInFlight)
+	{
+		bOnlineMatrixRunning = false;
+		bOnlineMatrixCompleted = false;
+		SetStatus(
+			FText::Format(
+				LOCTEXT("OnlineMatrixCaseStartFailed", "N7-F matrix could not start case {0}"),
+				FText::FromName(TestCase->CaseId)
+			),
+			true
+		);
+	}
+}
+
+void SLLMNPCMotionTestConsole::FinishOnlineMatrix()
+{
+	bOnlineMatrixRunning = false;
+	bOnlineMatrixCompleted = true;
+	bOnlineMatrixCancelled = false;
+	bOnlineMatrixWaitingForPlayback = false;
+	OnlineMatrixNextCaseTime = 0.0;
+	OnlineMatrixPlaybackWaitStartedAt = 0.0;
+	OnlineMatrixPlaybackIdleSince = 0.0;
+	ResetOnlineMatrixContext();
+	HandleSaveReport();
+	if (LastSavedReportPath.IsEmpty())
+	{
+		SetStatus(
+			LOCTEXT("OnlineMatrixReportFailed", "N7-F matrix finished, but its report could not be saved"),
+			true
+		);
+		return;
+	}
+	SetStatus(
+		FText::Format(
+			LOCTEXT(
+				"OnlineMatrixComplete",
+				"N7-F matrix complete: {0}/{1} passed. Report: {2}"
+			),
+			FText::AsNumber(OnlineMatrixPassedCount),
+			FText::AsNumber(OnlineMatrixCases.Num()),
+			FText::FromString(LastSavedReportPath)
+		),
+		OnlineMatrixFailedCount > 0
+	);
+}
+
+void SLLMNPCMotionTestConsole::ResetOnlineMatrixContext()
+{
+	if (ULLMNPCDialogueComponent* Dialogue = GetSelectedDialogueComponent())
+	{
+		for (const FName State : {
+			FName(TEXT("right_hand_busy")),
+			FName(TEXT("right_hand_occupied")),
+			FName(TEXT("left_hand_busy")),
+			FName(TEXT("left_hand_occupied")),
+			FName(TEXT("upper_body_busy")),
+			FName(TEXT("upper_body_occupied")),
+			FName(TEXT("walking")),
+			FName(TEXT("running")),
+			FName(TEXT("sprinting")),
+			FName(TEXT("turning")),
+			FName(TEXT("falling"))
+		})
+		{
+			Dialogue->SetSceneStateActive(State, false);
+		}
+		Dialogue->ResetEmotionContext();
+		Dialogue->RegisterSceneTarget(
+			TEXT("n3_test_target"),
+			nullptr,
+			TEXT("scene_target"),
+			{},
+			0.0f
+		);
+		if (ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent())
+		{
+			if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(Motion->GetWorld(), 0))
+			{
+				Dialogue->RegisterSceneTarget(
+					TEXT("player.main"),
+					PlayerPawn,
+					TEXT("player"),
+					{TEXT("conversation_partner")},
+					1.0f
+				);
+				Dialogue->RegisterTarget(TEXT("player"), PlayerPawn);
+			}
+		}
+	}
+	if (AActor* TestTarget = N3TestTargetActor.Get())
+	{
+		TestTarget->Destroy();
+	}
+	N3TestTargetActor.Reset();
+	TargetRef = TEXT("player");
 }
 
 void SLLMNPCMotionTestConsole::RestoreOnlineDialogueSettings()
@@ -1474,7 +2027,7 @@ void SLLMNPCMotionTestConsole::HandleActorChanged(
 	static_cast<void>(SelectInfo);
 	if (Option.IsValid())
 	{
-		if (bOnlineRunInFlight)
+		if (bOnlineRunInFlight || bOnlineMatrixRunning)
 		{
 			HandleCancelOnlineEvaluation();
 		}
@@ -1506,7 +2059,7 @@ void SLLMNPCMotionTestConsole::HandleOverlayChanged(ECheckBoxState State)
 
 FReply SLLMNPCMotionTestConsole::HandleRefresh()
 {
-	if (bOnlineRunInFlight)
+	if (bOnlineRunInFlight || bOnlineMatrixRunning)
 	{
 		HandleCancelOnlineEvaluation();
 	}
@@ -1673,6 +2226,14 @@ FReply SLLMNPCMotionTestConsole::HandleForwardN1CurlReview()
 
 FReply SLLMNPCMotionTestConsole::HandleRunOnlineEvaluation()
 {
+	if (bOnlineMatrixWaitingForPlayback)
+	{
+		SetStatus(
+			LOCTEXT("OnlinePlaybackStillRunning", "Wait for the current N7-F action to finish before starting another online selection"),
+			true
+		);
+		return FReply::Handled();
+	}
 	if (bOnlineRunInFlight)
 	{
 		SetStatus(LOCTEXT("OnlineAlreadyRunning", "An online evaluation is already in flight"), true);
@@ -1728,7 +2289,12 @@ FReply SLLMNPCMotionTestConsole::HandleRunOnlineEvaluation()
 
 	bSweepRunning = false;
 	Motion->ResetMotionTestState();
-	Dialogue->ResetConversation();
+	const FLLMNPCForwardN7MatrixCase* MatrixCase =
+		GetActiveOnlineMatrixCase();
+	if (!MatrixCase || MatrixCase->bResetConversationBefore)
+	{
+		Dialogue->ResetConversation();
+	}
 	PreviousProviderKind = Dialogue->ProviderKind;
 	PreviousProviderIdOverride = Dialogue->ProviderIdOverride;
 	bPreviousLocalFallback = Dialogue->bEnableLocalCommandFallback;
@@ -1736,9 +2302,12 @@ FReply SLLMNPCMotionTestConsole::HandleRunOnlineEvaluation()
 	bRestoreOnlineDialogueSettings = true;
 	Dialogue->SetProviderKind(ELLMNPCModelProviderKind::DeepSeekDirectEditorOnly);
 	Dialogue->bEnableLocalCommandFallback = false;
-	if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(Motion->GetWorld(), 0))
+	if (!MatrixCase || !MatrixCase->bRequireNoAvailableTargets)
 	{
-		Dialogue->RegisterTarget(TEXT("player"), PlayerPawn);
+		if (APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(Motion->GetWorld(), 0))
+		{
+			Dialogue->RegisterTarget(TEXT("player"), PlayerPawn);
+		}
 	}
 
 	ActiveOnlineInputHash = HashUtf8Text(CleanInput);
@@ -1763,7 +2332,18 @@ FReply SLLMNPCMotionTestConsole::HandleRunOnlineEvaluation()
 		: Debug.LastRequestId;
 	SetStatus(
 		FText::Format(
-			LOCTEXT("OnlineRequestStarted", "Strict online request started: {0}"),
+			MatrixCase
+				? LOCTEXT(
+					"OnlineMatrixRequestStarted",
+					"N7-F case started: {0} ({1})"
+				)
+				: LOCTEXT(
+					"OnlineRequestStarted",
+					"Strict online request started: {1}"
+				),
+			MatrixCase
+				? FText::FromName(MatrixCase->CaseId)
+				: FText::GetEmpty(),
 			FText::FromString(
 				ActiveOnlineRequestId.IsValid()
 					? ActiveOnlineRequestId.ToString(EGuidFormats::DigitsWithHyphensLower)
@@ -1775,8 +2355,164 @@ FReply SLLMNPCMotionTestConsole::HandleRunOnlineEvaluation()
 	return FReply::Handled();
 }
 
+FReply SLLMNPCMotionTestConsole::HandleRunOnlineMatrix()
+{
+	if (bOnlineRunInFlight || bOnlineMatrixRunning)
+	{
+		SetStatus(LOCTEXT("OnlineMatrixAlreadyRunning", "An online run is already in flight"), true);
+		return FReply::Handled();
+	}
+	if (!GetSelectedDialogueComponent() || !GetSelectedMotionComponent())
+	{
+		SetStatus(
+			LOCTEXT("OnlineMatrixPIEUnavailable", "Start PIE and select a Manny NPC before running N7-F"),
+			true
+		);
+		return FReply::Handled();
+	}
+	const FLLMNPCOnlineTestConfigState OnlineConfig =
+		FLLMNPCOnlineTestConfigLoader::GetState();
+	const ULLMNPCSettings* Settings = GetDefault<ULLMNPCSettings>();
+	if (!OnlineConfig.HasPassingConnectionForCurrentConfig())
+	{
+		SetStatus(
+			LOCTEXT("OnlineMatrixConnectionMissing", "Load env.txt and pass Test Connection before running N7-F"),
+			true
+		);
+		return FReply::Handled();
+	}
+	if (!Settings || !Settings->bAllowDirectProviderCallInEditorOnly)
+	{
+		SetStatus(
+			LOCTEXT("OnlineMatrixDirectDisabled", "Direct Editor provider access is disabled"),
+			true
+		);
+		return FReply::Handled();
+	}
+	if (Settings->RepeatSuppressionSeconds < OnlineMatrixMinimumRepeatSuppressionSeconds)
+	{
+		SetStatus(
+			FText::Format(
+				LOCTEXT(
+					"OnlineMatrixRepeatWindowTooShort",
+					"N7-F requires Repeat Suppression Seconds >= {0} so the repeat case remains protected after full playback"
+				),
+				FText::AsNumber(OnlineMatrixMinimumRepeatSuppressionSeconds)
+			),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	ULLMNPCTemplateLibrarySubsystem* Library = GetTemplateLibrary();
+	if (!Library)
+	{
+		SetStatus(LOCTEXT("OnlineMatrixLibraryUnavailable", "The PIE template library is unavailable"), true);
+		return FReply::Handled();
+	}
+	Library->RefreshLibrary();
+	const FLLMNPCForwardN7LibraryAudit Audit =
+		LLMNPCForwardN7Evaluation::AuditMannyLibrary(*Library);
+	if (!Audit.bPassed)
+	{
+		SetStatus(
+			FText::FromString(FString::Printf(
+				TEXT("N7-F library audit failed: %s"),
+				*FString::Join(Audit.Errors, TEXT("; "))
+			)),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	OnlineEvaluationRecords.Reset();
+	OnlineMatrixCases = LLMNPCForwardN7Evaluation::BuildDefaultMatrix();
+	OnlineMatrixCaseIndex = 0;
+	OnlineMatrixPassedCount = 0;
+	OnlineMatrixFailedCount = 0;
+	bOnlineMatrixRunning = true;
+	bOnlineMatrixCompleted = false;
+	bOnlineMatrixCancelled = false;
+	bOnlineMatrixWaitingForPlayback = false;
+	OnlineMatrixHumanReview = TEXT("pending");
+	OnlineMatrixHumanReviewedAtUtc = FDateTime();
+	LastSavedReportPath.Reset();
+	OnlineMatrixPlaybackWaitStartedAt = 0.0;
+	OnlineMatrixPlaybackIdleSince = 0.0;
+	OnlineMatrixNextCaseTime = FPlatformTime::Seconds();
+	StartOnlineMatrixCase();
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleOnlineMatrixVisualPass()
+{
+	return ApplyOnlineMatrixHumanReview(TEXT("passed"));
+}
+
+FReply SLLMNPCMotionTestConsole::HandleOnlineMatrixVisualFail()
+{
+	return ApplyOnlineMatrixHumanReview(TEXT("failed"));
+}
+
+FReply SLLMNPCMotionTestConsole::ApplyOnlineMatrixHumanReview(
+	const FString& Review
+)
+{
+	if (!bOnlineMatrixCompleted || OnlineMatrixCases.IsEmpty())
+	{
+		SetStatus(
+			LOCTEXT("OnlineMatrixHumanReviewUnavailable", "Complete the N7-F matrix before recording a human visual review"),
+			true
+		);
+		return FReply::Handled();
+	}
+	if (Review == TEXT("passed") && OnlineMatrixFailedCount > 0)
+	{
+		SetStatus(
+			LOCTEXT("OnlineMatrixHumanPassBlocked", "Human Visual Pass requires every machine-evaluated matrix case to pass"),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	OnlineMatrixHumanReview = Review;
+	OnlineMatrixHumanReviewedAtUtc = FDateTime::UtcNow();
+	for (FLLMNPCOnlineEvaluationRecord& Record : OnlineEvaluationRecords)
+	{
+		if (Record.bMatrixCase)
+		{
+			Record.VisualReview = Review;
+		}
+	}
+	HandleSaveReport();
+	if (LastSavedReportPath.IsEmpty())
+	{
+		SetStatus(
+			LOCTEXT("OnlineMatrixHumanReviewSaveFailed", "The human-reviewed matrix report could not be saved"),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	SetStatus(
+		FText::Format(
+			LOCTEXT(
+				"OnlineMatrixHumanReviewSaved",
+				"N7-F Human Visual {0}. Reviewed report: {1}"
+			),
+			Review == TEXT("passed")
+				? LOCTEXT("OnlineMatrixHumanReviewPassLabel", "Pass")
+				: LOCTEXT("OnlineMatrixHumanReviewFailLabel", "Fail"),
+			FText::FromString(LastSavedReportPath)
+		),
+		Review == TEXT("failed")
+	);
+	return FReply::Handled();
+}
+
 FReply SLLMNPCMotionTestConsole::HandleCancelOnlineEvaluation()
 {
+	const bool bWasMatrixRunning = bOnlineMatrixRunning;
 	if (ULLMNPCDialogueComponent* Dialogue = ActiveOnlineDialogue.Get())
 	{
 		if (bOnlineRunInFlight)
@@ -1785,18 +2521,73 @@ FReply SLLMNPCMotionTestConsole::HandleCancelOnlineEvaluation()
 		}
 	}
 	bOnlineRunInFlight = false;
+	bOnlineMatrixRunning = false;
+	bOnlineMatrixCompleted = false;
+	bOnlineMatrixCancelled = bWasMatrixRunning;
+	bOnlineMatrixWaitingForPlayback = false;
+	OnlineMatrixPlaybackWaitStartedAt = 0.0;
+	OnlineMatrixPlaybackIdleSince = 0.0;
 	ActiveOnlineRequestId.Invalidate();
 	RestoreOnlineDialogueSettings();
-	SetStatus(LOCTEXT("OnlineEvaluationCancelled", "Online evaluation cancelled"), false);
+	if (bWasMatrixRunning)
+	{
+		if (ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent())
+		{
+			Motion->StopAllMotions();
+		}
+	}
+	ResetOnlineMatrixContext();
+	if (bWasMatrixRunning)
+	{
+		HandleSaveReport();
+		if (LastSavedReportPath.IsEmpty())
+		{
+			SetStatus(
+				LOCTEXT("OnlineMatrixPartialReportFailed", "N7-F matrix was cancelled and its partial report could not be saved"),
+				true
+			);
+			return FReply::Handled();
+		}
+		SetStatus(
+			FText::Format(
+				LOCTEXT(
+					"OnlineMatrixCancelled",
+					"N7-F matrix cancelled after {0}/{1} cases. Partial report: {2}"
+				),
+				FText::AsNumber(OnlineMatrixCaseIndex),
+				FText::AsNumber(OnlineMatrixCases.Num()),
+				FText::FromString(LastSavedReportPath)
+			),
+			false
+		);
+	}
+	else
+	{
+		SetStatus(LOCTEXT("OnlineEvaluationCancelled", "Online evaluation cancelled"), false);
+	}
 	return FReply::Handled();
 }
 
 FReply SLLMNPCMotionTestConsole::HandleSaveReport()
 {
+	LastSavedReportPath.Reset();
 	TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
 	Root->SetStringField(TEXT("schema_version"), TEXT("llmnpc.forward_n0_motion_test_report.v1"));
 	Root->SetStringField(TEXT("generated_at_utc"), FDateTime::UtcNow().ToIso8601());
-	Root->SetStringField(TEXT("human_review"), TEXT("pending"));
+	Root->SetStringField(
+		TEXT("human_review"),
+		OnlineMatrixCases.IsEmpty()
+			? FString(TEXT("pending"))
+			: OnlineMatrixHumanReview
+	);
+	if (OnlineMatrixHumanReviewedAtUtc.GetTicks() > 0)
+	{
+		Root->SetStringField(
+			TEXT("human_reviewed_at_utc"),
+			OnlineMatrixHumanReviewedAtUtc.ToIso8601()
+		);
+		Root->SetStringField(TEXT("human_review_source"), TEXT("editor_user"));
+	}
 
 	const FLLMNPCOnlineTestConfigState OnlineConfig =
 		FLLMNPCOnlineTestConfigLoader::GetState();
@@ -1958,6 +2749,8 @@ FReply SLLMNPCMotionTestConsole::HandleSaveReport()
 			Record.bStrictProviderIdentity
 		);
 		Event->SetBoolField(TEXT("used_local_fallback"), Record.bUsedLocalFallback);
+		Event->SetBoolField(TEXT("response_schema_valid"), Record.bResponseSchemaValid);
+		Event->SetStringField(TEXT("request_schema_version"), Record.RequestSchemaVersion);
 		Event->SetNumberField(
 			TEXT("source_candidate_count"),
 			Record.SourceCandidateCount
@@ -1976,6 +2769,27 @@ FReply SLLMNPCMotionTestConsole::HandleSaveReport()
 			OfferedIds.Add(MakeShared<FJsonValueString>(CandidateId.ToString()));
 		}
 		Event->SetArrayField(TEXT("offered_candidate_ids"), OfferedIds);
+		TArray<TSharedPtr<FJsonValue>> Exclusions;
+		for (const FLLMNPCCandidateExclusion& Exclusion : Record.CandidateExclusions)
+		{
+			TSharedRef<FJsonObject> ExclusionObject = MakeShared<FJsonObject>();
+			ExclusionObject->SetStringField(
+				TEXT("selection_id"),
+				Exclusion.SelectionId.ToString()
+			);
+			ExclusionObject->SetStringField(
+				TEXT("reason"),
+				Exclusion.Reason.ToString()
+			);
+			Exclusions.Add(MakeShared<FJsonValueObject>(ExclusionObject));
+		}
+		Event->SetArrayField(TEXT("candidate_exclusions"), Exclusions);
+		Event->SetArrayField(TEXT("active_states"), NamesToJsonValues(Record.ActiveStates));
+		Event->SetStringField(TEXT("context_emotion"), Record.ContextEmotion.ToString());
+		Event->SetArrayField(
+			TEXT("available_target_refs"),
+			StringsToJsonValues(Record.AvailableTargetRefs)
+		);
 		Event->SetStringField(
 			TEXT("selected_action_id"),
 			Record.SelectedActionId.ToString()
@@ -2037,10 +2851,279 @@ FReply SLLMNPCMotionTestConsole::HandleSaveReport()
 		);
 		Event->SetStringField(TEXT("validator_result"), Record.ValidatorResult);
 		Event->SetBoolField(TEXT("passed"), Record.bPassed);
-		Event->SetStringField(TEXT("visual_review"), TEXT("pending"));
+		Event->SetBoolField(TEXT("playback_required"), Record.bPlaybackRequired);
+		Event->SetBoolField(TEXT("playback_observed"), Record.bPlaybackObserved);
+		Event->SetBoolField(TEXT("playback_completed"), Record.bPlaybackCompleted);
+		Event->SetNumberField(TEXT("playback_wait_seconds"), Record.PlaybackWaitSeconds);
+		Event->SetStringField(TEXT("playback_wait_result"), Record.PlaybackWaitResult);
+		Event->SetBoolField(TEXT("matrix_case"), Record.bMatrixCase);
+		if (Record.bMatrixCase)
+		{
+			Event->SetStringField(
+				TEXT("matrix_schema_version"),
+				LLMNPCForwardN7Evaluation::GetMatrixSchemaVersion()
+			);
+			Event->SetStringField(TEXT("matrix_case_id"), Record.MatrixCaseId.ToString());
+			Event->SetStringField(
+				TEXT("expected_selection"),
+				LLMNPCForwardN7Evaluation::ExpectedSelectionToString(
+					Record.ExpectedSelection
+				)
+			);
+			Event->SetStringField(TEXT("expected_action_id"), Record.ExpectedActionId.ToString());
+			Event->SetStringField(TEXT("expected_target_ref"), Record.ExpectedTargetRef);
+			Event->SetBoolField(TEXT("check_expected_mirror"), Record.bCheckExpectedMirror);
+			Event->SetBoolField(TEXT("expected_mirror"), Record.bExpectedMirror);
+			Event->SetBoolField(TEXT("check_expected_style"), Record.bCheckExpectedStyle);
+			Event->SetStringField(TEXT("expected_style"), Record.ExpectedStyle.ToString());
+			Event->SetArrayField(
+				TEXT("expected_exclusion_reasons"),
+				NamesToJsonValues(Record.ExpectedExclusionReasons)
+			);
+			Event->SetArrayField(TEXT("coverage_tags"), NamesToJsonValues(Record.CoverageTags));
+			Event->SetBoolField(TEXT("provider_passed"), Record.bProviderPassed);
+			Event->SetBoolField(TEXT("schema_passed"), Record.bSchemaPassed);
+			Event->SetBoolField(TEXT("selection_passed"), Record.bSelectionPassed);
+			Event->SetBoolField(TEXT("execution_passed"), Record.bExecutionPassed);
+			Event->SetBoolField(TEXT("context_passed"), Record.bContextPassed);
+			Event->SetBoolField(TEXT("style_passed"), Record.bStylePassed);
+			Event->SetBoolField(TEXT("validator_passed"), Record.bValidatorPassed);
+			Event->SetStringField(TEXT("failure_reason"), Record.FailureReason);
+		}
+		Event->SetStringField(TEXT("visual_review"), Record.VisualReview);
+		if (Record.VisualReview != TEXT("pending") && OnlineMatrixHumanReviewedAtUtc.GetTicks() > 0)
+		{
+			Event->SetStringField(
+				TEXT("visual_reviewed_at_utc"),
+				OnlineMatrixHumanReviewedAtUtc.ToIso8601()
+			);
+			Event->SetStringField(TEXT("visual_review_source"), TEXT("editor_user"));
+		}
 		OnlineEvaluations.Add(MakeShared<FJsonValueObject>(Event));
 	}
 	Root->SetArrayField(TEXT("online_evaluations"), OnlineEvaluations);
+
+	if (ULLMNPCTemplateLibrarySubsystem* Library = GetTemplateLibrary())
+	{
+		const FLLMNPCForwardN7LibraryAudit Audit =
+			LLMNPCForwardN7Evaluation::AuditMannyLibrary(*Library);
+		TSharedRef<FJsonObject> AuditObject = MakeShared<FJsonObject>();
+		AuditObject->SetStringField(
+			TEXT("schema_version"),
+			LLMNPCForwardN7Evaluation::GetLibraryAuditSchemaVersion()
+		);
+		AuditObject->SetStringField(TEXT("skeleton_profile_id"), Audit.SkeletonProfileId.ToString());
+		AuditObject->SetBoolField(TEXT("passed"), Audit.bPassed);
+		AuditObject->SetNumberField(TEXT("public_action_count"), Audit.PublicActionCount);
+		AuditObject->SetNumberField(TEXT("published_template_count"), Audit.PublishedTemplateCount);
+		AuditObject->SetArrayField(TEXT("public_action_ids"), NamesToJsonValues(Audit.PublicActionIds));
+		AuditObject->SetArrayField(TEXT("published_template_ids"), NamesToJsonValues(Audit.PublishedTemplateIds));
+		AuditObject->SetArrayField(TEXT("missing_public_action_ids"), NamesToJsonValues(Audit.MissingPublicActionIds));
+		AuditObject->SetArrayField(TEXT("unexpected_public_action_ids"), NamesToJsonValues(Audit.UnexpectedPublicActionIds));
+		AuditObject->SetArrayField(TEXT("actions_without_manny_template"), NamesToJsonValues(Audit.ActionsWithoutMannyTemplate));
+		AuditObject->SetArrayField(TEXT("non_manny_template_ids"), NamesToJsonValues(Audit.NonMannyTemplateIds));
+		AuditObject->SetArrayField(TEXT("incomplete_candidate_ids"), NamesToJsonValues(Audit.IncompleteCandidateIds));
+		AuditObject->SetBoolField(TEXT("wave_has_style_variants"), Audit.bWaveHasStyleVariants);
+		AuditObject->SetBoolField(TEXT("clap_has_animation_asset"), Audit.bClapHasAnimationAsset);
+		AuditObject->SetBoolField(TEXT("clap_has_procedural_variant"), Audit.bClapHasProceduralVariant);
+		AuditObject->SetBoolField(TEXT("all_templates_published"), Audit.bAllTemplatesPublished);
+		AuditObject->SetArrayField(TEXT("errors"), StringsToJsonValues(Audit.Errors));
+		AuditObject->SetArrayField(TEXT("warnings"), StringsToJsonValues(Audit.Warnings));
+		Root->SetObjectField(TEXT("forward_n7_library_audit"), AuditObject);
+	}
+
+	TSharedRef<FJsonObject> Matrix = MakeShared<FJsonObject>();
+	Matrix->SetStringField(
+		TEXT("schema_version"),
+		LLMNPCForwardN7Evaluation::GetMatrixSchemaVersion()
+	);
+	Matrix->SetStringField(
+		TEXT("status"),
+		bOnlineMatrixRunning
+			? TEXT("running")
+			: (bOnlineMatrixCompleted
+				? TEXT("complete")
+				: (bOnlineMatrixCancelled ? TEXT("cancelled") : TEXT("not_run")))
+	);
+	Matrix->SetNumberField(TEXT("total_case_count"), OnlineMatrixCases.Num());
+	int32 MatrixCompletedCount = 0;
+	int32 MatrixPassedCount = 0;
+	int32 MatrixSchemaSuccessCount = 0;
+	int32 IllegalCandidateCount = 0;
+	int32 UnnecessaryActionCount = 0;
+	int32 MissedActionCount = 0;
+	int32 TargetErrorCount = 0;
+	int32 ValidatorRejectCount = 0;
+	int32 ExecutionCompleteCount = 0;
+	int32 PlaybackRequiredCount = 0;
+	int32 PlaybackObservedCount = 0;
+	int32 PlaybackCompletedCount = 0;
+	int32 PlaybackTimeoutCount = 0;
+	int32 TotalAttempts = 0;
+	int64 TotalTokens = 0;
+	int32 TokenSampleCount = 0;
+	double LatencySum = 0.0;
+	TArray<float> Latencies;
+	TSet<FName> ExpectedCoverage;
+	TSet<FName> PassedCoverage;
+	TSet<FName> SelectedActions;
+	TArray<FName> CompletedCaseIds;
+	TArray<FName> FailedCaseIds;
+	for (const FLLMNPCForwardN7MatrixCase& TestCase : OnlineMatrixCases)
+	{
+		for (const FName CoverageTag : TestCase.CoverageTags)
+		{
+			ExpectedCoverage.Add(CoverageTag);
+		}
+	}
+	for (const FLLMNPCOnlineEvaluationRecord& Record : OnlineEvaluationRecords)
+	{
+		if (!Record.bMatrixCase)
+		{
+			continue;
+		}
+		++MatrixCompletedCount;
+		MatrixPassedCount += Record.bPassed ? 1 : 0;
+		MatrixSchemaSuccessCount += Record.bResponseSchemaValid ? 1 : 0;
+		IllegalCandidateCount +=
+			!Record.SelectedActionId.IsNone() &&
+			!Record.OfferedCandidateIds.Contains(Record.SelectedActionId)
+				? 1
+				: 0;
+		UnnecessaryActionCount +=
+			Record.ExpectedSelection == ELLMNPCForwardN7ExpectedSelection::NoAction &&
+			!Record.SelectedActionId.IsNone()
+				? 1
+				: 0;
+		MissedActionCount +=
+			Record.ExpectedSelection == ELLMNPCForwardN7ExpectedSelection::ExactAction &&
+			Record.SelectedActionId.IsNone()
+				? 1
+				: 0;
+		TargetErrorCount +=
+			!Record.ExpectedTargetRef.IsEmpty() &&
+			Record.TargetRef != Record.ExpectedTargetRef
+				? 1
+				: 0;
+		ValidatorRejectCount +=
+			Record.ExpectedSelection == ELLMNPCForwardN7ExpectedSelection::ExactAction &&
+			!Record.bValidatorPassed
+				? 1
+				: 0;
+		ExecutionCompleteCount += Record.bExecutionPassed ? 1 : 0;
+		if (Record.bPlaybackRequired)
+		{
+			++PlaybackRequiredCount;
+			PlaybackObservedCount += Record.bPlaybackObserved ? 1 : 0;
+			PlaybackCompletedCount += Record.bPlaybackCompleted ? 1 : 0;
+		}
+		PlaybackTimeoutCount += Record.PlaybackWaitResult == TEXT("timeout") ? 1 : 0;
+		TotalAttempts += Record.AttemptCount;
+		if (Record.TotalTokens >= 0)
+		{
+			TotalTokens += Record.TotalTokens;
+			++TokenSampleCount;
+		}
+		if (Record.TotalLatencySeconds >= 0.0f)
+		{
+			LatencySum += Record.TotalLatencySeconds;
+			Latencies.Add(Record.TotalLatencySeconds);
+		}
+		CompletedCaseIds.Add(Record.MatrixCaseId);
+		if (Record.bPassed)
+		{
+			for (const FName CoverageTag : Record.CoverageTags)
+			{
+				PassedCoverage.Add(CoverageTag);
+			}
+		}
+		else
+		{
+			FailedCaseIds.Add(Record.MatrixCaseId);
+		}
+		if (!Record.SelectedActionId.IsNone())
+		{
+			SelectedActions.Add(Record.SelectedActionId);
+		}
+	}
+	Latencies.Sort();
+	const int32 P95Index = Latencies.IsEmpty()
+		? INDEX_NONE
+		: FMath::Clamp(
+			FMath::CeilToInt(0.95f * Latencies.Num()) - 1,
+			0,
+			Latencies.Num() - 1
+		);
+	TArray<FName> MissingCoverage;
+	for (const FName ExpectedTag : ExpectedCoverage)
+	{
+		if (!PassedCoverage.Contains(ExpectedTag))
+		{
+			MissingCoverage.Add(ExpectedTag);
+		}
+	}
+	TArray<FName> ExpectedCoverageArray = ExpectedCoverage.Array();
+	TArray<FName> PassedCoverageArray = PassedCoverage.Array();
+	TArray<FName> SelectedActionArray = SelectedActions.Array();
+	ExpectedCoverageArray.Sort(FNameLexicalLess());
+	PassedCoverageArray.Sort(FNameLexicalLess());
+	MissingCoverage.Sort(FNameLexicalLess());
+	SelectedActionArray.Sort(FNameLexicalLess());
+	CompletedCaseIds.Sort(FNameLexicalLess());
+	FailedCaseIds.Sort(FNameLexicalLess());
+	const double CompletedDenominator = FMath::Max(MatrixCompletedCount, 1);
+	Matrix->SetNumberField(TEXT("completed_case_count"), MatrixCompletedCount);
+	Matrix->SetNumberField(TEXT("passed_case_count"), MatrixPassedCount);
+	Matrix->SetNumberField(TEXT("failed_case_count"), MatrixCompletedCount - MatrixPassedCount);
+	Matrix->SetBoolField(
+		TEXT("all_cases_passed"),
+		bOnlineMatrixCompleted &&
+		MatrixCompletedCount == OnlineMatrixCases.Num() &&
+		MatrixPassedCount == MatrixCompletedCount
+	);
+	Matrix->SetNumberField(TEXT("pass_rate"), MatrixPassedCount / CompletedDenominator);
+	Matrix->SetNumberField(TEXT("schema_success_rate"), MatrixSchemaSuccessCount / CompletedDenominator);
+	Matrix->SetNumberField(TEXT("illegal_candidate_rate"), IllegalCandidateCount / CompletedDenominator);
+	Matrix->SetNumberField(TEXT("unnecessary_action_rate"), UnnecessaryActionCount / CompletedDenominator);
+	Matrix->SetNumberField(TEXT("missed_action_rate"), MissedActionCount / CompletedDenominator);
+	Matrix->SetNumberField(TEXT("target_error_rate"), TargetErrorCount / CompletedDenominator);
+	Matrix->SetNumberField(TEXT("validator_reject_rate"), ValidatorRejectCount / CompletedDenominator);
+	Matrix->SetNumberField(TEXT("execution_complete_rate"), ExecutionCompleteCount / CompletedDenominator);
+	const double PlaybackDenominator = FMath::Max(PlaybackRequiredCount, 1);
+	Matrix->SetNumberField(TEXT("playback_required_case_count"), PlaybackRequiredCount);
+	Matrix->SetNumberField(TEXT("playback_observed_case_count"), PlaybackObservedCount);
+	Matrix->SetNumberField(TEXT("playback_completed_case_count"), PlaybackCompletedCount);
+	Matrix->SetNumberField(TEXT("playback_timeout_count"), PlaybackTimeoutCount);
+	Matrix->SetNumberField(TEXT("playback_observation_rate"), PlaybackObservedCount / PlaybackDenominator);
+	Matrix->SetNumberField(TEXT("playback_completion_rate"), PlaybackCompletedCount / PlaybackDenominator);
+	Matrix->SetNumberField(TEXT("distinct_selected_action_count"), SelectedActionArray.Num());
+	Matrix->SetNumberField(
+		TEXT("average_latency_seconds"),
+		Latencies.IsEmpty() ? -1.0 : LatencySum / Latencies.Num()
+	);
+	Matrix->SetNumberField(
+		TEXT("p95_latency_seconds"),
+		P95Index == INDEX_NONE ? -1.0 : Latencies[P95Index]
+	);
+	Matrix->SetNumberField(TEXT("total_attempt_count"), TotalAttempts);
+	Matrix->SetNumberField(TEXT("total_tokens"), TokenSampleCount > 0 ? TotalTokens : -1);
+	Matrix->SetNumberField(TEXT("token_sample_count"), TokenSampleCount);
+	Matrix->SetArrayField(TEXT("expected_coverage_tags"), NamesToJsonValues(ExpectedCoverageArray));
+	Matrix->SetArrayField(TEXT("passed_coverage_tags"), NamesToJsonValues(PassedCoverageArray));
+	Matrix->SetArrayField(TEXT("missing_coverage_tags"), NamesToJsonValues(MissingCoverage));
+	Matrix->SetArrayField(TEXT("selected_action_ids"), NamesToJsonValues(SelectedActionArray));
+	Matrix->SetArrayField(TEXT("completed_case_ids"), NamesToJsonValues(CompletedCaseIds));
+	Matrix->SetArrayField(TEXT("failed_case_ids"), NamesToJsonValues(FailedCaseIds));
+	Matrix->SetStringField(TEXT("human_review"), OnlineMatrixHumanReview);
+	if (OnlineMatrixHumanReviewedAtUtc.GetTicks() > 0)
+	{
+		Matrix->SetStringField(
+			TEXT("human_reviewed_at_utc"),
+			OnlineMatrixHumanReviewedAtUtc.ToIso8601()
+		);
+		Matrix->SetStringField(TEXT("human_review_source"), TEXT("editor_user"));
+	}
+	Root->SetObjectField(TEXT("forward_n7_selection_matrix"), Matrix);
 
 	FString Json;
 	if (!FLLMNPCOnlineReportSanitizer::SanitizeAndSerialize(Root, Json))
@@ -2051,15 +3134,27 @@ FReply SLLMNPCMotionTestConsole::HandleSaveReport()
 
 	const FString Directory = FPaths::Combine(
 		FPaths::ProjectSavedDir(),
-		TEXT("LLMNPCActionLayer/ForwardN0/Reports")
+		OnlineMatrixCases.IsEmpty()
+			? TEXT("LLMNPCActionLayer/ForwardN0/Reports")
+			: TEXT("LLMNPCActionLayer/ForwardN7/Reports")
 	);
 	IFileManager::Get().MakeDirectory(*Directory, true);
+	const FString Timestamp =
+		FDateTime::UtcNow().ToString(TEXT("%Y%m%d_%H%M%S"));
+	const FString HumanReviewSuffix =
+		OnlineMatrixHumanReview == TEXT("pending")
+			? FString()
+			: FString::Printf(TEXT("_human_%s"), *OnlineMatrixHumanReview);
+	const FString ReportFilename = OnlineMatrixCases.IsEmpty()
+		? FString::Printf(TEXT("motion_test_%s.json"), *Timestamp)
+		: FString::Printf(
+			TEXT("selection_matrix_%s%s.json"),
+			*Timestamp,
+			*HumanReviewSuffix
+		);
 	const FString ReportPath = FPaths::Combine(
 		Directory,
-		FString::Printf(
-			TEXT("motion_test_%s.json"),
-			*FDateTime::UtcNow().ToString(TEXT("%Y%m%d_%H%M%S"))
-		)
+		ReportFilename
 	);
 	if (!FFileHelper::SaveStringToFile(
 		Json,
@@ -2070,6 +3165,7 @@ FReply SLLMNPCMotionTestConsole::HandleSaveReport()
 		SetStatus(LOCTEXT("ReportWriteFailed", "Motion test report could not be written"), true);
 		return FReply::Handled();
 	}
+	LastSavedReportPath = ReportPath;
 
 	SetStatus(
 		FText::Format(
