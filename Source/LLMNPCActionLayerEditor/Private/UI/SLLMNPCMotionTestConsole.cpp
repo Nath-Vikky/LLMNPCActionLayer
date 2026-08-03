@@ -2,12 +2,16 @@
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Dialogue/LLMNPCDialogueComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Editor.h"
 #include "Engine/GameInstance.h"
 #include "Engine/TargetPoint.h"
 #include "Engine/World.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMemory.h"
 #include "HAL/PlatformTime.h"
@@ -21,6 +25,8 @@
 #include "Online/LLMNPCOnlineReportSanitizer.h"
 #include "Online/LLMNPCOnlineTestConfigLoader.h"
 #include "Skeleton/LLMNPCSkeletonProfile.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Styling/AppStyle.h"
 #include "Templates/LLMNPCTemplateCandidate.h"
 #include "Templates/LLMNPCMotionTemplate.h"
@@ -47,6 +53,140 @@ constexpr double OnlineMatrixPlaybackIdleDwellSeconds = 0.9;
 constexpr double OnlineMatrixNoActionObservationSeconds = 1.25;
 constexpr double OnlineMatrixInterCaseDelaySeconds = 0.15;
 constexpr float OnlineMatrixMinimumRepeatSuppressionSeconds = 5.5f;
+const FName PressureSpawnTag(TEXT("LLMNPC.N8PressureSpawned"));
+
+FString ResolvePressureDesiredLOD(
+	const FLLMNPCForwardN8PressureConfig& Config,
+	int32 ActorIndex
+)
+{
+	if (ActorIndex <= 0)
+	{
+		return TEXT("existing");
+	}
+	if (Config.TargetActorCount < 30)
+	{
+		return TEXT("Full");
+	}
+	const int32 LODIndex = (ActorIndex - 1) % 3;
+	return LODIndex == 0
+		? TEXT("Full")
+		: (LODIndex == 1 ? TEXT("Reduced") : TEXT("Minimal"));
+}
+
+FVector ResolvePressureViewerLocation(UWorld& World, const AActor& Fallback)
+{
+	if (const APlayerController* PlayerController = World.GetFirstPlayerController())
+	{
+		if (const AActor* ViewTarget = PlayerController->GetViewTarget())
+		{
+			return ViewTarget->GetActorLocation();
+		}
+	}
+	return Fallback.GetActorLocation();
+}
+
+float ResolvePressureSpawnRadius(
+	const ULLMNPCMotionComponent& SourceMotion,
+	const FString& DesiredLOD
+)
+{
+	const float FullDistance = FMath::Max(SourceMotion.FullQualityDistanceCm, 0.0f);
+	const float ReducedDistance = FMath::Max(
+		SourceMotion.ReducedQualityDistanceCm,
+		FullDistance
+	);
+	if (DesiredLOD == TEXT("Reduced"))
+	{
+		return FMath::Max(
+			FullDistance + 100.0f,
+			FMath::Lerp(FullDistance, ReducedDistance, 0.5f)
+		);
+	}
+	if (DesiredLOD == TEXT("Minimal"))
+	{
+		return ReducedDistance + 1500.0f;
+	}
+	return FMath::Clamp(FullDistance * 0.5f, 300.0f, 1000.0f);
+}
+
+bool HasPressureArmClearance(UWorld& World, AActor& Actor)
+{
+	const USkeletalMeshComponent* Mesh =
+		Actor.FindComponentByClass<USkeletalMeshComponent>();
+	const FVector Forward = Actor.GetActorForwardVector();
+	const FVector Right = Actor.GetActorRightVector();
+	const auto IsSideClear = [
+		&World,
+		&Actor,
+		Mesh,
+		&Forward,
+		&Right
+	](bool bLeftHand)
+	{
+		const FName ShoulderBone =
+			bLeftHand ? FName(TEXT("upperarm_l")) : FName(TEXT("upperarm_r"));
+		const float SideSign = bLeftHand ? -1.0f : 1.0f;
+		const FVector Start =
+			Mesh &&
+			(
+				Mesh->DoesSocketExist(ShoulderBone) ||
+				Mesh->GetBoneIndex(ShoulderBone) != INDEX_NONE
+			)
+			? Mesh->GetSocketLocation(ShoulderBone)
+			: Actor.GetActorLocation() +
+				FVector::UpVector * 90.0f +
+				Right * SideSign * 22.0f;
+		const FVector Direction =
+			(Forward + Right * SideSign * 0.3f).GetSafeNormal();
+		FCollisionQueryParams QueryParams(
+			SCENE_QUERY_STAT(LLMNPCPressureArmClearance),
+			false,
+			&Actor
+		);
+		FHitResult Hit;
+		return !World.SweepSingleByChannel(
+			Hit,
+			Start,
+			Start + Direction * 95.0f,
+			FQuat::Identity,
+			ECC_Visibility,
+			FCollisionShape::MakeSphere(10.0f),
+			QueryParams
+		);
+	};
+	return IsSideClear(false) && IsSideClear(true);
+}
+
+bool OrientPressureActorForClearance(
+	UWorld& World,
+	AActor& Actor,
+	const FRotator& PreferredRotation
+)
+{
+	constexpr float YawOffsets[] = {
+		0.0f,
+		45.0f,
+		-45.0f,
+		90.0f,
+		-90.0f,
+		135.0f,
+		-135.0f,
+		180.0f
+	};
+	for (const float YawOffset : YawOffsets)
+	{
+		FRotator Candidate = PreferredRotation;
+		Candidate.Yaw = FRotator::NormalizeAxis(Candidate.Yaw + YawOffset);
+		Actor.SetActorRotation(Candidate, ETeleportType::TeleportPhysics);
+		if (HasPressureArmClearance(World, Actor))
+		{
+			return true;
+		}
+	}
+	Actor.SetActorRotation(PreferredRotation, ETeleportType::TeleportPhysics);
+	return false;
+}
 
 bool IsOnlinePlaybackBusy(const FLLMNPCMotionDebugState& Debug)
 {
@@ -584,7 +724,7 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 						SNew(SButton)
 						.IsEnabled_Lambda([this]()
 						{
-							return !bStabilityRunning && !bOnlineRunInFlight && !bSweepRunning;
+							return !bStabilityRunning && !bPressureRunning && !bOnlineRunInFlight && !bSweepRunning;
 						})
 						.ToolTipText(LOCTEXT("RunStabilitySmokeTooltip", "Run the short N8-A validation profile with the formal stability state machine."))
 						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleRunStabilitySmoke)
@@ -597,7 +737,7 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 						SNew(SButton)
 						.IsEnabled_Lambda([this]()
 						{
-							return !bStabilityRunning && !bOnlineRunInFlight && !bSweepRunning;
+							return !bStabilityRunning && !bPressureRunning && !bOnlineRunInFlight && !bSweepRunning;
 						})
 						.ToolTipText(LOCTEXT("RunStabilityFormalTooltip", "Run the locked 30-minute, 500-request N8-A formal stability gate."))
 						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleRunStabilityFormal)
@@ -625,6 +765,7 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 						.IsEnabled_Lambda([this]()
 						{
 							return !bStabilityRunning &&
+								!bPressureRunning &&
 								StabilityReport.bMachinePassed &&
 								StabilityReport.Status == TEXT("complete");
 						})
@@ -638,7 +779,7 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 						SNew(SButton)
 						.IsEnabled_Lambda([this]()
 						{
-							return !bStabilityRunning && StabilityReport.Status == TEXT("complete");
+							return !bStabilityRunning && !bPressureRunning && StabilityReport.Status == TEXT("complete");
 						})
 						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleStabilityVisualFail)
 						[
@@ -650,6 +791,103 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 				[
 					SNew(STextBlock)
 					.Text(this, &SLLMNPCMotionTestConsole::GetStabilityTraceText)
+					.AutoWrapText(true)
+					.Font(FAppStyle::GetFontStyle("MonoFont"))
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 18.0f, 0.0f, 8.0f)
+				[
+					MakeSectionHeader(LOCTEXT("ForwardN8PressureSection", "Forward N8-B Local Pressure"))
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(188.0f, 0.0f, 0.0f, 4.0f)
+				[
+					SNew(SUniformGridPanel)
+					.SlotPadding(FMargin(4.0f, 0.0f))
+					+ SUniformGridPanel::Slot(0, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return !bPressureRunning && !bStabilityRunning &&
+								!bOnlineRunInFlight && !bOnlineMatrixRunning && !bSweepRunning;
+						})
+						.ToolTipText(LOCTEXT("RunPressureSmokeTooltip", "Spawn three managed Manny NPCs and validate the N8-B concurrent runner."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleRunPressureSmoke)
+						[
+							SNew(STextBlock).Text(LOCTEXT("RunPressureSmoke", "Smoke"))
+						]
+					]
+					+ SUniformGridPanel::Slot(1, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return !bPressureRunning && !bStabilityRunning &&
+								!bOnlineRunInFlight && !bOnlineMatrixRunning && !bSweepRunning;
+						})
+						.ToolTipText(LOCTEXT("RunPressureTenTooltip", "Run the locked 10-NPC concurrent local pressure profile."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleRunPressureTenNPC)
+						[
+							SNew(STextBlock).Text(LOCTEXT("RunPressureTen", "10 NPC"))
+						]
+					]
+					+ SUniformGridPanel::Slot(2, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return !bPressureRunning && !bStabilityRunning &&
+								!bOnlineRunInFlight && !bOnlineMatrixRunning && !bSweepRunning;
+						})
+						.ToolTipText(LOCTEXT("RunPressureThirtyTooltip", "Run the locked 30-NPC pressure profile across Full, Reduced, and Minimal motion LOD."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleRunPressureThirtyNPC)
+						[
+							SNew(STextBlock).Text(LOCTEXT("RunPressureThirty", "30 NPC LOD"))
+						]
+					]
+					+ SUniformGridPanel::Slot(3, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]() { return bPressureRunning; })
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleCancelPressure)
+						[
+							SNew(STextBlock).Text(LOCTEXT("CancelPressure", "Cancel"))
+						]
+					]
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(188.0f, 2.0f, 0.0f, 4.0f)
+				[
+					SNew(SUniformGridPanel)
+					.SlotPadding(FMargin(4.0f, 0.0f))
+					+ SUniformGridPanel::Slot(0, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return !bPressureRunning && PressureReport.bMachinePassed &&
+								PressureReport.Status == TEXT("complete");
+						})
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandlePressureVisualPass)
+						[
+							SNew(STextBlock).Text(LOCTEXT("PressureVisualPass", "Visual Pass"))
+						]
+					]
+					+ SUniformGridPanel::Slot(1, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return !bPressureRunning && PressureReport.Status == TEXT("complete");
+						})
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandlePressureVisualFail)
+						[
+							SNew(STextBlock).Text(LOCTEXT("PressureVisualFail", "Visual Fail"))
+						]
+					]
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(188.0f, 5.0f, 0.0f, 4.0f)
+				[
+					SNew(STextBlock)
+					.Text(this, &SLLMNPCMotionTestConsole::GetPressureTraceText)
 					.AutoWrapText(true)
 					.Font(FAppStyle::GetFontStyle("MonoFont"))
 				]
@@ -673,6 +911,10 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 
 SLLMNPCMotionTestConsole::~SLLMNPCMotionTestConsole()
 {
+	if (bPressureRunning)
+	{
+		FinishPressureSession(TEXT("cancelled"), TEXT("LLMNPC_N8_PRESSURE_CONSOLE_CLOSED"));
+	}
 	if (bStabilityRunning)
 	{
 		FinishStabilitySession(TEXT("cancelled"), TEXT("LLMNPC_N8_STABILITY_CONSOLE_CLOSED"));
@@ -750,7 +992,11 @@ void SLLMNPCMotionTestConsole::Tick(
 		}
 	}
 
-	if (bStabilityRunning)
+	if (bPressureRunning)
+	{
+		TickPressureSession(InCurrentTime, InDeltaTime);
+	}
+	else if (bStabilityRunning)
 	{
 		TickStabilitySession(InCurrentTime, InDeltaTime);
 	}
@@ -1060,6 +1306,62 @@ FText SLLMNPCMotionTestConsole::GetStabilityTraceText() const
 	));
 }
 
+FText SLLMNPCMotionTestConsole::GetPressureTraceText() const
+{
+	if (PressureReport.Status == TEXT("not_started"))
+	{
+		return LOCTEXT(
+			"PressureIdleTrace",
+			"Status: idle  Profile: none  Actors: 0  Rounds: 0/0  Human: pending"
+		);
+	}
+
+	auto CountLOD = [this](const FString& LODLevel)
+	{
+		int32 Count = 0;
+		for (const FLLMNPCForwardN8PressureActorRecord& Actor : PressureReport.Actors)
+		{
+			if (Actor.ObservedLODLevels.Contains(LODLevel))
+			{
+				++Count;
+			}
+		}
+		return Count;
+	};
+	return FText::FromString(FString::Printf(
+		TEXT("Status: %s  Outcome: %s  Profile: %s  Human: %s\n")
+		TEXT("Elapsed: %.1f/%.1fs  Actors: %d/%d  Rounds: %d/%d\n")
+		TEXT("Requests: %d/%d  Completed: %d  Rejected: %d  Round: %s\n")
+		TEXT("LOD actors Full/Reduced/Minimal: %d/%d/%d  Queue max/final: %d/%d\n")
+		TEXT("Frames: %d  Max: %.2fms  Baseline P95: %.2fms\n")
+		TEXT("Report: %s"),
+		*PressureReport.Status,
+		*PressureReport.Outcome,
+		*PressureConfig.ProfileName,
+		*PressureReport.HumanReview,
+		PressureReport.ElapsedSeconds,
+		PressureConfig.MinimumDurationSeconds,
+		PressureReport.ManagedActorCount,
+		PressureConfig.TargetActorCount,
+		PressureReport.CompletedRoundCount,
+		PressureConfig.RoundCount,
+		PressureReport.SubmittedRequestCount,
+		LLMNPCForwardN8Pressure::GetExpectedRequestCount(PressureConfig),
+		PressureReport.CompletedRequestCount,
+		PressureReport.RejectedRequestCount,
+		bPressureRoundRunning ? TEXT("active") : TEXT("idle"),
+		CountLOD(TEXT("Full")),
+		CountLOD(TEXT("Reduced")),
+		CountLOD(TEXT("Minimal")),
+		PressureReport.MaxAggregateQueueCount,
+		PressureReport.FinalAggregateQueueCount,
+		PressureReport.FrameSampleCount,
+		PressureReport.MaxFrameTimeMs,
+		PressureReport.BaselineP95FrameTimeMs,
+		PressureReportPath.IsEmpty() ? TEXT("pending") : *PressureReportPath
+	));
+}
+
 FSlateColor SLLMNPCMotionTestConsole::GetStatusColor() const
 {
 	return bStatusError
@@ -1296,6 +1598,14 @@ bool SLLMNPCMotionTestConsole::ApplyContextPreset(
 	ELLMNPCTestContextPreset Preset
 )
 {
+	if (bPressureRunning)
+	{
+		SetStatus(
+			LOCTEXT("PressureBlocksContext", "Cancel N8-B pressure before changing context"),
+			true
+		);
+		return false;
+	}
 	ULLMNPCDialogueComponent* Dialogue = GetSelectedDialogueComponent();
 	if (!Dialogue)
 	{
@@ -1358,6 +1668,14 @@ bool SLLMNPCMotionTestConsole::ApplyContextPreset(
 
 bool SLLMNPCMotionTestConsole::PlaceN3TestTarget()
 {
+	if (bPressureRunning)
+	{
+		SetStatus(
+			LOCTEXT("PressureBlocksTarget", "Cancel N8-B pressure before changing the test target"),
+			true
+		);
+		return false;
+	}
 	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
 	AActor* Owner = Motion ? Motion->GetOwner() : nullptr;
 	UWorld* World = Motion ? Motion->GetWorld() : nullptr;
@@ -1442,6 +1760,14 @@ bool SLLMNPCMotionTestConsole::PlaceN3TestTarget()
 
 bool SLLMNPCMotionTestConsole::ExecuteCurrent(const FString& PresetLabel)
 {
+	if (bPressureRunning)
+	{
+		SetStatus(
+			LOCTEXT("PressureBlocksDirectExecution", "Cancel N8-B pressure before manual execution"),
+			true
+		);
+		return false;
+	}
 	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
 	if (!Motion || !SelectedTemplate.IsValid())
 	{
@@ -2282,7 +2608,7 @@ bool SLLMNPCMotionTestConsole::StartStabilitySession(
 	const FLLMNPCForwardN8StabilityConfig& Config
 )
 {
-	if (bStabilityRunning || bOnlineRunInFlight || bOnlineMatrixRunning || bSweepRunning)
+	if (bStabilityRunning || bPressureRunning || bOnlineRunInFlight || bOnlineMatrixRunning || bSweepRunning)
 	{
 		SetStatus(
 			LOCTEXT("StabilityOtherRunActive", "Finish the active test before starting N8-A stability"),
@@ -2663,6 +2989,969 @@ SLLMNPCMotionTestConsole::FindStabilityTemplateOption(FName TemplateId) const
 	return nullptr;
 }
 
+void SLLMNPCMotionTestConsole::TickPressureSession(
+	double CurrentTime,
+	float DeltaTime
+)
+{
+	if (!GEditor || !GEditor->PlayWorld)
+	{
+		++PressureReport.ActorLossCount;
+		FinishPressureSession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_PRESSURE_PIE_WORLD_LOST")
+		);
+		return;
+	}
+
+	PressureReport.ElapsedSeconds = FMath::Max(
+		CurrentTime - PressureStartedAt,
+		0.0
+	);
+	PressureReport.UpdatedAtUtc = FDateTime::UtcNow();
+	int32 AggregateQueueCount = 0;
+	int32 AggregateActivePlanCount = 0;
+	bool bAllCurrentRequestsComplete = bPressureRoundRunning;
+
+	for (FLLMNPCPressureRuntimeActor& RuntimeActor : PressureActors)
+	{
+		AActor* Actor = RuntimeActor.Actor.Get();
+		ULLMNPCMotionComponent* Motion = RuntimeActor.MotionComponent.Get();
+		if (
+			!Actor ||
+			!Motion ||
+			Actor->GetWorld() != GEditor->PlayWorld ||
+			!PressureReport.Actors.IsValidIndex(RuntimeActor.ReportActorIndex)
+		)
+		{
+			++PressureReport.ActorLossCount;
+			FinishPressureSession(
+				TEXT("failed"),
+				TEXT("LLMNPC_N8_PRESSURE_ACTOR_LOST")
+			);
+			return;
+		}
+
+		FLLMNPCForwardN8PressureActorRecord& ActorRecord =
+			PressureReport.Actors[RuntimeActor.ReportActorIndex];
+		const FLLMNPCMotionDebugState Debug = Motion->GetDebugState();
+		ActorRecord.ObservedLODLevels.AddUnique(Debug.MotionLODLevel);
+		ActorRecord.bPostProcessInstalled = Debug.bPostProcessInstalled;
+		ActorRecord.PostProcessError = Debug.LastPostProcessError;
+		ActorRecord.MaxQueueCount = FMath::Max(
+			ActorRecord.MaxQueueCount,
+			Debug.QueueCount
+		);
+		ActorRecord.MaxActivePlanCount = FMath::Max(
+			ActorRecord.MaxActivePlanCount,
+			Debug.ActivePlanCount
+		);
+		PressureReport.MaxPerActorQueueCount = FMath::Max(
+			PressureReport.MaxPerActorQueueCount,
+			Debug.QueueCount
+		);
+		AggregateQueueCount += Debug.QueueCount;
+		AggregateActivePlanCount += Debug.ActivePlanCount;
+
+		if (ActorRecord.bPostProcessRequired && !Debug.bPostProcessInstalled)
+		{
+			ActorRecord.bPostProcessReady = false;
+			++PressureReport.PostProcessFailureCount;
+			FinishPressureSession(
+				TEXT("failed"),
+				TEXT("LLMNPC_N8_PRESSURE_POST_PROCESS_LOST")
+			);
+			return;
+		}
+
+		if (!bPressureRoundRunning || RuntimeActor.bRequestCompleted)
+		{
+			continue;
+		}
+		bAllCurrentRequestsComplete = false;
+		if (!PressureReport.Requests.IsValidIndex(RuntimeActor.CurrentRequestIndex))
+		{
+			FinishPressureSession(
+				TEXT("failed"),
+				TEXT("LLMNPC_N8_PRESSURE_REQUEST_STATE_INVALID")
+			);
+			return;
+		}
+
+		FLLMNPCForwardN8PressureRequestRecord& Request =
+			PressureReport.Requests[RuntimeActor.CurrentRequestIndex];
+		const bool bBusy = LLMNPCForwardN8Stability::IsPlaybackBusy(Debug);
+		if (bBusy)
+		{
+			if (!RuntimeActor.bPlaybackObserved)
+			{
+				RuntimeActor.bPlaybackObserved = true;
+				Request.bPlaybackObserved = true;
+				++PressureReport.PlaybackObservedCount;
+				++ActorRecord.PlaybackObservedCount;
+			}
+			RuntimeActor.PlaybackIdleSince = 0.0;
+		}
+		else if (RuntimeActor.bPlaybackObserved)
+		{
+			if (RuntimeActor.PlaybackIdleSince <= 0.0)
+			{
+				RuntimeActor.PlaybackIdleSince = CurrentTime;
+			}
+			if (
+				CurrentTime - RuntimeActor.PlaybackIdleSince >=
+				PressureConfig.RecoveryDwellSeconds
+			)
+			{
+				CompletePressureActorRequest(RuntimeActor, CurrentTime);
+			}
+		}
+	}
+
+	LLMNPCForwardN8Pressure::ObserveFrame(
+		PressureReport,
+		DeltaTime,
+		AggregateQueueCount,
+		AggregateActivePlanCount,
+		GetUsedPhysicalMemoryMB()
+	);
+	if (CurrentTime - PressureLastCheckpointAt >= 5.0)
+	{
+		PressureLastCheckpointAt = CurrentTime;
+		SavePressureReport();
+	}
+
+	if (!bPressureWarmupComplete)
+	{
+		if (PressureReport.ElapsedSeconds >= PressureConfig.WarmupSeconds)
+		{
+			if (!CompletePressureWarmup())
+			{
+				FinishPressureSession(
+					TEXT("failed"),
+					TEXT("LLMNPC_N8_PRESSURE_WARMUP_FAILED")
+				);
+			}
+		}
+		return;
+	}
+
+	if (bPressureRoundRunning)
+	{
+		bAllCurrentRequestsComplete = PressureActors.ContainsByPredicate(
+			[](const FLLMNPCPressureRuntimeActor& RuntimeActor)
+			{
+				return !RuntimeActor.bRequestCompleted;
+			}
+		) == false;
+		if (bAllCurrentRequestsComplete)
+		{
+			CompletePressureRound(CurrentTime);
+		}
+		else if (
+			CurrentTime - PressureRoundStartedAt >=
+			PressureConfig.PlaybackTimeoutSeconds
+		)
+		{
+			for (FLLMNPCPressureRuntimeActor& RuntimeActor : PressureActors)
+			{
+				if (
+					!RuntimeActor.bRequestCompleted &&
+					PressureReport.Requests.IsValidIndex(RuntimeActor.CurrentRequestIndex)
+				)
+				{
+					FLLMNPCForwardN8PressureRequestRecord& Request =
+						PressureReport.Requests[RuntimeActor.CurrentRequestIndex];
+					Request.PlaybackWaitSeconds = static_cast<float>(
+						CurrentTime - PressureRoundStartedAt
+					);
+					Request.Error = TEXT("LLMNPC_N8_PRESSURE_PLAYBACK_TIMEOUT");
+				}
+			}
+			FinishPressureSession(
+				TEXT("failed"),
+				TEXT("LLMNPC_N8_PRESSURE_PLAYBACK_TIMEOUT")
+			);
+		}
+		return;
+	}
+
+	if (PressureReport.CompletedRoundCount >= PressureConfig.RoundCount)
+	{
+		if (PressureReport.ElapsedSeconds >= PressureConfig.MinimumDurationSeconds)
+		{
+			FinishPressureSession(TEXT("complete"));
+		}
+		return;
+	}
+
+	if (CurrentTime >= PressureNextRoundTime)
+	{
+		SubmitPressureRound(CurrentTime);
+	}
+}
+
+bool SLLMNPCMotionTestConsole::StartPressureSession(
+	const FLLMNPCForwardN8PressureConfig& Config
+)
+{
+	if (
+		bPressureRunning ||
+		bStabilityRunning ||
+		bOnlineRunInFlight ||
+		bOnlineMatrixRunning ||
+		bSweepRunning
+	)
+	{
+		SetStatus(
+			LOCTEXT("PressureOtherRunActive", "Finish the active test before starting N8-B pressure"),
+			true
+		);
+		return false;
+	}
+
+	FString ConfigError;
+	if (!LLMNPCForwardN8Pressure::ValidateConfig(Config, ConfigError))
+	{
+		SetStatus(FText::FromString(ConfigError), true);
+		return false;
+	}
+
+	ULLMNPCMotionComponent* SourceMotion = GetSelectedMotionComponent();
+	AActor* SourceActor = SourceMotion ? SourceMotion->GetOwner() : nullptr;
+	if (
+		!SourceMotion ||
+		!SourceActor ||
+		!GEditor ||
+		SourceMotion->GetWorld() != GEditor->PlayWorld
+	)
+	{
+		SetStatus(
+			LOCTEXT("PressurePIERequired", "Start PIE and select the Manny NPC before running N8-B pressure"),
+			true
+		);
+		return false;
+	}
+
+	PressureTemplateIds.Reset();
+	for (const TSharedPtr<FLLMNPCTestTemplateOption>& Option : TemplateOptions)
+	{
+		if (
+			Option.IsValid() &&
+			!Option->TemplateId.IsNone() &&
+			!Option->bRequiresTarget
+		)
+		{
+			PressureTemplateIds.AddUnique(Option->TemplateId);
+		}
+	}
+	PressureTemplateIds.Sort(FNameLexicalLess());
+	if (PressureTemplateIds.Num() < Config.MinimumUniqueTemplateCount)
+	{
+		SetStatus(
+			FText::Format(
+				LOCTEXT(
+					"PressureTemplateCoverageMissing",
+					"N8-B needs {0} non-target Published templates; only {1} are available"
+				),
+				FText::AsNumber(Config.MinimumUniqueTemplateCount),
+				FText::AsNumber(PressureTemplateIds.Num())
+			),
+			true
+		);
+		return false;
+	}
+	if (!ApplyContextPreset(ELLMNPCTestContextPreset::Neutral))
+	{
+		return false;
+	}
+
+	PressureConfig = Config;
+	PressureReport = FLLMNPCForwardN8PressureReport();
+	PressureReport.Status = TEXT("running");
+	PressureReport.Outcome = TEXT("pending");
+	PressureReport.Config = Config;
+	if (const ULLMNPCSkeletonProfile* Profile = SourceMotion->SkeletonProfile.LoadSynchronous())
+	{
+		PressureReport.SkeletonProfileId = Profile->ProfileId;
+	}
+	PressureReport.StartedAtUtc = FDateTime::UtcNow();
+	PressureReport.UpdatedAtUtc = PressureReport.StartedAtUtc;
+	PressureReport.StartUsedPhysicalMB = GetUsedPhysicalMemoryMB();
+	PressureReport.PeakUsedPhysicalMB = PressureReport.StartUsedPhysicalMB;
+	PressureStartedAt = FPlatformTime::Seconds();
+	PressureRoundStartedAt = 0.0;
+	PressureNextRoundTime = PressureStartedAt + Config.WarmupSeconds;
+	PressureLastCheckpointAt = PressureStartedAt;
+	PressureRoundIndex = INDEX_NONE;
+	bPressureRunning = true;
+	bPressureWarmupComplete = false;
+	bPressureRoundRunning = false;
+	LoadPressureBaseline();
+
+	const FString Directory = FPaths::Combine(
+		FPaths::ProjectSavedDir(),
+		TEXT("LLMNPCActionLayer/ForwardN8/Reports")
+	);
+	IFileManager::Get().MakeDirectory(*Directory, true);
+	const FString Timestamp =
+		PressureReport.StartedAtUtc.ToString(TEXT("%Y%m%d_%H%M%S"));
+	PressureReportPath = FPaths::Combine(
+		Directory,
+		FString::Printf(
+			TEXT("pressure_%s_%s.json"),
+			*Timestamp,
+			*Config.ProfileName
+		)
+	);
+	if (!SavePressureReport())
+	{
+		bPressureRunning = false;
+		SetStatus(
+			LOCTEXT("PressureInitialReportFailed", "N8-B could not create its checkpoint report"),
+			true
+		);
+		return false;
+	}
+	if (!PreparePressureActors(*SourceActor, *SourceMotion))
+	{
+		FinishPressureSession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_PRESSURE_SPAWN_FAILED")
+		);
+		return false;
+	}
+	SavePressureReport();
+	SetStatus(
+		FText::Format(
+			LOCTEXT("PressureStarted", "N8-B pressure started: {0}"),
+			FText::FromString(Config.ProfileName)
+		),
+		false
+	);
+	return true;
+}
+
+bool SLLMNPCMotionTestConsole::PreparePressureActors(
+	AActor& SourceActor,
+	ULLMNPCMotionComponent& SourceMotion
+)
+{
+	UWorld* World = SourceActor.GetWorld();
+	if (!World || !GEditor || World != GEditor->PlayWorld)
+	{
+		return false;
+	}
+
+	TArray<AActor*> LeftoverActors;
+	UGameplayStatics::GetAllActorsWithTag(&SourceActor, PressureSpawnTag, LeftoverActors);
+	for (AActor* Leftover : LeftoverActors)
+	{
+		if (IsValid(Leftover))
+		{
+			Leftover->Destroy();
+		}
+	}
+
+	PressureActors.Reset();
+	PressureReport.Actors.Reset();
+	PressureReport.ManagedActorCount = 0;
+	PressureReport.SpawnedActorCount = 0;
+	PressureReport.DestroyedSpawnedActorCount = 0;
+	const FVector ViewerLocation = ResolvePressureViewerLocation(*World, SourceActor);
+
+	auto AddActor = [this, &ViewerLocation](
+		AActor& Actor,
+		ULLMNPCMotionComponent& Motion,
+		bool bSpawned,
+		const FString& DesiredLOD,
+		int32 PlacementAttemptCount
+	)
+	{
+		Motion.ResetMotionTestState();
+		FLLMNPCForwardN8PressureActorRecord& ActorRecord =
+			PressureReport.Actors.AddDefaulted_GetRef();
+		ActorRecord.ActorIndex = PressureReport.Actors.Num() - 1;
+		ActorRecord.ActorName = Actor.GetName();
+		ActorRecord.bSpawnedByRunner = bSpawned;
+		ActorRecord.ViewerDistanceCm = FVector::Dist(
+			Actor.GetActorLocation(),
+			ViewerLocation
+		);
+		ActorRecord.PlacementAttemptCount = PlacementAttemptCount;
+		ActorRecord.FacingYawDegrees = Actor.GetActorRotation().Yaw;
+		ActorRecord.DesiredLODLevel = DesiredLOD;
+		const FLLMNPCMotionDebugState Debug = Motion.GetDebugState();
+		ActorRecord.bPostProcessRequired = Debug.bPostProcessInstalled;
+		ActorRecord.bPostProcessInstalled = Debug.bPostProcessInstalled;
+		ActorRecord.bPostProcessReady = true;
+		ActorRecord.PostProcessError = Debug.LastPostProcessError;
+
+		FLLMNPCPressureRuntimeActor& RuntimeActor =
+			PressureActors.AddDefaulted_GetRef();
+		RuntimeActor.Actor = &Actor;
+		RuntimeActor.MotionComponent = &Motion;
+		RuntimeActor.ReportActorIndex = ActorRecord.ActorIndex;
+		RuntimeActor.bSpawnedByRunner = bSpawned;
+	};
+
+	AddActor(SourceActor, SourceMotion, false, TEXT("existing"), 0);
+	for (int32 ActorIndex = 1; ActorIndex < PressureConfig.TargetActorCount; ++ActorIndex)
+	{
+		const FString DesiredLOD = ResolvePressureDesiredLOD(
+			PressureConfig,
+			ActorIndex
+		);
+		const float Radius = ResolvePressureSpawnRadius(SourceMotion, DesiredLOD);
+		AActor* SpawnedActor = nullptr;
+		int32 PlacementAttemptCount = 0;
+		constexpr int32 MaxPlacementAttempts = 12;
+		for (int32 AttemptIndex = 0; AttemptIndex < MaxPlacementAttempts; ++AttemptIndex)
+		{
+			PlacementAttemptCount = AttemptIndex + 1;
+			const float AngleDegrees = FMath::Fmod(
+				static_cast<float>(ActorIndex) * 137.50776f +
+				static_cast<float>(AttemptIndex) * 47.0f,
+				360.0f
+			);
+			const float Angle = FMath::DegreesToRadians(AngleDegrees);
+			FVector SpawnLocation = ViewerLocation + FVector(
+				FMath::Cos(Angle) * Radius,
+				FMath::Sin(Angle) * Radius,
+				0.0f
+			);
+			SpawnLocation.Z = SourceActor.GetActorLocation().Z;
+			FRotator SpawnRotation = (ViewerLocation - SpawnLocation).Rotation();
+			SpawnRotation.Pitch = 0.0f;
+			SpawnRotation.Roll = 0.0f;
+			FActorSpawnParameters SpawnParameters;
+			SpawnParameters.SpawnCollisionHandlingOverride =
+				ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			SpawnParameters.ObjectFlags |= RF_Transient;
+			SpawnParameters.Name = MakeUniqueObjectName(
+				World,
+				SourceActor.GetClass(),
+				FName(*FString::Printf(TEXT("LLMNPC_N8Pressure_%02d"), ActorIndex))
+			);
+			SpawnedActor = World->SpawnActor<AActor>(
+				SourceActor.GetClass(),
+				FTransform(SpawnRotation, SpawnLocation),
+				SpawnParameters
+			);
+			if (!SpawnedActor)
+			{
+				continue;
+			}
+			SpawnedActor->SetActorEnableCollision(false);
+			if (OrientPressureActorForClearance(*World, *SpawnedActor, SpawnRotation))
+			{
+				break;
+			}
+			SpawnedActor->Destroy();
+			SpawnedActor = nullptr;
+		}
+		if (!SpawnedActor)
+		{
+			PressureReport.Errors.AddUnique(
+				TEXT("LLMNPC_N8_PRESSURE_CLEARANCE_UNAVAILABLE")
+			);
+			return false;
+		}
+		SpawnedActor->Tags.AddUnique(PressureSpawnTag);
+		if (ACharacter* Character = Cast<ACharacter>(SpawnedActor))
+		{
+			if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+			{
+				Movement->StopMovementImmediately();
+				Movement->DisableMovement();
+			}
+			if (USkeletalMeshComponent* Mesh = Character->GetMesh())
+			{
+				Mesh->VisibilityBasedAnimTickOption =
+					EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			}
+		}
+
+		ULLMNPCMotionComponent* SpawnedMotion =
+			SpawnedActor->FindComponentByClass<ULLMNPCMotionComponent>();
+		if (!SpawnedMotion)
+		{
+			SpawnedActor->Destroy();
+			return false;
+		}
+		SpawnedMotion->bEnableAutomaticMotionLOD = true;
+		AddActor(
+			*SpawnedActor,
+			*SpawnedMotion,
+			true,
+			DesiredLOD,
+			PlacementAttemptCount
+		);
+		++PressureReport.SpawnedActorCount;
+	}
+
+	PressureReport.ManagedActorCount = PressureActors.Num();
+	return PressureReport.ManagedActorCount == PressureConfig.TargetActorCount;
+}
+
+bool SLLMNPCMotionTestConsole::CompletePressureWarmup()
+{
+	PressureReport.PostProcessFailureCount = 0;
+	for (const FLLMNPCPressureRuntimeActor& RuntimeActor : PressureActors)
+	{
+		const ULLMNPCMotionComponent* Motion = RuntimeActor.MotionComponent.Get();
+		if (
+			!Motion ||
+			!PressureReport.Actors.IsValidIndex(RuntimeActor.ReportActorIndex)
+		)
+		{
+			++PressureReport.ActorLossCount;
+			return false;
+		}
+		FLLMNPCForwardN8PressureActorRecord& ActorRecord =
+			PressureReport.Actors[RuntimeActor.ReportActorIndex];
+		const FLLMNPCMotionDebugState Debug = Motion->GetDebugState();
+		ActorRecord.ObservedLODLevels.AddUnique(Debug.MotionLODLevel);
+		ActorRecord.bPostProcessInstalled = Debug.bPostProcessInstalled;
+		ActorRecord.PostProcessError = Debug.LastPostProcessError;
+		ActorRecord.bPostProcessReady =
+			!ActorRecord.bPostProcessRequired || Debug.bPostProcessInstalled;
+		PressureReport.PostProcessFailureCount +=
+			ActorRecord.bPostProcessReady ? 0 : 1;
+	}
+	bPressureWarmupComplete = PressureReport.PostProcessFailureCount == 0;
+	PressureNextRoundTime = FPlatformTime::Seconds();
+	SavePressureReport();
+	return bPressureWarmupComplete;
+}
+
+bool SLLMNPCMotionTestConsole::SubmitPressureRound(double CurrentTime)
+{
+	if (PressureActors.Num() != PressureConfig.TargetActorCount)
+	{
+		FinishPressureSession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_PRESSURE_ACTOR_COUNT_MISMATCH")
+		);
+		return false;
+	}
+
+	PressureRoundIndex = PressureReport.CompletedRoundCount;
+	PressureRoundStartedAt = CurrentTime;
+	bPressureRoundRunning = true;
+	for (int32 ActorIndex = 0; ActorIndex < PressureActors.Num(); ++ActorIndex)
+	{
+		FLLMNPCPressureRuntimeActor& RuntimeActor = PressureActors[ActorIndex];
+		ULLMNPCMotionComponent* Motion = RuntimeActor.MotionComponent.Get();
+		if (
+			!Motion ||
+			!PressureReport.Actors.IsValidIndex(RuntimeActor.ReportActorIndex)
+		)
+		{
+			++PressureReport.ActorLossCount;
+			FinishPressureSession(
+				TEXT("failed"),
+				TEXT("LLMNPC_N8_PRESSURE_SUBMISSION_TARGET_LOST")
+			);
+			return false;
+		}
+
+		const int32 Sequence = PressureReport.SubmittedRequestCount;
+		const FName TemplateId = PressureTemplateIds[
+			(PressureRoundIndex * PressureActors.Num() + ActorIndex) %
+			PressureTemplateIds.Num()
+		];
+		const FLLMNPCTestTemplateOption* Option =
+			FindStabilityTemplateOption(TemplateId);
+		if (!Option)
+		{
+			FinishPressureSession(
+				TEXT("failed"),
+				TEXT("LLMNPC_N8_PRESSURE_TEMPLATE_OPTION_LOST")
+			);
+			return false;
+		}
+
+		const float Variation = static_cast<float>((Sequence % 3) - 1) * 0.08f;
+		FLLMNPCTemplateModifiers Modifiers;
+		Modifiers.Amplitude = FMath::Clamp(
+			1.0f + Variation,
+			static_cast<float>(Option->AmplitudeRange.X),
+			static_cast<float>(Option->AmplitudeRange.Y)
+		);
+		Modifiers.SpeedScale = FMath::Clamp(
+			1.0f - Variation,
+			static_cast<float>(Option->SpeedRange.X),
+			static_cast<float>(Option->SpeedRange.Y)
+		);
+		Modifiers.DurationScale = FMath::Clamp(
+			1.0f + Variation * 0.5f,
+			static_cast<float>(Option->DurationRange.X),
+			static_cast<float>(Option->DurationRange.Y)
+		);
+		if (!Option->AllowedStyles.IsEmpty())
+		{
+			Modifiers.Style =
+				Option->AllowedStyles[Sequence % Option->AllowedStyles.Num()];
+		}
+		Modifiers.bMirror = Option->bAllowMirror && (Sequence % 2) == 1;
+		Modifiers.RandomSeed = Sequence + 1;
+
+		FLLMNPCForwardN8PressureRequestRecord& Request =
+			PressureReport.Requests.AddDefaulted_GetRef();
+		Request.Sequence = Sequence + 1;
+		Request.Round = PressureRoundIndex + 1;
+		Request.ActorIndex = RuntimeActor.ReportActorIndex;
+		Request.TemplateId = TemplateId;
+		Request.SubmittedAtSeconds = static_cast<float>(
+			CurrentTime - PressureStartedAt
+		);
+		Request.Amplitude = Modifiers.Amplitude;
+		Request.SpeedScale = Modifiers.SpeedScale;
+		Request.DurationScale = Modifiers.DurationScale;
+		Request.Style = Modifiers.Style;
+		Request.bMirror = Modifiers.bMirror;
+		RuntimeActor.CurrentRequestIndex = PressureReport.Requests.Num() - 1;
+		RuntimeActor.PlaybackIdleSince = 0.0;
+		RuntimeActor.bPlaybackObserved = false;
+		RuntimeActor.bRequestCompleted = false;
+		++PressureReport.SubmittedRequestCount;
+		FLLMNPCForwardN8PressureActorRecord& ActorRecord =
+			PressureReport.Actors[RuntimeActor.ReportActorIndex];
+		++ActorRecord.SubmittedRequestCount;
+
+		Request.bAccepted = Motion->SubmitPublishedTemplate(TemplateId, Modifiers);
+		if (!Request.bAccepted)
+		{
+			++PressureReport.RejectedRequestCount;
+			Request.Error = Motion->GetDebugState().LastValidationError;
+			if (Request.Error.IsEmpty())
+			{
+				Request.Error = TEXT("LLMNPC_N8_PRESSURE_SUBMISSION_REJECTED");
+			}
+			FinishPressureSession(TEXT("failed"), Request.Error);
+			return false;
+		}
+		++PressureReport.AcceptedRequestCount;
+		++ActorRecord.AcceptedRequestCount;
+		const FLLMNPCMotionDebugState Debug = Motion->GetDebugState();
+		if (LLMNPCForwardN8Stability::IsPlaybackBusy(Debug))
+		{
+			RuntimeActor.bPlaybackObserved = true;
+			Request.bPlaybackObserved = true;
+			++PressureReport.PlaybackObservedCount;
+			++ActorRecord.PlaybackObservedCount;
+		}
+	}
+	SavePressureReport();
+	return true;
+}
+
+void SLLMNPCMotionTestConsole::CompletePressureActorRequest(
+	FLLMNPCPressureRuntimeActor& RuntimeActor,
+	double CurrentTime
+)
+{
+	ULLMNPCMotionComponent* Motion = RuntimeActor.MotionComponent.Get();
+	if (
+		!Motion ||
+		!PressureReport.Actors.IsValidIndex(RuntimeActor.ReportActorIndex) ||
+		!PressureReport.Requests.IsValidIndex(RuntimeActor.CurrentRequestIndex)
+	)
+	{
+		++PressureReport.ActorLossCount;
+		return;
+	}
+
+	FLLMNPCForwardN8PressureActorRecord& ActorRecord =
+		PressureReport.Actors[RuntimeActor.ReportActorIndex];
+	FLLMNPCForwardN8PressureRequestRecord& Request =
+		PressureReport.Requests[RuntimeActor.CurrentRequestIndex];
+	Request.CompletedAtSeconds = static_cast<float>(
+		CurrentTime - PressureStartedAt
+	);
+	Request.PlaybackWaitSeconds = static_cast<float>(
+		CurrentTime - PressureRoundStartedAt
+	);
+	Request.bPlaybackCompleted = true;
+	++PressureReport.CompletedRequestCount;
+	++ActorRecord.CompletedRequestCount;
+
+	const float Residual = LLMNPCForwardN8Stability::MeasureActionPoseResidual(
+		Motion->GetCurrentSnapshot()
+	);
+	ActorRecord.MaxActionPoseResidual = FMath::Max(
+		ActorRecord.MaxActionPoseResidual,
+		Residual
+	);
+	Request.bPoseRecovered = Residual <= 0.05f;
+	if (!Request.bPoseRecovered)
+	{
+		++PressureReport.PoseRecoveryFailureCount;
+		++ActorRecord.PoseRecoveryFailureCount;
+		Request.Error = FString::Printf(
+			TEXT("LLMNPC_N8_PRESSURE_POSE_NOT_RECOVERED:%.4f"),
+			Residual
+		);
+	}
+	RuntimeActor.bRequestCompleted = true;
+}
+
+void SLLMNPCMotionTestConsole::CompletePressureRound(double CurrentTime)
+{
+	int32 BoundaryQueueCount = 0;
+	int32 BoundaryActivePlanCount = 0;
+	if (!TryGetPressureSchedulerCounts(BoundaryQueueCount, BoundaryActivePlanCount))
+	{
+		++PressureReport.ActorLossCount;
+		FinishPressureSession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_PRESSURE_ACTOR_LOST")
+		);
+		return;
+	}
+	PressureReport.MaxRoundBoundaryAggregateQueueCount = FMath::Max(
+		PressureReport.MaxRoundBoundaryAggregateQueueCount,
+		BoundaryQueueCount
+	);
+	if (BoundaryQueueCount != 0 || BoundaryActivePlanCount != 0)
+	{
+		FinishPressureSession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_PRESSURE_QUEUE_NOT_DRAINED")
+		);
+		return;
+	}
+
+	++PressureReport.CompletedRoundCount;
+	bPressureRoundRunning = false;
+	PressureRoundIndex = INDEX_NONE;
+	PressureRoundStartedAt = 0.0;
+	for (FLLMNPCPressureRuntimeActor& RuntimeActor : PressureActors)
+	{
+		RuntimeActor.CurrentRequestIndex = INDEX_NONE;
+		RuntimeActor.PlaybackIdleSince = 0.0;
+		RuntimeActor.bPlaybackObserved = false;
+		RuntimeActor.bRequestCompleted = false;
+	}
+	const double RoundInterval =
+		PressureConfig.MinimumDurationSeconds /
+		FMath::Max(PressureConfig.RoundCount, 1);
+	PressureNextRoundTime = FMath::Max(
+		CurrentTime + 0.05,
+		PressureStartedAt + PressureReport.CompletedRoundCount * RoundInterval
+	);
+	SavePressureReport();
+	if (PressureReport.PoseRecoveryFailureCount > 0)
+	{
+		FinishPressureSession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_PRESSURE_POSE_NOT_RECOVERED")
+		);
+	}
+}
+
+bool SLLMNPCMotionTestConsole::TryGetPressureSchedulerCounts(
+	int32& OutAggregateQueueCount,
+	int32& OutAggregateActivePlanCount
+) const
+{
+	OutAggregateQueueCount = 0;
+	OutAggregateActivePlanCount = 0;
+	for (const FLLMNPCPressureRuntimeActor& RuntimeActor : PressureActors)
+	{
+		const ULLMNPCMotionComponent* Motion = RuntimeActor.MotionComponent.Get();
+		if (!Motion)
+		{
+			return false;
+		}
+		const FLLMNPCMotionDebugState Debug = Motion->GetDebugState();
+		OutAggregateQueueCount += Debug.QueueCount;
+		OutAggregateActivePlanCount += Debug.ActivePlanCount;
+	}
+	return true;
+}
+
+void SLLMNPCMotionTestConsole::FinishPressureSession(
+	const FString& Status,
+	const FString& Error
+)
+{
+	if (!bPressureRunning)
+	{
+		return;
+	}
+
+	const double Now = FPlatformTime::Seconds();
+	PressureReport.ElapsedSeconds = FMath::Max(Now - PressureStartedAt, 0.0);
+	PressureReport.Status = Status;
+	PressureReport.CompletedAtUtc = FDateTime::UtcNow();
+	PressureReport.UpdatedAtUtc = PressureReport.CompletedAtUtc;
+	PressureReport.EndUsedPhysicalMB = GetUsedPhysicalMemoryMB();
+	if (!TryGetPressureSchedulerCounts(
+		PressureReport.FinalAggregateQueueCount,
+		PressureReport.FinalAggregateActivePlanCount
+	))
+	{
+		++PressureReport.ActorLossCount;
+		PressureReport.Errors.AddUnique(TEXT("LLMNPC_N8_PRESSURE_ACTOR_LOST"));
+	}
+	if (!Error.IsEmpty())
+	{
+		PressureReport.Errors.AddUnique(Error);
+	}
+
+	bPressureRunning = false;
+	bPressureWarmupComplete = false;
+	bPressureRoundRunning = false;
+	PressureRoundIndex = INDEX_NONE;
+	CleanupPressureActors();
+	LLMNPCForwardN8Pressure::Finalize(PressureReport);
+	if (Status == TEXT("cancelled"))
+	{
+		PressureReport.Outcome = TEXT("cancelled");
+		PressureReport.bMachinePassed = false;
+	}
+	else if (Status != TEXT("complete"))
+	{
+		PressureReport.Outcome = TEXT("failed");
+		PressureReport.bMachinePassed = false;
+	}
+	SavePressureReport();
+	PressureActors.Reset();
+
+	SetStatus(
+		FText::Format(
+			Status == TEXT("complete")
+				? LOCTEXT("PressureComplete", "N8-B pressure complete: {0}")
+				: LOCTEXT("PressureStopped", "N8-B pressure stopped: {0}"),
+			FText::FromString(PressureReportPath)
+		),
+		!PressureReport.bMachinePassed
+	);
+}
+
+void SLLMNPCMotionTestConsole::CleanupPressureActors()
+{
+	int32 DestroyedCount = 0;
+	for (FLLMNPCPressureRuntimeActor& RuntimeActor : PressureActors)
+	{
+		if (ULLMNPCMotionComponent* Motion = RuntimeActor.MotionComponent.Get())
+		{
+			Motion->StopAllMotions();
+		}
+		if (!RuntimeActor.bSpawnedByRunner)
+		{
+			continue;
+		}
+		AActor* Actor = RuntimeActor.Actor.Get();
+		if (!IsValid(Actor) || Actor->IsActorBeingDestroyed())
+		{
+			++DestroyedCount;
+			continue;
+		}
+		if (Actor->Destroy())
+		{
+			++DestroyedCount;
+		}
+	}
+	PressureReport.DestroyedSpawnedActorCount = DestroyedCount;
+}
+
+bool SLLMNPCMotionTestConsole::SavePressureReport(
+	const FString& OverridePath
+)
+{
+	const FString Path = OverridePath.IsEmpty()
+		? PressureReportPath
+		: OverridePath;
+	if (Path.IsEmpty())
+	{
+		return false;
+	}
+
+	PressureReport.UpdatedAtUtc = FDateTime::UtcNow();
+	FString Json;
+	if (!FLLMNPCOnlineReportSanitizer::SanitizeAndSerialize(
+		LLMNPCForwardN8Pressure::BuildJson(PressureReport),
+		Json
+	))
+	{
+		return false;
+	}
+	IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), true);
+	if (!FFileHelper::SaveStringToFile(
+		Json,
+		*Path,
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM
+	))
+	{
+		return false;
+	}
+	PressureReportPath = Path;
+	return true;
+}
+
+bool SLLMNPCMotionTestConsole::LoadPressureBaseline()
+{
+	const FString Directory = FPaths::Combine(
+		FPaths::ProjectSavedDir(),
+		TEXT("LLMNPCActionLayer/ForwardN8/Reports")
+	);
+	TArray<FString> Files;
+	IFileManager::Get().FindFiles(
+		Files,
+		*FPaths::Combine(
+			Directory,
+			TEXT("stability_*_formal_30m_500_human_passed.json")
+		),
+		true,
+		false
+	);
+	Files.Sort(TGreater<FString>());
+	for (const FString& File : Files)
+	{
+		FString Json;
+		if (!FFileHelper::LoadFileToString(Json, *FPaths::Combine(Directory, File)))
+		{
+			continue;
+		}
+		TSharedPtr<FJsonObject> Root;
+		const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
+		if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+		{
+			continue;
+		}
+		bool bMachinePassed = false;
+		FString HumanReview;
+		if (
+			!Root->TryGetBoolField(TEXT("machine_passed"), bMachinePassed) ||
+			!bMachinePassed ||
+			!Root->TryGetStringField(TEXT("human_review"), HumanReview) ||
+			HumanReview != TEXT("passed") ||
+			!Root->HasTypedField<EJson::Object>(TEXT("metrics"))
+		)
+		{
+			continue;
+		}
+		double BaselineP95 = 0.0;
+		if (
+			!Root->GetObjectField(TEXT("metrics"))->TryGetNumberField(
+				TEXT("p95_frame_time_ms"),
+				BaselineP95
+			) ||
+			BaselineP95 <= 0.0
+		)
+		{
+			continue;
+		}
+		PressureReport.BaselineReportFile = File;
+		PressureReport.BaselineP95FrameTimeMs = static_cast<float>(BaselineP95);
+		return true;
+	}
+	return false;
+}
+
 void SLLMNPCMotionTestConsole::SetStatus(const FText& Text, bool bError)
 {
 	StatusText = Text;
@@ -2677,6 +3966,13 @@ void SLLMNPCMotionTestConsole::HandleActorChanged(
 	static_cast<void>(SelectInfo);
 	if (Option.IsValid())
 	{
+		if (bPressureRunning)
+		{
+			FinishPressureSession(
+				TEXT("cancelled"),
+				TEXT("LLMNPC_N8_PRESSURE_ACTOR_CHANGED")
+			);
+		}
 		if (bStabilityRunning)
 		{
 			FinishStabilitySession(
@@ -2716,6 +4012,13 @@ void SLLMNPCMotionTestConsole::HandleOverlayChanged(ECheckBoxState State)
 
 FReply SLLMNPCMotionTestConsole::HandleRefresh()
 {
+	if (bPressureRunning)
+	{
+		FinishPressureSession(
+			TEXT("cancelled"),
+			TEXT("LLMNPC_N8_PRESSURE_REFRESHED")
+		);
+	}
 	if (bStabilityRunning)
 	{
 		FinishStabilitySession(
@@ -2733,6 +4036,11 @@ FReply SLLMNPCMotionTestConsole::HandleRefresh()
 
 FReply SLLMNPCMotionTestConsole::HandleExecute()
 {
+	if (bPressureRunning)
+	{
+		SetStatus(LOCTEXT("PressureBlocksExecute", "Cancel N8-B pressure before manual execution"), true);
+		return FReply::Handled();
+	}
 	if (bStabilityRunning)
 	{
 		SetStatus(LOCTEXT("StabilityBlocksExecute", "Cancel N8-A stability before manual execution"), true);
@@ -2745,6 +4053,10 @@ FReply SLLMNPCMotionTestConsole::HandleExecute()
 
 FReply SLLMNPCMotionTestConsole::HandleStop()
 {
+	if (bPressureRunning)
+	{
+		return HandleCancelPressure();
+	}
 	if (bStabilityRunning)
 	{
 		return HandleCancelStability();
@@ -2760,6 +4072,11 @@ FReply SLLMNPCMotionTestConsole::HandleStop()
 
 FReply SLLMNPCMotionTestConsole::HandleMinimum()
 {
+	if (bPressureRunning)
+	{
+		SetStatus(LOCTEXT("PressureBlocksMinimum", "Cancel N8-B pressure before manual execution"), true);
+		return FReply::Handled();
+	}
 	if (bStabilityRunning)
 	{
 		SetStatus(LOCTEXT("StabilityBlocksMinimum", "Cancel N8-A stability before manual execution"), true);
@@ -2775,6 +4092,11 @@ FReply SLLMNPCMotionTestConsole::HandleMinimum()
 
 FReply SLLMNPCMotionTestConsole::HandleDefault()
 {
+	if (bPressureRunning)
+	{
+		SetStatus(LOCTEXT("PressureBlocksDefault", "Cancel N8-B pressure before manual execution"), true);
+		return FReply::Handled();
+	}
 	if (bStabilityRunning)
 	{
 		SetStatus(LOCTEXT("StabilityBlocksDefault", "Cancel N8-A stability before manual execution"), true);
@@ -2790,6 +4112,11 @@ FReply SLLMNPCMotionTestConsole::HandleDefault()
 
 FReply SLLMNPCMotionTestConsole::HandleMaximum()
 {
+	if (bPressureRunning)
+	{
+		SetStatus(LOCTEXT("PressureBlocksMaximum", "Cancel N8-B pressure before manual execution"), true);
+		return FReply::Handled();
+	}
 	if (bStabilityRunning)
 	{
 		SetStatus(LOCTEXT("StabilityBlocksMaximum", "Cancel N8-A stability before manual execution"), true);
@@ -2805,6 +4132,11 @@ FReply SLLMNPCMotionTestConsole::HandleMaximum()
 
 FReply SLLMNPCMotionTestConsole::HandleRunSweep()
 {
+	if (bPressureRunning)
+	{
+		SetStatus(LOCTEXT("PressureBlocksSweep", "Cancel N8-B pressure before running a parameter sweep"), true);
+		return FReply::Handled();
+	}
 	if (bStabilityRunning)
 	{
 		SetStatus(LOCTEXT("StabilityBlocksSweep", "Cancel N8-A stability before running a parameter sweep"), true);
@@ -2859,6 +4191,14 @@ void SLLMNPCMotionTestConsole::ExecuteForwardN1ReviewSample(
 	const FText& Label
 )
 {
+	if (bPressureRunning)
+	{
+		SetStatus(
+			LOCTEXT("PressureBlocksReviewSample", "Cancel N8-B pressure before manual review playback"),
+			true
+		);
+		return;
+	}
 	bSweepRunning = false;
 	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
 	if (!Motion)
@@ -2919,6 +4259,11 @@ FReply SLLMNPCMotionTestConsole::HandleForwardN1CurlReview()
 
 FReply SLLMNPCMotionTestConsole::HandleRunOnlineEvaluation()
 {
+	if (bPressureRunning)
+	{
+		SetStatus(LOCTEXT("PressureBlocksOnline", "Cancel N8-B pressure before starting an online request"), true);
+		return FReply::Handled();
+	}
 	if (bStabilityRunning)
 	{
 		SetStatus(LOCTEXT("StabilityBlocksOnline", "Cancel N8-A stability before starting an online request"), true);
@@ -3055,6 +4400,11 @@ FReply SLLMNPCMotionTestConsole::HandleRunOnlineEvaluation()
 
 FReply SLLMNPCMotionTestConsole::HandleRunOnlineMatrix()
 {
+	if (bPressureRunning)
+	{
+		SetStatus(LOCTEXT("PressureBlocksMatrix", "Cancel N8-B pressure before starting N7-F"), true);
+		return FReply::Handled();
+	}
 	if (bStabilityRunning)
 	{
 		SetStatus(LOCTEXT("StabilityBlocksMatrix", "Cancel N8-A stability before starting N7-F"), true);
@@ -3359,6 +4709,109 @@ FReply SLLMNPCMotionTestConsole::ApplyStabilityHumanReview(
 				? LOCTEXT("StabilityHumanPassLabel", "Pass")
 				: LOCTEXT("StabilityHumanFailLabel", "Fail"),
 			FText::FromString(StabilityReportPath)
+		),
+		Review == TEXT("failed")
+	);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleRunPressureSmoke()
+{
+	StartPressureSession(LLMNPCForwardN8Pressure::BuildSmokeConfig());
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleRunPressureTenNPC()
+{
+	StartPressureSession(LLMNPCForwardN8Pressure::BuildTenNPCConfig());
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleRunPressureThirtyNPC()
+{
+	StartPressureSession(LLMNPCForwardN8Pressure::BuildThirtyNPCLODConfig());
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleCancelPressure()
+{
+	if (!bPressureRunning)
+	{
+		SetStatus(
+			LOCTEXT("PressureNotRunning", "No N8-B pressure session is running"),
+			true
+		);
+		return FReply::Handled();
+	}
+	FinishPressureSession(
+		TEXT("cancelled"),
+		TEXT("LLMNPC_N8_PRESSURE_CANCELLED_BY_USER")
+	);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandlePressureVisualPass()
+{
+	return ApplyPressureHumanReview(TEXT("passed"));
+}
+
+FReply SLLMNPCMotionTestConsole::HandlePressureVisualFail()
+{
+	return ApplyPressureHumanReview(TEXT("failed"));
+}
+
+FReply SLLMNPCMotionTestConsole::ApplyPressureHumanReview(
+	const FString& Review
+)
+{
+	if (bPressureRunning || PressureReport.Status != TEXT("complete"))
+	{
+		SetStatus(
+			LOCTEXT("PressureHumanReviewUnavailable", "Complete an N8-B pressure session before recording visual review"),
+			true
+		);
+		return FReply::Handled();
+	}
+	if (Review == TEXT("passed") && !PressureReport.bMachinePassed)
+	{
+		SetStatus(
+			LOCTEXT("PressureHumanPassBlocked", "Human Visual Pass requires the N8-B machine gate to pass"),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	LLMNPCForwardN8Pressure::ApplyHumanReview(
+		PressureReport,
+		Review,
+		TEXT("editor_user")
+	);
+	FString Stem = FPaths::GetBaseFilename(PressureReportPath);
+	const int32 ExistingReviewIndex = Stem.Find(TEXT("_human_"));
+	if (ExistingReviewIndex != INDEX_NONE)
+	{
+		Stem.LeftInline(ExistingReviewIndex);
+	}
+	const FString ReviewedPath = FPaths::Combine(
+		FPaths::GetPath(PressureReportPath),
+		FString::Printf(TEXT("%s_human_%s.json"), *Stem, *Review)
+	);
+	if (!SavePressureReport(ReviewedPath))
+	{
+		SetStatus(
+			LOCTEXT("PressureHumanReviewSaveFailed", "The human-reviewed N8-B report could not be saved"),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	SetStatus(
+		FText::Format(
+			LOCTEXT("PressureHumanReviewSaved", "N8-B Human Visual {0}. Report: {1}"),
+			Review == TEXT("passed")
+				? LOCTEXT("PressureHumanPassLabel", "Pass")
+				: LOCTEXT("PressureHumanFailLabel", "Fail"),
+			FText::FromString(PressureReportPath)
 		),
 		Review == TEXT("failed")
 	);

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Dialogue/LLMNPCDialogueTypes.h"
 #include "Evaluation/LLMNPCForwardN7Evaluation.h"
+#include "Evaluation/LLMNPCForwardN8Pressure.h"
 #include "Evaluation/LLMNPCForwardN8Stability.h"
 #include "Templates/LLMNPCTemplateCompiler.h"
 #include "Widgets/SCompoundWidget.h"
@@ -157,6 +158,18 @@ struct FLLMNPCOnlineEvaluationRecord
 	FString VisualReview = TEXT("pending");
 };
 
+struct FLLMNPCPressureRuntimeActor
+{
+	TWeakObjectPtr<AActor> Actor;
+	TWeakObjectPtr<ULLMNPCMotionComponent> MotionComponent;
+	int32 ReportActorIndex = INDEX_NONE;
+	int32 CurrentRequestIndex = INDEX_NONE;
+	double PlaybackIdleSince = 0.0;
+	bool bPlaybackObserved = false;
+	bool bRequestCompleted = false;
+	bool bSpawnedByRunner = false;
+};
+
 class SLLMNPCMotionTestConsole final : public SCompoundWidget
 {
 public:
@@ -184,8 +197,12 @@ private:
 	TArray<FLLMNPCOnlineEvaluationRecord> OnlineEvaluationRecords;
 	TArray<FLLMNPCForwardN7MatrixCase> OnlineMatrixCases;
 	TArray<FName> StabilityTemplateIds;
+	TArray<FName> PressureTemplateIds;
+	TArray<FLLMNPCPressureRuntimeActor> PressureActors;
 	FLLMNPCForwardN8StabilityConfig StabilityConfig;
 	FLLMNPCForwardN8StabilityReport StabilityReport;
+	FLLMNPCForwardN8PressureConfig PressureConfig;
+	FLLMNPCForwardN8PressureReport PressureReport;
 	FString TargetRef = TEXT("player");
 	FString OnlineInput = TEXT("Greet the player with a friendly body gesture.");
 	FString ActiveOnlineInputHash;
@@ -210,11 +227,15 @@ private:
 	bool bStabilityWaitingForPlayback = false;
 	bool bStabilityPlaybackObserved = false;
 	bool bStabilityPostProcessRequired = false;
+	bool bPressureRunning = false;
+	bool bPressureWarmupComplete = false;
+	bool bPressureRoundRunning = false;
 	int32 SweepStepIndex = INDEX_NONE;
 	int32 OnlineMatrixCaseIndex = INDEX_NONE;
 	int32 OnlineMatrixPassedCount = 0;
 	int32 OnlineMatrixFailedCount = 0;
 	int32 StabilityRequestIndex = INDEX_NONE;
+	int32 PressureRoundIndex = INDEX_NONE;
 	double SweepNextActionTime = 0.0;
 	double OnlineRequestStartedAt = 0.0;
 	double OnlineMatrixNextCaseTime = 0.0;
@@ -225,6 +246,10 @@ private:
 	double StabilityPlaybackIdleSince = 0.0;
 	double StabilityNextRequestTime = 0.0;
 	double StabilityLastCheckpointAt = 0.0;
+	double PressureStartedAt = 0.0;
+	double PressureRoundStartedAt = 0.0;
+	double PressureNextRoundTime = 0.0;
+	double PressureLastCheckpointAt = 0.0;
 	float RuntimeRefreshAccumulator = 0.0f;
 	FGuid ActiveOnlineRequestId;
 	TWeakObjectPtr<AActor> N3TestTargetActor;
@@ -237,6 +262,7 @@ private:
 	FDateTime OnlineMatrixHumanReviewedAtUtc;
 	FString LastSavedReportPath;
 	FString StabilityReportPath;
+	FString PressureReportPath;
 	FText StatusText;
 	bool bStatusError = false;
 
@@ -251,6 +277,7 @@ private:
 	FText GetDebugStateText() const;
 	FText GetOnlineTraceText() const;
 	FText GetStabilityTraceText() const;
+	FText GetPressureTraceText() const;
 	FSlateColor GetStatusColor() const;
 	ECheckBoxState GetOverlayCheckState() const;
 
@@ -292,6 +319,30 @@ private:
 	);
 	bool SaveStabilityReport(const FString& OverridePath = FString());
 	const FLLMNPCTestTemplateOption* FindStabilityTemplateOption(FName TemplateId) const;
+	void TickPressureSession(double CurrentTime, float DeltaTime);
+	bool StartPressureSession(const FLLMNPCForwardN8PressureConfig& Config);
+	bool PreparePressureActors(
+		AActor& SourceActor,
+		ULLMNPCMotionComponent& SourceMotion
+	);
+	bool CompletePressureWarmup();
+	bool SubmitPressureRound(double CurrentTime);
+	void CompletePressureActorRequest(
+		FLLMNPCPressureRuntimeActor& RuntimeActor,
+		double CurrentTime
+	);
+	void CompletePressureRound(double CurrentTime);
+	bool TryGetPressureSchedulerCounts(
+		int32& OutAggregateQueueCount,
+		int32& OutAggregateActivePlanCount
+	) const;
+	void FinishPressureSession(
+		const FString& Status,
+		const FString& Error = FString()
+	);
+	void CleanupPressureActors();
+	bool SavePressureReport(const FString& OverridePath = FString());
+	bool LoadPressureBaseline();
 	void SetStatus(const FText& Text, bool bError);
 
 	void HandleActorChanged(
@@ -331,5 +382,12 @@ private:
 	FReply HandleStabilityVisualPass();
 	FReply HandleStabilityVisualFail();
 	FReply ApplyStabilityHumanReview(const FString& Review);
+	FReply HandleRunPressureSmoke();
+	FReply HandleRunPressureTenNPC();
+	FReply HandleRunPressureThirtyNPC();
+	FReply HandleCancelPressure();
+	FReply HandlePressureVisualPass();
+	FReply HandlePressureVisualFail();
+	FReply ApplyPressureHumanReview(const FString& Review);
 	FReply HandleSaveReport();
 };

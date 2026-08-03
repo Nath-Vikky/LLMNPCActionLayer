@@ -554,6 +554,28 @@ report error, or warning, followed by explicit human visual approval. The
 strict procedural right-wave comparison ran 55 times without mirroring; other
 eligible templates still exercised mirroring 82 times.
 
+## Forward N8-B Local Multi-NPC Pressure
+
+N8-B adds fixed 3-NPC Smoke, 10-NPC concurrent, and 30-NPC motion-LOD pressure
+profiles to the Motion Test Console. The runner creates transient instances
+from the selected PIE Manny class, submits Published templates concurrently,
+waits for per-NPC playback and pose recovery, verifies actual Full/Reduced/
+Minimal LOD coverage, and destroys only its own spawned actors.
+
+Pressure reports compare P95 frame time with the newest accepted N8-A
+single-NPC report without treating a machine-specific delta as an invented hard
+limit. Minimal-LOD requests may wait for one throttled update, while per-actor
+queue growth and any undrained round/final boundary still fail closed. See
+`Docs/Phases/forward-n8b-local-pressure.md` for locked budgets,
+failure conditions, cleanup ownership, and acceptance evidence.
+
+The final machine run completed 6/6 Smoke, 50/50 10-NPC, and 120/120 30-NPC
+requests without rejection, recovery failure, actor loss, report error, or
+warning. The 30-NPC profile observed 11 Full, 10 Reduced, and 9 Minimal actors;
+its transient queue peak was six, with depth one per Minimal actor and zero at
+every round and final boundary. The separate user-owned visual gate also passed
+and is preserved in a sanitized `editor_user` Human Visual Pass report.
+
 ## Product Runtime
 
 When the owning Actor replicates, `ULLMNPCMotionComponent` replicates only a
