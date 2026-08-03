@@ -330,5 +330,6 @@
 	"catalog_schema_version": "llmnpc.template_catalog.v1",
 	"catalog_revision": 2,
 	"visual_description": "The right arm rises beside the upper body, the open palm faces outward, and the forearm, wrist, and fingers follow the reconstructed Waving reference motion.",
-	"catalog_content_hash": "md5:0a060d6dd2f1c9a6d0777b2f1ec222da"
+	"catalog_content_hash": "md5:0a060d6dd2f1c9a6d0777b2f1ec222da",
+	"variant_difference": "Reference-faithful FK wave used by normal runtime selection."
 }

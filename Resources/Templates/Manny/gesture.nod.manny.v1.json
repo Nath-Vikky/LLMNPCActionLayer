@@ -134,5 +134,6 @@
 		"subtle"
 	],
 	"visual_description": "The head pitches down and returns once while the chest, arms, hands, and lower body remain under their existing animation.",
-	"catalog_content_hash": "md5:b0b41a7ca8bc0102faa3b6d5c803b18a"
+	"catalog_content_hash": "md5:b0b41a7ca8bc0102faa3b6d5c803b18a",
+	"variant_difference": "Compact single-cycle head-only implementation."
 }

@@ -3,7 +3,7 @@
 	"asset_name": "MT_Wave_Right_Manny_Procedural_v1",
 	"template_id": "gesture.wave.right.manny.procedural.v1",
 	"public_action_id": "gesture.wave.right",
-	"semantic_version": "1.1.0",
+	"semantic_version": "1.1.1",
 	"variant_id": "procedural",
 	"variant_weight": 1,
 	"variant_style_tags": [
@@ -72,7 +72,7 @@
 		"amplitude": [ 0.75, 1.2 ],
 		"speed": [ 0.84999999999999998, 1.25 ],
 		"duration": [ 1, 1 ],
-		"allow_mirror": true,
+		"allow_mirror": false,
 		"allowed_styles": [
 			"neutral",
 			"friendly",
@@ -242,7 +242,8 @@
 		"manual_review": "pending_forward_n0_visual_recheck"
 	},
 	"catalog_schema_version": "llmnpc.template_catalog.v1",
-	"catalog_revision": 2,
+	"catalog_revision": 3,
 	"visual_description": "The right hand follows a semantic wave anchor and a bounded lateral arc while wrist keyframes and an open-hand pose maintain the visible wave shape.",
-	"catalog_content_hash": "md5:e5d5d9c36f5168ca6dda64b33fbfd6d6"
+	"catalog_content_hash": "md5:21cd8d913acfccb89f84bd0f0457721f",
+	"variant_difference": "Strict right-hand procedural comparison variant; mirroring disabled after N8 visual rejection."
 }

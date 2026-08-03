@@ -535,6 +535,25 @@ required playbacks with no timeout, and received explicit human visual approval
 for all 17 cases. See `Docs/Phases/forward-n7f-online-selection-matrix.md` for
 the locked contract, report location, and acceptance evidence.
 
+## Forward N8-A Single-Player Stability
+
+N8-A adds checkpointed Smoke and formal stability profiles to the Motion Test
+Console. The formal profile requires at least 30 minutes and exactly 500
+completed valid Published-template requests; it cannot be shortened into a
+passing release report. Each request must be observed in runtime, finish full
+playback, and recover its action-controlled pose before the next request.
+
+Reports include per-request outcomes, frame-time and hitch statistics, queue
+depth, process physical memory, pose recovery, cancellation, and explicit human
+visual review. See `Docs/Phases/forward-n8a-single-player-stability.md` for the
+locked budgets and failure conditions.
+
+The accepted formal run completed 500 of 500 requests over 1800.02 seconds
+across nine Published Manny templates with no rejection, recovery failure,
+report error, or warning, followed by explicit human visual approval. The
+strict procedural right-wave comparison ran 55 times without mirroring; other
+eligible templates still exercised mirroring 82 times.
+
 ## Product Runtime
 
 When the owning Actor replicates, `ULLMNPCMotionComponent` replicates only a

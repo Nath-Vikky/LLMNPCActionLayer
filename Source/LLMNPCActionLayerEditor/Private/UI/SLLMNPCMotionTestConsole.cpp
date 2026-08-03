@@ -9,6 +9,7 @@
 #include "Engine/TargetPoint.h"
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformMemory.h"
 #include "HAL/PlatformTime.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
@@ -55,6 +56,13 @@ bool IsOnlinePlaybackBusy(const FLLMNPCMotionDebugState& Debug)
 		Debug.QueueCount > 0 ||
 		Debug.bMotionRequestInFlight ||
 		Debug.bAnimationAssetPlaying;
+}
+
+double GetUsedPhysicalMemoryMB()
+{
+	constexpr double BytesPerMegabyte = 1024.0 * 1024.0;
+	return static_cast<double>(FPlatformMemory::GetStats().UsedPhysical) /
+		BytesPerMegabyte;
 }
 
 FString PresetName(ELLMNPCTestParameterPreset Preset)
@@ -563,6 +571,88 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 					.AutoWrapText(true)
 					.Font(FAppStyle::GetFontStyle("MonoFont"))
 				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 18.0f, 0.0f, 8.0f)
+				[
+					MakeSectionHeader(LOCTEXT("ForwardN8StabilitySection", "Forward N8 Stability"))
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(188.0f, 0.0f, 0.0f, 4.0f)
+				[
+					SNew(SUniformGridPanel)
+					.SlotPadding(FMargin(4.0f, 0.0f))
+					+ SUniformGridPanel::Slot(0, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return !bStabilityRunning && !bOnlineRunInFlight && !bSweepRunning;
+						})
+						.ToolTipText(LOCTEXT("RunStabilitySmokeTooltip", "Run the short N8-A validation profile with the formal stability state machine."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleRunStabilitySmoke)
+						[
+							SNew(STextBlock).Text(LOCTEXT("RunStabilitySmoke", "Smoke"))
+						]
+					]
+					+ SUniformGridPanel::Slot(1, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return !bStabilityRunning && !bOnlineRunInFlight && !bSweepRunning;
+						})
+						.ToolTipText(LOCTEXT("RunStabilityFormalTooltip", "Run the locked 30-minute, 500-request N8-A formal stability gate."))
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleRunStabilityFormal)
+						[
+							SNew(STextBlock).Text(LOCTEXT("RunStabilityFormal", "30m / 500"))
+						]
+					]
+					+ SUniformGridPanel::Slot(2, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]() { return bStabilityRunning; })
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleCancelStability)
+						[
+							SNew(STextBlock).Text(LOCTEXT("CancelStability", "Cancel"))
+						]
+					]
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(188.0f, 2.0f, 0.0f, 4.0f)
+				[
+					SNew(SUniformGridPanel)
+					.SlotPadding(FMargin(4.0f, 0.0f))
+					+ SUniformGridPanel::Slot(0, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return !bStabilityRunning &&
+								StabilityReport.bMachinePassed &&
+								StabilityReport.Status == TEXT("complete");
+						})
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleStabilityVisualPass)
+						[
+							SNew(STextBlock).Text(LOCTEXT("StabilityVisualPass", "Visual Pass"))
+						]
+					]
+					+ SUniformGridPanel::Slot(1, 0)
+					[
+						SNew(SButton)
+						.IsEnabled_Lambda([this]()
+						{
+							return !bStabilityRunning && StabilityReport.Status == TEXT("complete");
+						})
+						.OnClicked(this, &SLLMNPCMotionTestConsole::HandleStabilityVisualFail)
+						[
+							SNew(STextBlock).Text(LOCTEXT("StabilityVisualFail", "Visual Fail"))
+						]
+					]
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(188.0f, 5.0f, 0.0f, 4.0f)
+				[
+					SNew(STextBlock)
+					.Text(this, &SLLMNPCMotionTestConsole::GetStabilityTraceText)
+					.AutoWrapText(true)
+					.Font(FAppStyle::GetFontStyle("MonoFont"))
+				]
 				+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 14.0f, 0.0f, 8.0f)
 				[
 					MakeSectionHeader(LOCTEXT("DebugSection", "Runtime Debug State"))
@@ -583,6 +673,10 @@ void SLLMNPCMotionTestConsole::Construct(const FArguments& InArgs)
 
 SLLMNPCMotionTestConsole::~SLLMNPCMotionTestConsole()
 {
+	if (bStabilityRunning)
+	{
+		FinishStabilitySession(TEXT("cancelled"), TEXT("LLMNPC_N8_STABILITY_CONSOLE_CLOSED"));
+	}
 	if (ULLMNPCDialogueComponent* Dialogue = ActiveOnlineDialogue.Get())
 	{
 		if (bOnlineRunInFlight)
@@ -654,6 +748,11 @@ void SLLMNPCMotionTestConsole::Tick(
 				}
 			}
 		}
+	}
+
+	if (bStabilityRunning)
+	{
+		TickStabilitySession(InCurrentTime, InDeltaTime);
 	}
 
 	PollOnlineEvaluation();
@@ -913,6 +1012,51 @@ FText SLLMNPCMotionTestConsole::GetOnlineTraceText() const
 		*Debug.LastResolvedTemplateId.ToString(),
 		Debug.bUsedLocalFallback ? TEXT("yes") : TEXT("no"),
 		Debug.LastErrorCode.IsNone() ? TEXT("none") : *Debug.LastErrorCode.ToString()
+	));
+}
+
+FText SLLMNPCMotionTestConsole::GetStabilityTraceText() const
+{
+	if (StabilityReport.Status == TEXT("not_started"))
+	{
+		return LOCTEXT(
+			"StabilityIdleTrace",
+			"Status: idle  Profile: none  Requests: 0/0  Human: pending"
+		);
+	}
+
+	const FLLMNPCForwardN8StabilityRequestRecord* CurrentRequest =
+		StabilityRequestIndex != INDEX_NONE &&
+		StabilityReport.Requests.IsValidIndex(StabilityRequestIndex)
+			? &StabilityReport.Requests[StabilityRequestIndex]
+			: nullptr;
+	const FString CurrentTemplate = CurrentRequest
+		? CurrentRequest->TemplateId.ToString()
+		: TEXT("none");
+	return FText::FromString(FString::Printf(
+		TEXT("Status: %s  Outcome: %s  Profile: %s  Human: %s\n")
+		TEXT("Elapsed: %.1f/%.1fs  Requests: %d/%d  Completed: %d  Rejected: %d\n")
+		TEXT("Current: %s  Style: %s  Mirror: %s\n")
+		TEXT("Frames: %d  Max: %.2fms  Memory: %.1f/%.1f MB\n")
+		TEXT("Report: %s"),
+		*StabilityReport.Status,
+		*StabilityReport.Outcome,
+		*StabilityConfig.ProfileName,
+		*StabilityReport.HumanReview,
+		StabilityReport.ElapsedSeconds,
+		StabilityConfig.MinimumDurationSeconds,
+		StabilityReport.SubmittedRequestCount,
+		StabilityConfig.TargetRequestCount,
+		StabilityReport.CompletedRequestCount,
+		StabilityReport.RejectedRequestCount,
+		*CurrentTemplate,
+		CurrentRequest ? *CurrentRequest->Style.ToString() : TEXT("none"),
+		CurrentRequest && CurrentRequest->bMirror ? TEXT("yes") : TEXT("no"),
+		StabilityReport.FrameSampleCount,
+		StabilityReport.MaxFrameTimeMs,
+		StabilityReport.StartUsedPhysicalMB,
+		StabilityReport.PeakUsedPhysicalMB,
+		StabilityReportPath.IsEmpty() ? TEXT("pending") : *StabilityReportPath
 	));
 }
 
@@ -2013,6 +2157,512 @@ void SLLMNPCMotionTestConsole::RestoreOnlineDialogueSettings()
 	ActiveOnlineDialogue.Reset();
 }
 
+void SLLMNPCMotionTestConsole::TickStabilitySession(
+	double CurrentTime,
+	float DeltaTime
+)
+{
+	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
+	if (!Motion || !Motion->GetOwner())
+	{
+		++StabilityReport.ActorLossCount;
+		FinishStabilitySession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_STABILITY_ACTOR_LOST")
+		);
+		return;
+	}
+
+	StabilityReport.ElapsedSeconds = FMath::Max(
+		CurrentTime - StabilityStartedAt,
+		0.0
+	);
+	StabilityReport.UpdatedAtUtc = FDateTime::UtcNow();
+	const FLLMNPCMotionDebugState Debug = Motion->GetDebugState();
+	LLMNPCForwardN8Stability::ObserveFrame(
+		StabilityReport,
+		DeltaTime,
+		Debug,
+		GetUsedPhysicalMemoryMB()
+	);
+
+	if (bStabilityPostProcessRequired && !Debug.bPostProcessInstalled)
+	{
+		++StabilityReport.PostProcessLossCount;
+		FinishStabilitySession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_STABILITY_POST_PROCESS_LOST")
+		);
+		return;
+	}
+
+	if (CurrentTime - StabilityLastCheckpointAt >= 5.0)
+	{
+		StabilityLastCheckpointAt = CurrentTime;
+		SaveStabilityReport();
+	}
+
+	if (bStabilityWaitingForPlayback)
+	{
+		if (!StabilityReport.Requests.IsValidIndex(StabilityRequestIndex))
+		{
+			FinishStabilitySession(
+				TEXT("failed"),
+				TEXT("LLMNPC_N8_STABILITY_REQUEST_STATE_INVALID")
+			);
+			return;
+		}
+
+		FLLMNPCForwardN8StabilityRequestRecord& Request =
+			StabilityReport.Requests[StabilityRequestIndex];
+		const bool bBusy = LLMNPCForwardN8Stability::IsPlaybackBusy(Debug);
+		if (bBusy)
+		{
+			if (!bStabilityPlaybackObserved)
+			{
+				bStabilityPlaybackObserved = true;
+				Request.bPlaybackObserved = true;
+				++StabilityReport.PlaybackObservedCount;
+			}
+			StabilityPlaybackIdleSince = 0.0;
+		}
+		else if (bStabilityPlaybackObserved)
+		{
+			if (StabilityPlaybackIdleSince <= 0.0)
+			{
+				StabilityPlaybackIdleSince = CurrentTime;
+			}
+			if (
+				CurrentTime - StabilityPlaybackIdleSince >=
+				StabilityConfig.RecoveryDwellSeconds
+			)
+			{
+				CompleteCurrentStabilityRequest(CurrentTime);
+			}
+		}
+
+		if (
+			bStabilityRunning &&
+			bStabilityWaitingForPlayback &&
+			CurrentTime - StabilityRequestStartedAt >=
+			StabilityConfig.PlaybackTimeoutSeconds
+		)
+		{
+			Request.PlaybackWaitSeconds = static_cast<float>(
+				CurrentTime - StabilityRequestStartedAt
+			);
+			Request.Error = TEXT("LLMNPC_N8_STABILITY_PLAYBACK_TIMEOUT");
+			FinishStabilitySession(TEXT("failed"), Request.Error);
+		}
+		return;
+	}
+
+	if (
+		StabilityReport.CompletedRequestCount >=
+		StabilityConfig.TargetRequestCount
+	)
+	{
+		if (
+			StabilityReport.ElapsedSeconds >=
+			StabilityConfig.MinimumDurationSeconds
+		)
+		{
+			FinishStabilitySession(TEXT("complete"));
+		}
+		return;
+	}
+
+	if (CurrentTime >= StabilityNextRequestTime)
+	{
+		SubmitNextStabilityRequest(CurrentTime);
+	}
+}
+
+bool SLLMNPCMotionTestConsole::StartStabilitySession(
+	const FLLMNPCForwardN8StabilityConfig& Config
+)
+{
+	if (bStabilityRunning || bOnlineRunInFlight || bOnlineMatrixRunning || bSweepRunning)
+	{
+		SetStatus(
+			LOCTEXT("StabilityOtherRunActive", "Finish the active test before starting N8-A stability"),
+			true
+		);
+		return false;
+	}
+
+	FString ConfigError;
+	if (!LLMNPCForwardN8Stability::ValidateConfig(Config, ConfigError))
+	{
+		SetStatus(FText::FromString(ConfigError), true);
+		return false;
+	}
+
+	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
+	AActor* Owner = Motion ? Motion->GetOwner() : nullptr;
+	if (!Motion || !Owner || !GEditor || Motion->GetWorld() != GEditor->PlayWorld)
+	{
+		SetStatus(
+			LOCTEXT("StabilityPIERequired", "Start PIE and select the Manny NPC before running N8-A stability"),
+			true
+		);
+		return false;
+	}
+
+	StabilityTemplateIds.Reset();
+	for (const TSharedPtr<FLLMNPCTestTemplateOption>& Option : TemplateOptions)
+	{
+		if (
+			Option.IsValid() &&
+			!Option->TemplateId.IsNone() &&
+			!Option->bRequiresTarget
+		)
+		{
+			StabilityTemplateIds.AddUnique(Option->TemplateId);
+		}
+	}
+	StabilityTemplateIds.Sort(FNameLexicalLess());
+	if (StabilityTemplateIds.Num() < Config.MinimumUniqueTemplateCount)
+	{
+		SetStatus(
+			FText::Format(
+				LOCTEXT(
+					"StabilityTemplateCoverageMissing",
+					"N8-A needs {0} non-target Published templates; only {1} are available"
+				),
+				FText::AsNumber(Config.MinimumUniqueTemplateCount),
+				FText::AsNumber(StabilityTemplateIds.Num())
+			),
+			true
+		);
+		return false;
+	}
+
+	ApplyContextPreset(ELLMNPCTestContextPreset::Neutral);
+	Motion->ResetMotionTestState();
+	StabilityConfig = Config;
+	StabilityReport = FLLMNPCForwardN8StabilityReport();
+	StabilityReport.Status = TEXT("running");
+	StabilityReport.Outcome = TEXT("pending");
+	StabilityReport.Config = Config;
+	StabilityReport.ActorName = Owner->GetName();
+	if (const ULLMNPCSkeletonProfile* Profile = Motion->SkeletonProfile.LoadSynchronous())
+	{
+		StabilityReport.SkeletonProfileId = Profile->ProfileId;
+	}
+	StabilityReport.StartedAtUtc = FDateTime::UtcNow();
+	StabilityReport.UpdatedAtUtc = StabilityReport.StartedAtUtc;
+	StabilityReport.StartUsedPhysicalMB = GetUsedPhysicalMemoryMB();
+	StabilityReport.PeakUsedPhysicalMB = StabilityReport.StartUsedPhysicalMB;
+
+	StabilityStartedAt = FPlatformTime::Seconds();
+	StabilityRequestStartedAt = 0.0;
+	StabilityPlaybackIdleSince = 0.0;
+	StabilityNextRequestTime = StabilityStartedAt;
+	StabilityLastCheckpointAt = StabilityStartedAt;
+	StabilityRequestIndex = INDEX_NONE;
+	bStabilityRunning = true;
+	bStabilityWaitingForPlayback = false;
+	bStabilityPlaybackObserved = false;
+	bStabilityPostProcessRequired = Motion->GetDebugState().bPostProcessInstalled;
+
+	const FString Directory = FPaths::Combine(
+		FPaths::ProjectSavedDir(),
+		TEXT("LLMNPCActionLayer/ForwardN8/Reports")
+	);
+	IFileManager::Get().MakeDirectory(*Directory, true);
+	const FString Timestamp =
+		StabilityReport.StartedAtUtc.ToString(TEXT("%Y%m%d_%H%M%S"));
+	StabilityReportPath = FPaths::Combine(
+		Directory,
+		FString::Printf(
+			TEXT("stability_%s_%s.json"),
+			*Timestamp,
+			*Config.ProfileName
+		)
+	);
+	if (!SaveStabilityReport())
+	{
+		bStabilityRunning = false;
+		SetStatus(
+			LOCTEXT("StabilityInitialReportFailed", "N8-A could not create its checkpoint report"),
+			true
+		);
+		return false;
+	}
+
+	SetStatus(
+		FText::Format(
+			LOCTEXT("StabilityStarted", "N8-A stability started: {0}"),
+			FText::FromString(Config.ProfileName)
+		),
+		false
+	);
+	return true;
+}
+
+bool SLLMNPCMotionTestConsole::SubmitNextStabilityRequest(double CurrentTime)
+{
+	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
+	if (!Motion || StabilityTemplateIds.IsEmpty())
+	{
+		FinishStabilitySession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_STABILITY_SUBMISSION_TARGET_LOST")
+		);
+		return false;
+	}
+
+	const int32 Sequence = StabilityReport.SubmittedRequestCount;
+	const FName TemplateId =
+		StabilityTemplateIds[Sequence % StabilityTemplateIds.Num()];
+	const FLLMNPCTestTemplateOption* Option =
+		FindStabilityTemplateOption(TemplateId);
+	if (!Option)
+	{
+		FinishStabilitySession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_STABILITY_TEMPLATE_OPTION_LOST")
+		);
+		return false;
+	}
+
+	const float Variation = static_cast<float>((Sequence % 3) - 1) * 0.1f;
+	FLLMNPCTemplateModifiers Modifiers;
+	Modifiers.Amplitude = FMath::Clamp(
+		1.0f + Variation,
+		static_cast<float>(Option->AmplitudeRange.X),
+		static_cast<float>(Option->AmplitudeRange.Y)
+	);
+	Modifiers.SpeedScale = FMath::Clamp(
+		1.0f - Variation,
+		static_cast<float>(Option->SpeedRange.X),
+		static_cast<float>(Option->SpeedRange.Y)
+	);
+	Modifiers.DurationScale = FMath::Clamp(
+		1.0f + Variation * 0.5f,
+		static_cast<float>(Option->DurationRange.X),
+		static_cast<float>(Option->DurationRange.Y)
+	);
+	if (!Option->AllowedStyles.IsEmpty())
+	{
+		Modifiers.Style =
+			Option->AllowedStyles[Sequence % Option->AllowedStyles.Num()];
+	}
+	Modifiers.bMirror = Option->bAllowMirror && (Sequence % 2) == 1;
+	Modifiers.RandomSeed = Sequence + 1;
+
+	FLLMNPCForwardN8StabilityRequestRecord& Record =
+		StabilityReport.Requests.AddDefaulted_GetRef();
+	Record.Sequence = Sequence + 1;
+	Record.TemplateId = TemplateId;
+	Record.SubmittedAtSeconds = static_cast<float>(
+		CurrentTime - StabilityStartedAt
+	);
+	Record.Amplitude = Modifiers.Amplitude;
+	Record.SpeedScale = Modifiers.SpeedScale;
+	Record.DurationScale = Modifiers.DurationScale;
+	Record.Style = Modifiers.Style;
+	Record.bMirror = Modifiers.bMirror;
+	StabilityRequestIndex = StabilityReport.Requests.Num() - 1;
+	++StabilityReport.SubmittedRequestCount;
+
+	Record.bAccepted = Motion->SubmitPublishedTemplate(TemplateId, Modifiers);
+	if (!Record.bAccepted)
+	{
+		++StabilityReport.RejectedRequestCount;
+		Record.Error = Motion->GetDebugState().LastValidationError;
+		if (Record.Error.IsEmpty())
+		{
+			Record.Error = TEXT("LLMNPC_N8_STABILITY_SUBMISSION_REJECTED");
+		}
+		FinishStabilitySession(TEXT("failed"), Record.Error);
+		return false;
+	}
+
+	++StabilityReport.AcceptedRequestCount;
+	bStabilityWaitingForPlayback = true;
+	bStabilityPlaybackObserved = false;
+	StabilityRequestStartedAt = CurrentTime;
+	StabilityPlaybackIdleSince = 0.0;
+	const FLLMNPCMotionDebugState Debug = Motion->GetDebugState();
+	if (LLMNPCForwardN8Stability::IsPlaybackBusy(Debug))
+	{
+		bStabilityPlaybackObserved = true;
+		Record.bPlaybackObserved = true;
+		++StabilityReport.PlaybackObservedCount;
+	}
+	SaveStabilityReport();
+	return true;
+}
+
+void SLLMNPCMotionTestConsole::CompleteCurrentStabilityRequest(
+	double CurrentTime
+)
+{
+	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
+	if (!Motion || !StabilityReport.Requests.IsValidIndex(StabilityRequestIndex))
+	{
+		FinishStabilitySession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_STABILITY_COMPLETION_STATE_INVALID")
+		);
+		return;
+	}
+
+	FLLMNPCForwardN8StabilityRequestRecord& Record =
+		StabilityReport.Requests[StabilityRequestIndex];
+	Record.CompletedAtSeconds = static_cast<float>(
+		CurrentTime - StabilityStartedAt
+	);
+	Record.PlaybackWaitSeconds = static_cast<float>(
+		CurrentTime - StabilityRequestStartedAt
+	);
+	Record.bPlaybackCompleted = true;
+	++StabilityReport.CompletedRequestCount;
+
+	const float Residual =
+		LLMNPCForwardN8Stability::MeasureActionPoseResidual(
+			Motion->GetCurrentSnapshot()
+		);
+	StabilityReport.MaxActionPoseResidual = FMath::Max(
+		StabilityReport.MaxActionPoseResidual,
+		Residual
+	);
+	Record.bPoseRecovered = Residual <= 0.05f;
+	if (!Record.bPoseRecovered)
+	{
+		++StabilityReport.PoseRecoveryFailureCount;
+		Record.Error = FString::Printf(
+			TEXT("LLMNPC_N8_STABILITY_POSE_NOT_RECOVERED:%.4f"),
+			Residual
+		);
+	}
+
+	bStabilityWaitingForPlayback = false;
+	bStabilityPlaybackObserved = false;
+	StabilityRequestStartedAt = 0.0;
+	StabilityPlaybackIdleSince = 0.0;
+	StabilityRequestIndex = INDEX_NONE;
+	const double RequestInterval =
+		StabilityConfig.MinimumDurationSeconds /
+		FMath::Max(StabilityConfig.TargetRequestCount, 1);
+	StabilityNextRequestTime = FMath::Max(
+		CurrentTime + 0.05,
+		StabilityStartedAt +
+			StabilityReport.CompletedRequestCount * RequestInterval
+	);
+	SaveStabilityReport();
+
+	if (StabilityReport.PoseRecoveryFailureCount > 0)
+	{
+		FinishStabilitySession(
+			TEXT("failed"),
+			TEXT("LLMNPC_N8_STABILITY_POSE_NOT_RECOVERED")
+		);
+	}
+}
+
+void SLLMNPCMotionTestConsole::FinishStabilitySession(
+	const FString& Status,
+	const FString& Error
+)
+{
+	if (!bStabilityRunning)
+	{
+		return;
+	}
+
+	const double Now = FPlatformTime::Seconds();
+	StabilityReport.ElapsedSeconds = FMath::Max(Now - StabilityStartedAt, 0.0);
+	StabilityReport.Status = Status;
+	StabilityReport.CompletedAtUtc = FDateTime::UtcNow();
+	StabilityReport.UpdatedAtUtc = StabilityReport.CompletedAtUtc;
+	StabilityReport.EndUsedPhysicalMB = GetUsedPhysicalMemoryMB();
+	if (!Error.IsEmpty())
+	{
+		StabilityReport.Errors.AddUnique(Error);
+	}
+
+	bStabilityRunning = false;
+	bStabilityWaitingForPlayback = false;
+	bStabilityPlaybackObserved = false;
+	StabilityRequestIndex = INDEX_NONE;
+	if (ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent())
+	{
+		Motion->StopAllMotions();
+	}
+	LLMNPCForwardN8Stability::Finalize(StabilityReport);
+	if (Status == TEXT("cancelled"))
+	{
+		StabilityReport.Outcome = TEXT("cancelled");
+		StabilityReport.bMachinePassed = false;
+	}
+	else if (Status != TEXT("complete"))
+	{
+		StabilityReport.Outcome = TEXT("failed");
+		StabilityReport.bMachinePassed = false;
+	}
+	SaveStabilityReport();
+
+	SetStatus(
+		FText::Format(
+			Status == TEXT("complete")
+				? LOCTEXT("StabilityComplete", "N8-A stability complete: {0}")
+				: LOCTEXT("StabilityStopped", "N8-A stability stopped: {0}"),
+			FText::FromString(StabilityReportPath)
+		),
+		!StabilityReport.bMachinePassed
+	);
+}
+
+bool SLLMNPCMotionTestConsole::SaveStabilityReport(
+	const FString& OverridePath
+)
+{
+	const FString Path = OverridePath.IsEmpty()
+		? StabilityReportPath
+		: OverridePath;
+	if (Path.IsEmpty())
+	{
+		return false;
+	}
+
+	StabilityReport.UpdatedAtUtc = FDateTime::UtcNow();
+	FString Json;
+	if (!FLLMNPCOnlineReportSanitizer::SanitizeAndSerialize(
+		LLMNPCForwardN8Stability::BuildJson(StabilityReport),
+		Json
+	))
+	{
+		return false;
+	}
+	IFileManager::Get().MakeDirectory(*FPaths::GetPath(Path), true);
+	if (!FFileHelper::SaveStringToFile(
+		Json,
+		*Path,
+		FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM
+	))
+	{
+		return false;
+	}
+	StabilityReportPath = Path;
+	return true;
+}
+
+const FLLMNPCTestTemplateOption*
+SLLMNPCMotionTestConsole::FindStabilityTemplateOption(FName TemplateId) const
+{
+	for (const TSharedPtr<FLLMNPCTestTemplateOption>& Option : TemplateOptions)
+	{
+		if (Option.IsValid() && Option->TemplateId == TemplateId)
+		{
+			return Option.Get();
+		}
+	}
+	return nullptr;
+}
+
 void SLLMNPCMotionTestConsole::SetStatus(const FText& Text, bool bError)
 {
 	StatusText = Text;
@@ -2027,6 +2677,13 @@ void SLLMNPCMotionTestConsole::HandleActorChanged(
 	static_cast<void>(SelectInfo);
 	if (Option.IsValid())
 	{
+		if (bStabilityRunning)
+		{
+			FinishStabilitySession(
+				TEXT("cancelled"),
+				TEXT("LLMNPC_N8_STABILITY_ACTOR_CHANGED")
+			);
+		}
 		if (bOnlineRunInFlight || bOnlineMatrixRunning)
 		{
 			HandleCancelOnlineEvaluation();
@@ -2059,6 +2716,13 @@ void SLLMNPCMotionTestConsole::HandleOverlayChanged(ECheckBoxState State)
 
 FReply SLLMNPCMotionTestConsole::HandleRefresh()
 {
+	if (bStabilityRunning)
+	{
+		FinishStabilitySession(
+			TEXT("cancelled"),
+			TEXT("LLMNPC_N8_STABILITY_REFRESHED")
+		);
+	}
 	if (bOnlineRunInFlight || bOnlineMatrixRunning)
 	{
 		HandleCancelOnlineEvaluation();
@@ -2069,6 +2733,11 @@ FReply SLLMNPCMotionTestConsole::HandleRefresh()
 
 FReply SLLMNPCMotionTestConsole::HandleExecute()
 {
+	if (bStabilityRunning)
+	{
+		SetStatus(LOCTEXT("StabilityBlocksExecute", "Cancel N8-A stability before manual execution"), true);
+		return FReply::Handled();
+	}
 	bSweepRunning = false;
 	ExecuteCurrent(TEXT("custom"));
 	return FReply::Handled();
@@ -2076,6 +2745,10 @@ FReply SLLMNPCMotionTestConsole::HandleExecute()
 
 FReply SLLMNPCMotionTestConsole::HandleStop()
 {
+	if (bStabilityRunning)
+	{
+		return HandleCancelStability();
+	}
 	bSweepRunning = false;
 	if (ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent())
 	{
@@ -2087,6 +2760,11 @@ FReply SLLMNPCMotionTestConsole::HandleStop()
 
 FReply SLLMNPCMotionTestConsole::HandleMinimum()
 {
+	if (bStabilityRunning)
+	{
+		SetStatus(LOCTEXT("StabilityBlocksMinimum", "Cancel N8-A stability before manual execution"), true);
+		return FReply::Handled();
+	}
 	bSweepRunning = false;
 	if (ApplyPreset(ELLMNPCTestParameterPreset::Minimum))
 	{
@@ -2097,6 +2775,11 @@ FReply SLLMNPCMotionTestConsole::HandleMinimum()
 
 FReply SLLMNPCMotionTestConsole::HandleDefault()
 {
+	if (bStabilityRunning)
+	{
+		SetStatus(LOCTEXT("StabilityBlocksDefault", "Cancel N8-A stability before manual execution"), true);
+		return FReply::Handled();
+	}
 	bSweepRunning = false;
 	if (ApplyPreset(ELLMNPCTestParameterPreset::Default))
 	{
@@ -2107,6 +2790,11 @@ FReply SLLMNPCMotionTestConsole::HandleDefault()
 
 FReply SLLMNPCMotionTestConsole::HandleMaximum()
 {
+	if (bStabilityRunning)
+	{
+		SetStatus(LOCTEXT("StabilityBlocksMaximum", "Cancel N8-A stability before manual execution"), true);
+		return FReply::Handled();
+	}
 	bSweepRunning = false;
 	if (ApplyPreset(ELLMNPCTestParameterPreset::Maximum))
 	{
@@ -2117,6 +2805,11 @@ FReply SLLMNPCMotionTestConsole::HandleMaximum()
 
 FReply SLLMNPCMotionTestConsole::HandleRunSweep()
 {
+	if (bStabilityRunning)
+	{
+		SetStatus(LOCTEXT("StabilityBlocksSweep", "Cancel N8-A stability before running a parameter sweep"), true);
+		return FReply::Handled();
+	}
 	ULLMNPCMotionComponent* Motion = GetSelectedMotionComponent();
 	if (!Motion || !SelectedTemplate.IsValid())
 	{
@@ -2226,6 +2919,11 @@ FReply SLLMNPCMotionTestConsole::HandleForwardN1CurlReview()
 
 FReply SLLMNPCMotionTestConsole::HandleRunOnlineEvaluation()
 {
+	if (bStabilityRunning)
+	{
+		SetStatus(LOCTEXT("StabilityBlocksOnline", "Cancel N8-A stability before starting an online request"), true);
+		return FReply::Handled();
+	}
 	if (bOnlineMatrixWaitingForPlayback)
 	{
 		SetStatus(
@@ -2357,6 +3055,11 @@ FReply SLLMNPCMotionTestConsole::HandleRunOnlineEvaluation()
 
 FReply SLLMNPCMotionTestConsole::HandleRunOnlineMatrix()
 {
+	if (bStabilityRunning)
+	{
+		SetStatus(LOCTEXT("StabilityBlocksMatrix", "Cancel N8-A stability before starting N7-F"), true);
+		return FReply::Handled();
+	}
 	if (bOnlineRunInFlight || bOnlineMatrixRunning)
 	{
 		SetStatus(LOCTEXT("OnlineMatrixAlreadyRunning", "An online run is already in flight"), true);
@@ -2565,6 +3268,100 @@ FReply SLLMNPCMotionTestConsole::HandleCancelOnlineEvaluation()
 	{
 		SetStatus(LOCTEXT("OnlineEvaluationCancelled", "Online evaluation cancelled"), false);
 	}
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleRunStabilitySmoke()
+{
+	StartStabilitySession(LLMNPCForwardN8Stability::BuildSmokeConfig());
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleRunStabilityFormal()
+{
+	StartStabilitySession(LLMNPCForwardN8Stability::BuildFormalConfig());
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleCancelStability()
+{
+	if (!bStabilityRunning)
+	{
+		SetStatus(LOCTEXT("StabilityNotRunning", "No N8-A stability session is running"), true);
+		return FReply::Handled();
+	}
+	FinishStabilitySession(
+		TEXT("cancelled"),
+		TEXT("LLMNPC_N8_STABILITY_CANCELLED_BY_USER")
+	);
+	return FReply::Handled();
+}
+
+FReply SLLMNPCMotionTestConsole::HandleStabilityVisualPass()
+{
+	return ApplyStabilityHumanReview(TEXT("passed"));
+}
+
+FReply SLLMNPCMotionTestConsole::HandleStabilityVisualFail()
+{
+	return ApplyStabilityHumanReview(TEXT("failed"));
+}
+
+FReply SLLMNPCMotionTestConsole::ApplyStabilityHumanReview(
+	const FString& Review
+)
+{
+	if (bStabilityRunning || StabilityReport.Status != TEXT("complete"))
+	{
+		SetStatus(
+			LOCTEXT("StabilityHumanReviewUnavailable", "Complete an N8-A stability session before recording visual review"),
+			true
+		);
+		return FReply::Handled();
+	}
+	if (Review == TEXT("passed") && !StabilityReport.bMachinePassed)
+	{
+		SetStatus(
+			LOCTEXT("StabilityHumanPassBlocked", "Human Visual Pass requires the N8-A machine gate to pass"),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	LLMNPCForwardN8Stability::ApplyHumanReview(
+		StabilityReport,
+		Review,
+		TEXT("editor_user")
+	);
+	FString Stem = FPaths::GetBaseFilename(StabilityReportPath);
+	const int32 ExistingReviewIndex = Stem.Find(TEXT("_human_"));
+	if (ExistingReviewIndex != INDEX_NONE)
+	{
+		Stem.LeftInline(ExistingReviewIndex);
+	}
+	const FString ReviewedPath = FPaths::Combine(
+		FPaths::GetPath(StabilityReportPath),
+		FString::Printf(TEXT("%s_human_%s.json"), *Stem, *Review)
+	);
+	if (!SaveStabilityReport(ReviewedPath))
+	{
+		SetStatus(
+			LOCTEXT("StabilityHumanReviewSaveFailed", "The human-reviewed N8-A report could not be saved"),
+			true
+		);
+		return FReply::Handled();
+	}
+
+	SetStatus(
+		FText::Format(
+			LOCTEXT("StabilityHumanReviewSaved", "N8-A Human Visual {0}. Report: {1}"),
+			Review == TEXT("passed")
+				? LOCTEXT("StabilityHumanPassLabel", "Pass")
+				: LOCTEXT("StabilityHumanFailLabel", "Fail"),
+			FText::FromString(StabilityReportPath)
+		),
+		Review == TEXT("failed")
+	);
 	return FReply::Handled();
 }
 

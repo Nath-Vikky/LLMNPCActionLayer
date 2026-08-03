@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Dialogue/LLMNPCDialogueTypes.h"
 #include "Evaluation/LLMNPCForwardN7Evaluation.h"
+#include "Evaluation/LLMNPCForwardN8Stability.h"
 #include "Templates/LLMNPCTemplateCompiler.h"
 #include "Widgets/SCompoundWidget.h"
 
@@ -182,6 +183,9 @@ private:
 	TArray<FLLMNPCTestExecutionRecord> ExecutionRecords;
 	TArray<FLLMNPCOnlineEvaluationRecord> OnlineEvaluationRecords;
 	TArray<FLLMNPCForwardN7MatrixCase> OnlineMatrixCases;
+	TArray<FName> StabilityTemplateIds;
+	FLLMNPCForwardN8StabilityConfig StabilityConfig;
+	FLLMNPCForwardN8StabilityReport StabilityReport;
 	FString TargetRef = TEXT("player");
 	FString OnlineInput = TEXT("Greet the player with a friendly body gesture.");
 	FString ActiveOnlineInputHash;
@@ -202,15 +206,25 @@ private:
 	bool bOnlineMatrixCancelled = false;
 	bool bOnlineMatrixWaitingForPlayback = false;
 	bool bRestoreOnlineDialogueSettings = false;
+	bool bStabilityRunning = false;
+	bool bStabilityWaitingForPlayback = false;
+	bool bStabilityPlaybackObserved = false;
+	bool bStabilityPostProcessRequired = false;
 	int32 SweepStepIndex = INDEX_NONE;
 	int32 OnlineMatrixCaseIndex = INDEX_NONE;
 	int32 OnlineMatrixPassedCount = 0;
 	int32 OnlineMatrixFailedCount = 0;
+	int32 StabilityRequestIndex = INDEX_NONE;
 	double SweepNextActionTime = 0.0;
 	double OnlineRequestStartedAt = 0.0;
 	double OnlineMatrixNextCaseTime = 0.0;
 	double OnlineMatrixPlaybackWaitStartedAt = 0.0;
 	double OnlineMatrixPlaybackIdleSince = 0.0;
+	double StabilityStartedAt = 0.0;
+	double StabilityRequestStartedAt = 0.0;
+	double StabilityPlaybackIdleSince = 0.0;
+	double StabilityNextRequestTime = 0.0;
+	double StabilityLastCheckpointAt = 0.0;
 	float RuntimeRefreshAccumulator = 0.0f;
 	FGuid ActiveOnlineRequestId;
 	TWeakObjectPtr<AActor> N3TestTargetActor;
@@ -222,6 +236,7 @@ private:
 	FString OnlineMatrixHumanReview = TEXT("pending");
 	FDateTime OnlineMatrixHumanReviewedAtUtc;
 	FString LastSavedReportPath;
+	FString StabilityReportPath;
 	FText StatusText;
 	bool bStatusError = false;
 
@@ -235,6 +250,7 @@ private:
 	FText GetTemplatePolicyText() const;
 	FText GetDebugStateText() const;
 	FText GetOnlineTraceText() const;
+	FText GetStabilityTraceText() const;
 	FSlateColor GetStatusColor() const;
 	ECheckBoxState GetOverlayCheckState() const;
 
@@ -266,6 +282,16 @@ private:
 	void FinishOnlineMatrix();
 	void ResetOnlineMatrixContext();
 	void RestoreOnlineDialogueSettings();
+	void TickStabilitySession(double CurrentTime, float DeltaTime);
+	bool StartStabilitySession(const FLLMNPCForwardN8StabilityConfig& Config);
+	bool SubmitNextStabilityRequest(double CurrentTime);
+	void CompleteCurrentStabilityRequest(double CurrentTime);
+	void FinishStabilitySession(
+		const FString& Status,
+		const FString& Error = FString()
+	);
+	bool SaveStabilityReport(const FString& OverridePath = FString());
+	const FLLMNPCTestTemplateOption* FindStabilityTemplateOption(FName TemplateId) const;
 	void SetStatus(const FText& Text, bool bError);
 
 	void HandleActorChanged(
@@ -299,5 +325,11 @@ private:
 	FReply HandleOnlineMatrixVisualFail();
 	FReply ApplyOnlineMatrixHumanReview(const FString& Review);
 	FReply HandleCancelOnlineEvaluation();
+	FReply HandleRunStabilitySmoke();
+	FReply HandleRunStabilityFormal();
+	FReply HandleCancelStability();
+	FReply HandleStabilityVisualPass();
+	FReply HandleStabilityVisualFail();
+	FReply ApplyStabilityHumanReview(const FString& Review);
 	FReply HandleSaveReport();
 };

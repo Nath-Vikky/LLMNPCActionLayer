@@ -325,5 +325,6 @@
 	"catalog_schema_version": "llmnpc.template_catalog.v1",
 	"catalog_revision": 2,
 	"visual_description": "The same reviewed right-hand wave is played with a smaller, quieter arm and wrist range for restrained greetings or farewells.",
-	"catalog_content_hash": "md5:3019cb66cb59105434ddf3c65f0f4c58"
+	"catalog_content_hash": "md5:3019cb66cb59105434ddf3c65f0f4c58",
+	"variant_difference": "Lower-amplitude Published style variant."
 }

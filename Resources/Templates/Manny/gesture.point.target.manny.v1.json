@@ -175,5 +175,6 @@
 		"subtle"
 	],
 	"visual_description": "The gaze turns toward a registered target while the right arm reaches toward it, the palm follows the target, and the index finger forms a pointing hand.",
-	"catalog_content_hash": "md5:85324613df1477eefcb6e3784e1bce75"
+	"catalog_content_hash": "md5:85324613df1477eefcb6e3784e1bce75",
+	"variant_difference": "Right-arm target-aware point with gaze and explicit finger pose."
 }

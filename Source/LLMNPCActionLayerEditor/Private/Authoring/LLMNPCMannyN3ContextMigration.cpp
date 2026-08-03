@@ -177,7 +177,8 @@ void N3ConfigureTemplate(ULLMNPCMotionTemplate& Template)
 	}
 	else if (TemplateId.ToString().Contains(TEXT("gesture.wave.right.manny")))
 	{
-		Policy.bAllowMirror = true;
+		Policy.bAllowMirror =
+			TemplateId != TEXT("gesture.wave.right.manny.procedural.v1");
 		Policy.ReachScaleRange = FVector2D(0.75f, 1.0f);
 		Policy.HeightScaleRange = FVector2D(0.8f, 1.05f);
 		Policy.LateralScaleRange = FVector2D(0.7f, 1.0f);
@@ -186,11 +187,21 @@ void N3ConfigureTemplate(ULLMNPCMotionTemplate& Template)
 		Policy.TorsoParticipationRange = FVector2D(0.8f, 1.0f);
 		Policy.bEnableObstacleAdaptation = true;
 	}
-	Template.Metadata.CatalogRevision = 2;
-	Template.Metadata.SemanticVersion =
-		Template.Kind == ELLMNPCTemplateKind::AnimationAsset
-			? TEXT("1.0.1")
-			: TEXT("1.1.0");
+	if (TemplateId == TEXT("gesture.wave.right.manny.procedural.v1"))
+	{
+		Template.Metadata.CatalogRevision = 3;
+		Template.Metadata.SemanticVersion = TEXT("1.1.1");
+		Template.Metadata.VariantDifference =
+			TEXT("Strict right-hand procedural comparison variant; mirroring disabled after N8 visual rejection.");
+	}
+	else
+	{
+		Template.Metadata.CatalogRevision = 2;
+		Template.Metadata.SemanticVersion =
+			Template.Kind == ELLMNPCTemplateKind::AnimationAsset
+				? TEXT("1.0.1")
+				: TEXT("1.1.0");
+	}
 	Template.Metadata.CatalogContentHash.Reset();
 	Template.Metadata.CatalogContentHash =
 		ULLMNPCMotionTemplate::BuildCatalogContentHash(Template);
@@ -315,6 +326,7 @@ bool N3UpdateTemplateSource(
 	Root->SetObjectField(TEXT("modifier_policy"), Policy);
 	Root->SetStringField(TEXT("semantic_version"), Template.Metadata.SemanticVersion);
 	Root->SetNumberField(TEXT("catalog_revision"), Template.Metadata.CatalogRevision);
+	Root->SetStringField(TEXT("variant_difference"), Template.Metadata.VariantDifference);
 	Root->SetStringField(TEXT("catalog_content_hash"), Template.Metadata.CatalogContentHash);
 	return N3WriteJson(Path, Root.ToSharedRef(), OutError);
 }
